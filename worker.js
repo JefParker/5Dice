@@ -50,6 +50,20 @@ export default {
       return new Response(JSON.stringify(room), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    if (path === '/api/chat' && method === 'GET') {
+      let chat = await env.FIVEDICE_KV.get('global_chat', { type: 'json' }) || [];
+      return new Response(JSON.stringify(chat), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (path === '/api/chat' && method === 'POST') {
+      const body = await request.json();
+      let chat = await env.FIVEDICE_KV.get('global_chat', { type: 'json' }) || [];
+      chat.push({ author: body.author || 'Anonymous', text: body.text, time: Date.now() });
+      if (chat.length > 20) chat = chat.slice(chat.length - 20); // Keep last 20 messages
+      await env.FIVEDICE_KV.put('global_chat', JSON.stringify(chat), { expirationTtl: 3600 });
+      return new Response(JSON.stringify(chat), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // Dynamic routes for specific rooms
     const roomMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9]+)(\/(join|signal))?$/);
     if (roomMatch) {

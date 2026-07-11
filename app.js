@@ -87,6 +87,43 @@ document.getElementById('btn-cancel-setup').addEventListener('click', () => {
 document.getElementById('btn-create-room').addEventListener('click', createRoom);
 document.getElementById('btn-leave-game').addEventListener('click', leaveGame);
 
+// Chat Logic
+const chatInput = document.getElementById('chat-input');
+chatInput.addEventListener('keypress', async (e) => {
+  if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+    const text = chatInput.value.trim();
+    chatInput.value = ''; // clear input immediately
+    const author = myName === 'Jeff' ? (prompt("Enter your chat name:", "Player") || "Anonymous") : myName;
+    myName = author; // Update global name
+    
+    try {
+      await fetch(`${API_BASE}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author, text })
+      });
+      loadChat();
+    } catch (err) { console.error("Chat error", err); }
+  }
+});
+
+async function loadChat() {
+  if(document.getElementById('screen-lobby').classList.contains('hidden')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/chat`);
+    const chat = await res.json();
+    const history = document.getElementById('chat-history');
+    history.innerHTML = '';
+    chat.forEach(msg => {
+      const div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.innerHTML = `<strong>${msg.author}:</strong> ${msg.text}`;
+      history.appendChild(div);
+    });
+    history.scrollTop = history.scrollHeight;
+  } catch(e) {}
+}
+
 // Fetch and display rooms
 async function loadRooms() {
   if(document.getElementById('screen-lobby').classList.contains('hidden')) return;
@@ -118,8 +155,12 @@ async function loadRooms() {
 }
 
 // Initial lobby load and polling
-setInterval(loadRooms, 5000);
+setInterval(() => {
+  loadRooms();
+  loadChat();
+}, 5000);
 loadRooms();
+loadChat();
 checkIOSPWA();
 
 // Create Room & Host Signaling
