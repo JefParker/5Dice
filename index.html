@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>5 Dice</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <div id="app-container">
+    <!-- Screen A: Lobby -->
+    <div id="screen-lobby" class="screen active">
+      <header class="top-header">
+        <h1>🎲 Public Game Lobby 🎲</h1>
+      </header>
+      <div class="content-layout">
+        <aside id="chat-sidebar" class="sidebar">
+          <div class="chat-history" id="chat-history"></div>
+          <input type="text" id="chat-input" class="capsule-input" placeholder="Type message...">
+        </aside>
+        <main class="main-content">
+          <button id="btn-create-new" class="capsule-button">Create a New Game</button>
+          <div id="room-list" class="room-grid">
+            <!-- Room cards go here dynamically -->
+          </div>
+        </main>
+      </div>
+      <footer class="app-footer">
+        <span id="game-count">Games Found: 0</span>
+        <div class="status-indicator">
+          <span class="status-dot connected" id="network-dot"></span> 
+          <span id="status-text">CONNECTED</span>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Screen B: Setup -->
+    <div id="screen-setup" class="screen hidden">
+      <header class="top-header">
+        <h1>🎲 The 5 Dice Game 🎲</h1>
+      </header>
+      <div class="setup-container">
+        <input type="text" id="room-name-input" class="capsule-input" placeholder="Name your game / match">
+        
+        <label for="player-count">How many players?</label>
+        <select id="player-count" class="capsule-input" disabled>
+          <option value="2">2 Players</option>
+        </select>
+        <p class="small-hint">Restricted to 2 players for prototype.</p>
+
+        <div id="player-inputs">
+          <input type="text" id="player-1-input" class="capsule-input" placeholder="Jeff (You)">
+          <input type="text" id="player-2-input" class="capsule-input" placeholder="Enter username 2">
+        </div>
+
+        <div class="action-group">
+          <button id="btn-create-room" class="capsule-button">Create</button>
+          <button id="btn-cancel-setup" class="capsule-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen C: Game Area (Tic-Tac-Toe) -->
+    <div id="screen-game" class="screen hidden">
+      <header class="top-header">
+        <h1>🎲 Match in Progress 🎲</h1>
+      </header>
+      <div class="game-container">
+        <p id="game-status" class="game-status">Waiting for opponent...</p>
+        <div id="tic-tac-toe-board" class="tic-tac-toe-board disabled">
+          <div class="cell" data-index="0"></div>
+          <div class="cell" data-index="1"></div>
+          <div class="cell" data-index="2"></div>
+          <div class="cell" data-index="3"></div>
+          <div class="cell" data-index="4"></div>
+          <div class="cell" data-index="5"></div>
+          <div class="cell" data-index="6"></div>
+          <div class="cell" data-index="7"></div>
+          <div class="cell" data-index="8"></div>
+        </div>
+        
+        <button id="btn-leave-game" class="capsule-button">Leave Game</button>
+      </div>
+    </div>
+
+    <!-- Overlays -->
+    <div id="reconnecting-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2>Reconnecting...</h2>
+        <p>Network volatile. Trying to re-establish peer connection.</p>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2 id="loading-text">Loading...</h2>
+      </div>
+    </div>
+
+    <!-- iOS Install Prompt Modal -->
+    <div id="ios-install-modal" class="bottom-sheet hidden">
+      <div class="sheet-content">
+        <h3>Install 5 Dice</h3>
+        <p>To install this app on your iPhone, tap the <strong>Share</strong> button <span class="share-icon">⬆️</span> and then select <strong>Add to Home Screen</strong>.</p>
+        <button id="btn-close-ios-modal" class="capsule-button">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
