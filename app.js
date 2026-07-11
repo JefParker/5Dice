@@ -55,7 +55,7 @@ if ('serviceWorker' in navigator) {
 // Global Application State
 let currentRoomId = null;
 let isHost = false;
-let myName = 'Jeff';
+let myName = localStorage.getItem('playerName') || 'Jeff';
 let pollInterval = null;
 let gameState = ['', '', '', '', '', '', '', '', ''];
 let myTurn = false;
@@ -89,23 +89,32 @@ document.getElementById('btn-leave-game').addEventListener('click', leaveGame);
 
 // Chat Logic
 const chatInput = document.getElementById('chat-input');
-chatInput.addEventListener('keypress', async (e) => {
-  if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+const btnChatSend = document.getElementById('btn-chat-send');
+
+async function handleChatSend() {
+  if (chatInput.value.trim() !== '') {
     const text = chatInput.value.trim();
     chatInput.value = ''; // clear input immediately
-    const author = myName === 'Jeff' ? (prompt("Enter your chat name:", "Player") || "Anonymous") : myName;
-    myName = author; // Update global name
+    if (myName === 'Jeff') {
+      myName = prompt("Enter your chat name:", "Player") || "Anonymous";
+      localStorage.setItem('playerName', myName);
+    }
     
     try {
       await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ author, text })
+        body: JSON.stringify({ author: myName, text })
       });
       loadChat();
     } catch (err) { console.error("Chat error", err); }
   }
+}
+
+chatInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') handleChatSend();
 });
+btnChatSend.addEventListener('click', handleChatSend);
 
 async function loadChat() {
   if(document.getElementById('screen-lobby').classList.contains('hidden')) return;
@@ -166,7 +175,11 @@ checkIOSPWA();
 // Create Room & Host Signaling
 async function createRoom() {
   const nameInput = document.getElementById('room-name-input').value || 'New Match';
-  myName = document.getElementById('player-1-input').value || 'Jeff';
+  const playerInput = document.getElementById('player-1-input').value;
+  if (playerInput) {
+    myName = playerInput;
+    localStorage.setItem('playerName', myName);
+  }
   isHost = true;
   showLoading('Creating Room...');
 
@@ -194,7 +207,8 @@ async function createRoom() {
 async function joinRoom(roomId) {
   isHost = false;
   currentRoomId = roomId;
-  myName = prompt("Enter your name:", "Player 2") || "Player 2";
+  myName = prompt("Enter your name:", myName) || "Player 2";
+  localStorage.setItem('playerName', myName);
   showLoading('Joining Room...');
 
   try {
@@ -279,11 +293,19 @@ function setupDataChannel() {
     document.getElementById('tic-tac-toe-board').classList.remove('disabled');
     myTurn = isHost; 
     stopPolling();
+    
+    // Exchange names
+    dataChannel.send(JSON.stringify({ type: 'handshake', name: myName }));
   };
   
   dataChannel.onmessage = (event) => {
     const msg = JSON.parse(event.data);
-    if (msg.type === 'move') {
+    if (msg.type === 'handshake') {
+      const oppName = msg.name || 'Opponent';
+      document.getElementById('game-status').innerText = myTurn 
+        ? `Your turn (${isHost ? 'X' : 'O'}) vs ${oppName}`
+        : `${oppName}'s turn (${!isHost ? 'X' : 'O'})`;
+    } else if (msg.type === 'move') {
       gameState[msg.index] = msg.player;
       updateBoard();
       myTurn = true;
@@ -293,13 +315,22 @@ function setupDataChannel() {
   };
 }
 
-async function sendSignal(payload) {
+let signalQueue = Promise.resolve();
+
+function sendSignal(payload) {
   if (!currentRoomId) return;
   payload.role = isHost ? 'host' : 'guest';
-  await fetch(`${API_BASE}/api/rooms/${currentRoomId}/signal`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+  
+  signalQueue = signalQueue.then(async () => {
+    try {
+      await fetch(`${API_BASE}/api/rooms/${currentRoomId}/signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.error("Signal error", e);
+    }
   });
 }
 

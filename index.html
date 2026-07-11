@@ -17,7 +17,10 @@
       <div class="content-layout">
         <aside id="chat-sidebar" class="sidebar">
           <div class="chat-history" id="chat-history"></div>
-          <input type="text" id="chat-input" class="capsule-input" placeholder="Type message...">
+          <div class="chat-input-container" style="display: flex; gap: 8px;">
+            <input type="text" id="chat-input" class="capsule-input" placeholder="Type message..." style="flex: 1; margin: 0;">
+            <button id="btn-chat-send" class="capsule-button" style="margin: 0; padding: 0 15px;">Send</button>
+          </div>
         </aside>
         <main class="main-content">
           <button id="btn-create-new" class="capsule-button">Create a New Game</button>
