@@ -109,10 +109,12 @@ let lastGuestSdpStr = null;
 
 // Setup UI Event Listeners
 document.getElementById('btn-create-new').addEventListener('click', () => {
+  stopLobbyPolling();
   showScreen('screen-setup');
 });
 document.getElementById('btn-cancel-setup').addEventListener('click', () => {
   showScreen('screen-lobby');
+  startLobbyPolling();
 });
 document.getElementById('btn-create-room').addEventListener('click', createRoom);
 document.getElementById('btn-leave-game').addEventListener('click', leaveGame);
