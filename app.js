@@ -126,6 +126,16 @@ chatInput.addEventListener('input', function() {
   this.style.height = (this.scrollHeight) + 'px';
 });
 
+// Mobile slide-over logic
+chatInput.addEventListener('focus', () => {
+  if (window.innerWidth <= 768) {
+    document.getElementById('chat-sidebar').classList.add('mobile-expanded');
+  }
+});
+document.getElementById('btn-close-chat').addEventListener('click', () => {
+  document.getElementById('chat-sidebar').classList.remove('mobile-expanded');
+});
+
 async function handleChatSend() {
   if (chatInput.value.trim() !== '') {
     const text = chatInput.value.trim();
@@ -208,9 +218,13 @@ async function loadRooms() {
 let lobbyInterval = null;
 let lobbyTimeout = null;
 
-function startLobbyPolling() {
+function stopLobbyPolling() {
   if (lobbyInterval) clearInterval(lobbyInterval);
   if (lobbyTimeout) clearTimeout(lobbyTimeout);
+}
+
+function startLobbyPolling() {
+  stopLobbyPolling();
   
   lobbyInterval = setInterval(() => {
     loadRooms();
@@ -255,6 +269,7 @@ async function createRoom() {
     const room = await res.json();
     currentRoomId = room.id;
     
+    stopLobbyPolling();
     requestWakeLock();
     initWebRTC();
     showScreen('screen-game');
@@ -289,6 +304,7 @@ async function joinRoom(roomId) {
       return;
     }
     
+    stopLobbyPolling();
     requestWakeLock();
     initWebRTC();
     showScreen('screen-game');
@@ -515,5 +531,5 @@ function leaveGame() {
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.add('disabled');
   showScreen('screen-lobby');
-  loadRooms();
+  startLobbyPolling();
 }

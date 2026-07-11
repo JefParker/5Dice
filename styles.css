@@ -95,11 +95,35 @@ input.capsule-input {
 
 .sidebar {
   width: 35%;
+  flex-shrink: 0;
   background-color: #1f1f1f;
   border-right: 1px solid #3a3a3a;
   display: flex;
   flex-direction: column;
   padding: 10px;
+  transition: width 0.3s ease-in-out;
+}
+
+.mobile-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #28a745;
+  font-size: 1rem;
+  padding: 10px 0;
+  margin-bottom: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .sidebar.mobile-expanded {
+    width: 100%;
+  }
+  .sidebar.mobile-expanded .mobile-back-btn {
+    display: block;
+  }
 }
 
 .chat-history {
