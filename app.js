@@ -60,6 +60,35 @@ let pollInterval = null;
 let gameState = ['', '', '', '', '', '', '', '', ''];
 let myTurn = false;
 
+// Screen Wake Lock
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake Lock acquired');
+    } catch (err) {
+      console.error('Wake Lock error:', err);
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock !== null) {
+    wakeLock.release().then(() => {
+      wakeLock = null;
+      console.log('Wake Lock released');
+    }).catch(e => console.error(e));
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentRoomId) {
+    requestWakeLock();
+  }
+});
+
 // WebRTC Configuration
 const rtcConfig = {
   iceServers: [
@@ -204,6 +233,7 @@ async function createRoom() {
     const room = await res.json();
     currentRoomId = room.id;
     
+    requestWakeLock();
     initWebRTC();
     showScreen('screen-game');
     document.getElementById('game-status').innerText = 'Waiting for opponent to join...';
@@ -237,6 +267,7 @@ async function joinRoom(roomId) {
       return;
     }
     
+    requestWakeLock();
     initWebRTC();
     showScreen('screen-game');
     document.getElementById('game-status').innerText = 'Connecting to host...';
@@ -457,6 +488,7 @@ function leaveGame() {
   if (peerConnection) peerConnection.close();
   if (dataChannel) dataChannel.close();
   currentRoomId = null;
+  releaseWakeLock();
   gameState = ['', '', '', '', '', '', '', '', ''];
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.add('disabled');
