@@ -85,8 +85,8 @@ export default {
         let updated = false;
 
         if (body.sdp) {
-          if (role === 'host') { room.host_sdp = body.sdp; updated = true; }
-          if (role === 'guest') { room.guest_sdp = body.sdp; updated = true; }
+          if (role === 'host') { room.host_sdp = body.sdp; room.host_ice = []; updated = true; }
+          if (role === 'guest') { room.guest_sdp = body.sdp; room.guest_ice = []; updated = true; }
         }
         if (body.ice) {
           if (role === 'host') { room.host_ice.push(body.ice); updated = true; }

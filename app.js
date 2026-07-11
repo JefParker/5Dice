@@ -74,6 +74,8 @@ const rtcConfig = {
 let peerConnection;
 let dataChannel;
 let processedIceCandidates = new Set();
+let lastHostSdpStr = null;
+let lastGuestSdpStr = null;
 
 // Setup UI Event Listeners
 document.getElementById('btn-create-new').addEventListener('click', () => {
@@ -187,6 +189,10 @@ function initWebRTC() {
     console.log("ICE State:", peerConnection.iceConnectionState);
     if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed') {
       document.getElementById('reconnecting-overlay').classList.remove('hidden');
+      document.getElementById('tic-tac-toe-board').classList.add('disabled');
+      
+      startPolling(); // Resume polling for signaling data
+      
       // A full ICE restart logic would be here, but for this prototype, we'll try a basic restart if host
       if (isHost && peerConnection.iceConnectionState === 'failed') {
         peerConnection.restartIce();
@@ -195,6 +201,8 @@ function initWebRTC() {
     } else if (peerConnection.iceConnectionState === 'connected') {
       document.getElementById('reconnecting-overlay').classList.add('hidden');
       document.getElementById('network-dot').classList.add('connected');
+      document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+      stopPolling();
     }
   };
 
@@ -264,7 +272,11 @@ function startPolling() {
       
       if (isHost) {
         if (room.guest_sdp && peerConnection.signalingState === 'have-local-offer') {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(room.guest_sdp));
+          const sdpStr = JSON.stringify(room.guest_sdp);
+          if (sdpStr !== lastGuestSdpStr) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(room.guest_sdp));
+            lastGuestSdpStr = sdpStr;
+          }
         }
         room.guest_ice.forEach(async ice => {
           const iceStr = JSON.stringify(ice);
@@ -274,11 +286,15 @@ function startPolling() {
           }
         });
       } else {
-        if (room.host_sdp && peerConnection.signalingState === 'stable') {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(room.host_sdp));
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          await sendSignal({ sdp: peerConnection.localDescription });
+        if (room.host_sdp) {
+          const sdpStr = JSON.stringify(room.host_sdp);
+          if (sdpStr !== lastHostSdpStr) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(room.host_sdp));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            await sendSignal({ sdp: peerConnection.localDescription });
+            lastHostSdpStr = sdpStr;
+          }
         }
         room.host_ice.forEach(async ice => {
           const iceStr = JSON.stringify(ice);
@@ -291,7 +307,7 @@ function startPolling() {
     } catch (e) {
       console.log("Polling error", e);
     }
-  }, 2000); // Polling every 2 seconds
+  }, 1000); // Polling every 1 second
 }
 
 function stopPolling() {
