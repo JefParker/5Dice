@@ -91,10 +91,18 @@ document.getElementById('btn-leave-game').addEventListener('click', leaveGame);
 const chatInput = document.getElementById('chat-input');
 const btnChatSend = document.getElementById('btn-chat-send');
 
+// Auto-resize textarea
+chatInput.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = (this.scrollHeight) + 'px';
+});
+
 async function handleChatSend() {
   if (chatInput.value.trim() !== '') {
     const text = chatInput.value.trim();
     chatInput.value = ''; // clear input immediately
+    chatInput.style.height = 'auto'; // reset height
+    
     if (myName === 'Jeff') {
       myName = prompt("Enter your chat name:", "Player") || "Anonymous";
       localStorage.setItem('playerName', myName);
@@ -111,8 +119,12 @@ async function handleChatSend() {
   }
 }
 
-chatInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') handleChatSend();
+chatInput.addEventListener('keydown', (e) => {
+  // Send on Enter (without shift key)
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault(); // Prevent adding a new line
+    handleChatSend();
+  }
 });
 btnChatSend.addEventListener('click', handleChatSend);
 
