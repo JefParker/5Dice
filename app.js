@@ -1,6 +1,6 @@
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
   ? 'http://127.0.0.1:8787' 
-  : '';
+  : 'https://5dice-backend.jeffreyrobertparker.workers.dev';
 
 // UI State Management
 function showScreen(screenId) {
