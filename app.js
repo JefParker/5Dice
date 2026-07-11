@@ -219,8 +219,10 @@ async function createRoom() {
 async function joinRoom(roomId) {
   isHost = false;
   currentRoomId = roomId;
-  myName = prompt("Enter your name:", myName) || "Player 2";
-  localStorage.setItem('playerName', myName);
+  if (myName === 'Jeff') {
+    myName = prompt("Enter your name:", "Player 2") || "Player 2";
+    localStorage.setItem('playerName', myName);
+  }
   showLoading('Joining Room...');
 
   try {
