@@ -282,6 +282,7 @@ label {
 .tic-tac-toe-board {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   grid-gap: 10px;
   width: 100%;
   max-width: 320px;

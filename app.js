@@ -205,12 +205,34 @@ async function loadRooms() {
 }
 
 // Initial lobby load and polling
-setInterval(() => {
+let lobbyInterval = null;
+let lobbyTimeout = null;
+
+function startLobbyPolling() {
+  if (lobbyInterval) clearInterval(lobbyInterval);
+  if (lobbyTimeout) clearTimeout(lobbyTimeout);
+  
+  lobbyInterval = setInterval(() => {
+    loadRooms();
+    loadChat();
+  }, 5000);
+  
   loadRooms();
   loadChat();
-}, 5000);
-loadRooms();
-loadChat();
+  
+  // Timeout after 3 minutes
+  lobbyTimeout = setTimeout(() => {
+    clearInterval(lobbyInterval);
+    document.getElementById('inactivity-overlay').classList.remove('hidden');
+  }, 3 * 60 * 1000);
+}
+
+document.getElementById('btn-stay-connected').addEventListener('click', () => {
+  document.getElementById('inactivity-overlay').classList.add('hidden');
+  startLobbyPolling();
+});
+
+startLobbyPolling();
 checkIOSPWA();
 
 // Create Room & Host Signaling
