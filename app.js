@@ -38,8 +38,12 @@ function checkIOSPWA() {
   }
 }
 document.getElementById('btn-close-ios-modal').addEventListener('click', () => {
-  document.getElementById('ios-install-modal').classList.add('hidden');
+  document.getElementById('ios-pwa-modal').classList.add('hidden');
 });
+
+// Start separate chat polling
+setInterval(loadChat, 5000);
+loadChat();
 
 // Register Service Worker
 if ('serviceWorker' in navigator) {
@@ -184,7 +188,6 @@ chatInput.addEventListener('keydown', (e) => {
 btnChatSend.addEventListener('click', handleChatSend);
 
 async function loadChat() {
-  if(document.getElementById('screen-lobby').classList.contains('hidden')) return;
   try {
     const res = await fetch(`${API_BASE}/api/chat`);
     const chat = await res.json();
@@ -245,11 +248,9 @@ function startLobbyPolling() {
   
   lobbyInterval = setInterval(() => {
     loadRooms();
-    loadChat();
   }, 5000);
   
   loadRooms();
-  loadChat();
   
   // Timeout after 3 minutes
   lobbyTimeout = setTimeout(() => {
