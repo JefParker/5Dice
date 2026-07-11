@@ -128,14 +128,27 @@ chatInput.addEventListener('input', function() {
 });
 
 // Mobile slide-over logic
-chatInput.addEventListener('focus', () => {
+document.getElementById('chat-sidebar').addEventListener('click', () => {
   if (window.innerWidth <= 768) {
     document.getElementById('chat-sidebar').classList.add('mobile-expanded');
   }
 });
-document.getElementById('btn-close-chat').addEventListener('click', () => {
+document.getElementById('btn-close-chat').addEventListener('click', (e) => {
+  e.stopPropagation();
   document.getElementById('chat-sidebar').classList.remove('mobile-expanded');
 });
+document.querySelector('.main-content').addEventListener('click', () => {
+  if (window.innerWidth <= 768) {
+    document.getElementById('chat-sidebar').classList.remove('mobile-expanded');
+  }
+});
+
+// Visual Viewport for mobile keyboard
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    document.body.style.height = window.visualViewport.height + 'px';
+  });
+}
 
 async function handleChatSend() {
   if (chatInput.value.trim() !== '') {

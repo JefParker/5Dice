@@ -114,6 +114,7 @@ input.capsule-input {
 
 .mobile-back-btn {
   display: none;
+  width: 100%;
   background: none;
   border: none;
   color: #28a745;
@@ -122,12 +123,12 @@ input.capsule-input {
   margin-bottom: 10px;
   font-weight: bold;
   cursor: pointer;
-  text-align: left;
+  text-align: right;
 }
 
 @media (max-width: 768px) {
   .sidebar.mobile-expanded {
-    width: 100%;
+    width: 85%;
   }
   .sidebar.mobile-expanded .mobile-back-btn {
     display: block;
