@@ -180,6 +180,7 @@ async function loadChat() {
       div.className = 'chat-msg';
       div.innerHTML = `<strong>${msg.author}:</strong> ${msg.text}`;
       history.appendChild(div);
+      setTimeout(() => { if (div.parentNode) div.remove(); }, 5 * 60 * 1000);
     });
     history.scrollTop = history.scrollHeight;
   } catch(e) {}

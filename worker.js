@@ -52,13 +52,17 @@ export default {
 
     if (path === '/api/chat' && method === 'GET') {
       let chat = await env.FIVEDICE_KV.get('global_chat', { type: 'json' }) || [];
+      const now = Date.now();
+      chat = chat.filter(m => (now - m.time) < 5 * 60 * 1000);
       return new Response(JSON.stringify(chat), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (path === '/api/chat' && method === 'POST') {
       const body = await request.json();
       let chat = await env.FIVEDICE_KV.get('global_chat', { type: 'json' }) || [];
-      chat.push({ author: body.author || 'Anonymous', text: body.text, time: Date.now() });
+      const now = Date.now();
+      chat.push({ author: body.author || 'Anonymous', text: body.text, time: now });
+      chat = chat.filter(m => (now - m.time) < 5 * 60 * 1000);
       if (chat.length > 20) chat = chat.slice(chat.length - 20); // Keep last 20 messages
       await env.FIVEDICE_KV.put('global_chat', JSON.stringify(chat), { expirationTtl: 3600 });
       return new Response(JSON.stringify(chat), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
