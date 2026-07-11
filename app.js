@@ -59,6 +59,7 @@ let myName = localStorage.getItem('playerName') || 'Jeff';
 let pollInterval = null;
 let gameState = ['', '', '', '', '', '', '', '', ''];
 let myTurn = false;
+let opponentName = 'Opponent';
 
 // Screen Wake Lock
 let wakeLock = null;
@@ -384,10 +385,10 @@ function setupDataChannel() {
   dataChannel.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'handshake') {
-      const oppName = msg.name || 'Opponent';
+      opponentName = msg.name || 'Opponent';
       document.getElementById('game-status').innerText = myTurn 
-        ? `Your turn (${isHost ? 'X' : 'O'}) vs ${oppName}`
-        : `${oppName}'s turn (${!isHost ? 'X' : 'O'})`;
+        ? `Your turn (${isHost ? 'X' : 'O'}) vs ${opponentName}`
+        : `${opponentName}'s turn (${!isHost ? 'X' : 'O'})`;
     } else if (msg.type === 'move') {
       gameState[msg.index] = msg.player;
       updateBoard();
@@ -512,7 +513,7 @@ function checkWin() {
   }
   
   if (winner) {
-    document.getElementById('game-status').innerText = `${winner === (isHost ? 'X' : 'O') ? 'You win!' : 'You lose!'}`;
+    document.getElementById('game-status').innerText = `${winner === (isHost ? 'X' : 'O') ? 'You win!' : `${opponentName} wins!`}`;
     document.getElementById('tic-tac-toe-board').classList.add('disabled');
     myTurn = false;
   } else if (!gameState.includes('')) {
