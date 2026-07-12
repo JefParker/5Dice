@@ -352,7 +352,14 @@ document.querySelector('.main-content').addEventListener('click', () => {
 
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('global-player-name').value = myName;
+  document.getElementById('btn-save-settings').innerText = myName ? "Back to Lobby" : "Save & Return";
   showScreen('screen-settings');
+});
+
+document.getElementById('global-player-name').addEventListener('input', (e) => {
+  const newName = e.target.value.trim();
+  document.getElementById('btn-save-settings').innerText = 
+    (newName && newName !== myName) ? "Save & Return" : "Back to Lobby";
 });
 
 document.getElementById('btn-save-settings').addEventListener('click', () => {
