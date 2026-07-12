@@ -553,6 +553,11 @@ async function handleGameStartSignal(players, resumeState = null) {
   if (resumeState) {
     gameState = resumeState.board;
     myTurn = resumeState.myTurn;
+    updateBoard();
+    const isOver = checkWin();
+    if (isOver && isHost) {
+      document.getElementById('btn-play-again').classList.remove('hidden');
+    }
     const otherPeerId = gamePlayers.find(p => p !== myPeerId);
     if (otherPeerId) {
       const otherName = lobbyPeers[otherPeerId] ? lobbyPeers[otherPeerId].name : 'A player';
@@ -562,8 +567,8 @@ async function handleGameStartSignal(players, resumeState = null) {
   } else {
     gameState = ['', '', '', '', '', '', '', '', ''];
     myTurn = (myPeerId === gameHost);
+    updateBoard();
   }
-  updateBoard();
   document.getElementById('game-status').innerText = `Game Mesh: Syncing...`;
 
   for (const p of gamePlayers) {
