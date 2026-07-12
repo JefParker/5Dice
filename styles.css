@@ -281,6 +281,10 @@ input.capsule-input {
   background-color: #28a745;
 }
 
+.status-dot.connecting {
+  background-color: #ffc107;
+}
+
 /* Screen B (Setup) */
 .setup-container {
   flex: 1;
