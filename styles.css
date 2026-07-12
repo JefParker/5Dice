@@ -515,3 +515,182 @@ label {
 }
 
 .hidden { display: none !important; }
+
+/* 5 Dice (Yahtzee) Styles */
+body.bg-five-dice {
+  background-color: #1b4d36;
+}
+
+.five-dice-board {
+  width: 100%;
+  max-width: 450px;
+  margin: 0 auto;
+  color: white;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
+
+.fd-upper-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 40px;
+  margin-bottom: 20px;
+}
+
+.fd-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 1.2rem;
+}
+
+.fd-cat:active {
+  background-color: rgba(255,255,255,0.2);
+}
+
+.fd-cat-die {
+  width: 48px;
+  height: 48px;
+  border: 3px solid white;
+  border-radius: 6px;
+  position: relative;
+}
+
+.fd-cat-score {
+  font-size: 2rem;
+  color: #a0d8cc;
+  min-width: 40px;
+  text-align: right;
+}
+
+.fd-upper-totals {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+.fd-upper-total-row {
+  text-align: center;
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+}
+
+.fd-lower-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px 20px;
+  margin-bottom: 20px;
+}
+
+.fd-lower-totals {
+  text-align: center;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  margin-bottom: 30px;
+}
+
+.fd-play-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.fd-dice-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.fd-die {
+  width: 44px;
+  height: 44px;
+  border: 3px solid white;
+  border-radius: 6px;
+  position: relative;
+  cursor: pointer;
+  background-color: transparent;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.fd-die.held {
+  border-color: #a0d8cc;
+  background-color: rgba(160, 216, 204, 0.2);
+}
+
+/* Dice dots via box-shadow relative to absolute pseudo element */
+.fd-die::after, .fd-cat-die::after {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  background-color: transparent;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.die-1::after { background-color: white; }
+.die-2::after { box-shadow: -10px -10px 0 white, 10px 10px 0 white; }
+.die-3::after { background-color: white; box-shadow: -10px -10px 0 white, 10px 10px 0 white; }
+.die-4::after { box-shadow: -10px -10px 0 white, 10px 10px 0 white, -10px 10px 0 white, 10px -10px 0 white; }
+.die-5::after { background-color: white; box-shadow: -10px -10px 0 white, 10px 10px 0 white, -10px 10px 0 white, 10px -10px 0 white; }
+.die-6::after { box-shadow: -10px -10px 0 white, 10px 10px 0 white, -10px 10px 0 white, 10px -10px 0 white, -10px 0 0 white, 10px 0 0 white; }
+.fd-die.held::after { box-shadow: inherit; } /* We will need to color the dots in JS or just keep them white. Let's keep dots white for now */
+
+.fd-roll-btn {
+  width: 50px;
+  height: 50px;
+  background-color: #4a4a4a;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+  margin-left: 10px;
+}
+
+.fd-roll-btn:active {
+  transform: scale(0.95);
+}
+
+.fd-turns-left {
+  font-size: 0.9rem;
+}
+
+.fd-commit-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #4a4a4a;
+  padding: 20px;
+  border-radius: 12px;
+  display: flex;
+  gap: 15px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  border: 1px solid #777;
+  z-index: 100;
+}
+
+.fd-commit-overlay button {
+  padding: 10px 20px;
+  font-size: 1.2rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+

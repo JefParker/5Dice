@@ -128,6 +128,55 @@
           <div class="cell" data-index="8"></div>
         </div>
         
+        <!-- 5 DICE BOARD -->
+        <div id="five-dice-board" class="five-dice-board hidden">
+          <div class="fd-upper-section">
+            <div class="fd-cat" data-category="ones"><div class="fd-cat-die die-1"></div><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="fours"><div class="fd-cat-die die-4"></div><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="twos"><div class="fd-cat-die die-2"></div><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="fives"><div class="fd-cat-die die-5"></div><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="threes"><div class="fd-cat-die die-3"></div><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="sixes"><div class="fd-cat-die die-6"></div><span class="fd-cat-score"></span></div>
+          </div>
+          
+          <div class="fd-upper-totals">
+            <span>Total: <span id="fd-total-par">0</span> (on par)</span>
+            <span>Bonus (if > 62): <span id="fd-bonus">0</span></span>
+          </div>
+          <div class="fd-upper-total-row">Upper Total: <span id="fd-upper-total">0</span></div>
+
+          <div class="fd-lower-section">
+            <div class="fd-cat" data-category="chance"><span class="fd-cat-name">Chance:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="sm-straight"><span class="fd-cat-name">Sm Straight:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="three-kind"><span class="fd-cat-name">3 of a kind:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="lg-straight"><span class="fd-cat-name">Lg Straight:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="four-kind"><span class="fd-cat-name">4 of a kind:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="five-dice"><span class="fd-cat-name">5 Dice:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="full-house"><span class="fd-cat-name">Full House:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="bonus-5s"><span class="fd-cat-name">Bonus 5's:</span><span class="fd-cat-score"></span></div>
+          </div>
+
+          <div class="fd-lower-totals">
+            <div>Lower Total: <span id="fd-lower-total">0</span></div>
+            <div style="font-weight:bold;">Grand Total: <span id="fd-grand-total">0</span></div>
+          </div>
+
+          <div class="fd-play-area">
+            <div class="fd-dice-row">
+              <div class="fd-die" data-index="0"></div>
+              <div class="fd-die" data-index="1"></div>
+              <div class="fd-die" data-index="2"></div>
+              <div class="fd-die" data-index="3"></div>
+              <div class="fd-die" data-index="4"></div>
+              <div id="fd-roll-btn" class="fd-roll-btn">
+                <span id="fd-rolls-left">3</span>
+                <span style="font-size: 0.6rem;">more</span>
+              </div>
+            </div>
+            <div class="fd-turns-left"><span id="fd-turns-count">13</span> turns remaining</div>
+          </div>
+        </div>
+        
         <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
           <button id="btn-play-again" class="capsule-button hidden" style="background-color: darkgreen; color: white; width: auto; padding-left: 40px; padding-right: 40px; margin: 0;">Play again?</button>
           <button id="btn-leave-game" class="capsule-button" style="width: auto; padding-left: 40px; padding-right: 40px; margin: 0;">Leave Room</button>
@@ -183,6 +232,7 @@
   </div>
 
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="five-dice.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

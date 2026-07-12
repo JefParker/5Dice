@@ -519,10 +519,26 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   
   broadcastToLobby({ type: 'ROOM_CREATED', room });
   
+  setupGameUI(gameType);
   showScreen('screen-game');
   document.getElementById('game-status').innerText = 'Waiting for opponent to join...';
   hideLoading();
 });
+
+function setupGameUI(gameType) {
+  const tttBoard = document.getElementById('tic-tac-toe-board');
+  const fdBoard = document.getElementById('five-dice-board');
+  if (gameType === '5 Dice') {
+    tttBoard.classList.add('hidden');
+    fdBoard.classList.remove('hidden');
+    document.body.classList.add('bg-five-dice');
+    init5DiceGame();
+  } else {
+    tttBoard.classList.remove('hidden');
+    fdBoard.classList.add('hidden');
+    document.body.classList.remove('bg-five-dice');
+  }
+}
 
 window.joinRoom = function(roomId) {
   const room = activeRooms[roomId];
@@ -536,6 +552,7 @@ window.joinRoom = function(roomId) {
     lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: myUuid }));
     currentRoomId = roomId;
     isHost = false;
+    setupGameUI(displayGameType);
     showScreen('screen-game');
     document.getElementById('game-status').innerText = 'Joined! Waiting for host to start game mesh...';
     hideLoading();
@@ -748,6 +765,10 @@ function setupGamePeer(targetId, pc, dc) {
         showToast(`${newHostName} ${newHostId === myPeerId ? 'are' : 'is'} now hosting`);
       } else if (msg.type === 'PLAYER_LEFT') {
         handlePeerDisconnect(msg.peerId);
+      } else if (msg.type.startsWith('5DICE_')) {
+        if (typeof window.handle5DiceMessage === 'function') {
+          window.handle5DiceMessage(msg);
+        }
       }
     };
   }
