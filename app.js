@@ -506,15 +506,16 @@ document.getElementById('room-name-input').addEventListener('keydown', (e) => {
 
 document.getElementById('btn-create-room').addEventListener('click', async () => {
   const roomName = document.getElementById('room-name-input').value || 'New Game';
+  const gameType = document.getElementById('game-type-select') ? document.getElementById('game-type-select').value : 'Tic-Tac-Toe';
   
   showLoading('Creating Room...');
   
   const roomId = Math.random().toString(36).substr(2, 9);
-  const room = { id: roomId, name: roomName, host: myPeerId, status: 'open', players: [myUuid] };
+  const room = { id: roomId, name: roomName, gameType: gameType, host: myPeerId, status: 'open', players: [myUuid] };
   activeRooms[roomId] = room;
   isHost = true;
   currentRoomId = roomId;
-  document.getElementById('game-room-name').innerText = `🎲 ${roomName} 🎲`;
+  document.getElementById('game-room-name').innerText = `🎲 ${roomName} - ${gameType} 🎲`;
   
   broadcastToLobby({ type: 'ROOM_CREATED', room });
   
@@ -527,7 +528,8 @@ window.joinRoom = function(roomId) {
   const room = activeRooms[roomId];
   if (!room) return alert('Room no longer exists.');
   
-  document.getElementById('game-room-name').innerText = `🎲 ${room.name} 🎲`;
+  const displayGameType = room.gameType || 'Tic-Tac-Toe';
+  document.getElementById('game-room-name').innerText = `🎲 ${room.name} - ${displayGameType} 🎲`;
   
   showLoading('Joining Room...');
   const sendJoin = () => {
@@ -575,8 +577,9 @@ function renderRooms() {
     if (hostColor) {
       div.style.backgroundColor = hostColor;
     }
+    const displayGameType = r.gameType || 'Tic-Tac-Toe';
     div.innerHTML = `
-      <h3>${r.name} - Tic-Tac-Toe</h3>
+      <h3>${r.name} - ${displayGameType}</h3>
       <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : r.host}</p>
       <button class="capsule-button small" onclick="joinRoom('${r.id}')">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
