@@ -414,7 +414,6 @@ if (colorPickerEl) {
 }
 
 document.getElementById('btn-create-new').addEventListener('click', () => {
-  document.getElementById('player-1-input').value = myName;
   showScreen('screen-setup');
 });
 
@@ -424,9 +423,6 @@ document.getElementById('btn-cancel-setup').addEventListener('click', () => {
 
 document.getElementById('btn-create-room').addEventListener('click', async () => {
   const roomName = document.getElementById('room-name-input').value || 'New Game';
-  const myNameInput = document.getElementById('player-1-input').value || myName;
-  myName = myNameInput;
-  localStorage.setItem('playerName', myName);
   
   showLoading('Creating Room...');
   
