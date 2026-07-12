@@ -519,7 +519,7 @@ function renderRooms() {
       div.style.backgroundColor = hostColor;
     }
     div.innerHTML = `
-      <h3>${r.name}</h3>
+      <h3>${r.name} - Tic-Tac-Toe</h3>
       <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : r.host}</p>
       <button class="capsule-button small" onclick="joinRoom('${r.id}')">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
