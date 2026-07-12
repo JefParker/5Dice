@@ -106,27 +106,24 @@ async function startLobbyMesh() {
         const newPeers = await res.json();
         for (const p of newPeers) {
           if (p !== myPeerId && !lobbyPeers[p]) {
-            await initiateLobbyConnection(p);
+            await initiateLobbyConnection(p, null); // Leader uses HTTP for new peers
           }
         }
       } catch(e){}
     }
 
-    // 3. Poll own inbox ONLY if disconnected
-    const activePeers = Object.keys(lobbyPeers).filter(p => lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open');
-    if (activePeers.length === 0) {
-      try {
-        const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
-        const signals = await res.json();
-        for (const sig of signals) {
-          try {
-            await handleLobbySignal(sig);
-          } catch(err) {
-            console.error('Error handling signal:', err);
-          }
+    // 3. Always poll own inbox for fallback WebRTC signals from unconnected peers
+    try {
+      const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
+      const signals = await res.json();
+      for (const sig of signals) {
+        try {
+          await handleLobbySignal(sig);
+        } catch(err) {
+          console.error('Error handling signal:', err);
         }
-      } catch(e){}
-    }
+      }
+    } catch(e){}
     
     updateDiagnostics();
   }, 3000);
@@ -144,29 +141,28 @@ async function claimLeadership() {
 
 
 async function sendSignal(targetId, signalPayload) {
-  const activePeers = Object.keys(lobbyPeers).filter(p => lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open');
+  const route = lobbyPeers[targetId] ? lobbyPeers[targetId].routeVia : null;
   
-  if (activePeers.length === 0) {
-    // HTTP Fallback when completely disconnected
+  if (route && lobbyPeers[route] && lobbyPeers[route].dc && lobbyPeers[route].dc.readyState === 'open') {
+    // Relay over WebRTC Mesh
+    lobbyPeers[route].dc.send(JSON.stringify({
+      type: 'relay', to: targetId, from: myPeerId, signal: signalPayload
+    }));
+  } else {
+    // HTTP Fallback
     await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: myPeerId, ...signalPayload })
     });
-  } else {
-    // Relay over WebRTC Mesh!
-    const router = activePeers.includes(leaderId) ? leaderId : activePeers[0];
-    lobbyPeers[router].dc.send(JSON.stringify({
-      type: 'relay', to: targetId, from: myPeerId, signal: signalPayload
-    }));
   }
 }
 
-async function initiateLobbyConnection(targetId) {
+async function initiateLobbyConnection(targetId, routeVia = null) {
   if (lobbyPeers[targetId]) return;
   const pc = new RTCPeerConnection(rtcConfig);
   const dc = pc.createDataChannel('lobby-channel');
-  lobbyPeers[targetId] = { pc, dc, name: 'Unknown' };
+  lobbyPeers[targetId] = { pc, dc, name: 'Unknown', iceQueue: [], routeVia };
   setupLobbyPeer(targetId, pc, dc);
 
   const offer = await pc.createOffer();
@@ -193,7 +189,7 @@ function setupLobbyPeer(targetId, pc, dc) {
       const msg = JSON.parse(e.data);
       if (msg.type === 'relay') {
         if (msg.to === myPeerId) {
-          handleLobbySignal({ from: msg.from, ...msg.signal });
+          handleLobbySignal({ from: msg.from, via: targetId, ...msg.signal });
         } else if (lobbyPeers[msg.to] && lobbyPeers[msg.to].dc && lobbyPeers[msg.to].dc.readyState === 'open') {
           lobbyPeers[msg.to].dc.send(JSON.stringify(msg)); // Forward to target
         }
@@ -202,7 +198,7 @@ function setupLobbyPeer(targetId, pc, dc) {
         if (msg.knownPeers) {
           for (const p of msg.knownPeers) {
             if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
-              await initiateLobbyConnection(p);
+              await initiateLobbyConnection(p, targetId); // Route via the peer who introduced us
             }
           }
         }
@@ -227,10 +223,10 @@ function setupLobbyPeer(targetId, pc, dc) {
 }
 
 async function handleLobbySignal(sig) {
-  const { from, type } = sig;
+  const { from, type, via } = sig;
   if (!lobbyPeers[from]) {
     const pc = new RTCPeerConnection(rtcConfig);
-    lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [] };
+    lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null };
     
     pc.ondatachannel = (e) => {
       if (e.channel.label === 'lobby-channel') {
