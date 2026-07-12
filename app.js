@@ -451,6 +451,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   activeRooms[roomId] = room;
   isHost = true;
   currentRoomId = roomId;
+  document.getElementById('game-room-name').innerText = `🎲 ${roomName} 🎲`;
   
   broadcastToLobby({ type: 'ROOM_CREATED', room });
   
@@ -462,6 +463,8 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
 window.joinRoom = function(roomId) {
   const room = activeRooms[roomId];
   if (!room) return alert('Room no longer exists.');
+  
+  document.getElementById('game-room-name').innerText = `🎲 ${room.name} 🎲`;
   
   showLoading('Joining Room...');
   const sendJoin = () => {
