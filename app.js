@@ -68,11 +68,17 @@ async function startLobbyMesh() {
   if (lobbyMeshInterval) clearInterval(lobbyMeshInterval);
   
   // Announce presence
-  await fetch(`${API_BASE}/api/lobby/new_peers`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ peerId: myPeerId })
-  });
+  try {
+    await fetch(`${API_BASE}/api/lobby/new_peers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peerId: myPeerId })
+    });
+  } catch (e) {
+    console.error("Lobby announce failed", e);
+  }
+
+  updateDiagnostics();
 
   lobbyMeshInterval = setInterval(async () => {
     // 1. Leader Election
