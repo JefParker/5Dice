@@ -40,6 +40,24 @@ function showScreen(screenId) {
   });
 }
 
+function showLoading(text) {
+  const overlay = document.getElementById('loading-overlay');
+  const txt = document.getElementById('loading-text');
+  if (overlay && txt) {
+    txt.innerText = text;
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+  }
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+  }
+}
+
 // iOS PWA Logic
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', () => {
