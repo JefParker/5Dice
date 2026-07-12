@@ -554,6 +554,9 @@ let gameHost = null;
 async function handleGameStartSignal(players, resumeState = null) {
   gamePlayers = players;
   gameHost = gamePlayers[0]; // Alphabetical sort means [0] is consistent host
+  for (const p in gamePeers) {
+    if (gamePeers[p].pc) gamePeers[p].pc.close();
+  }
   gamePeers = {};
   
   if (resumeState) {
@@ -609,6 +612,7 @@ function handlePeerDisconnect(targetId) {
   const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
   showToast(`${name} has left`, color);
 
+  if (gamePeers[targetId].pc) gamePeers[targetId].pc.close();
   delete gamePeers[targetId];
   gamePlayers = gamePlayers.filter(p => p !== targetId);
 
