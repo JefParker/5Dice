@@ -389,7 +389,7 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   if (colorPicker) colorPicker.value = myColor;
 
   if (document.getElementById('settings-uuid')) {
-    document.getElementById('settings-uuid').value = gameState.userId;
+    document.getElementById('settings-uuid').value = myUuid;
     document.getElementById('update-uuid-btn').style.display = 'none';
   }
 
@@ -447,7 +447,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   showLoading('Creating Room...');
   
   const roomId = Math.random().toString(36).substr(2, 9);
-  const room = { id: roomId, name: roomName, host: myPeerId, status: 'open', players: [gameState.userId] };
+  const room = { id: roomId, name: roomName, host: myPeerId, status: 'open', players: [myUuid] };
   activeRooms[roomId] = room;
   isHost = true;
   currentRoomId = roomId;
@@ -465,7 +465,7 @@ window.joinRoom = function(roomId) {
   
   showLoading('Joining Room...');
   if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
-    lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: gameState.userId }));
+    lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: myUuid }));
     currentRoomId = roomId;
     isHost = false;
     showScreen('screen-game');
@@ -483,7 +483,7 @@ function renderRooms() {
   document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
   
   rooms.forEach(r => {
-    if (r.status === 'in-progress' && !(r.players && r.players.includes(gameState.userId))) {
+    if (r.status === 'in-progress' && !(r.players && r.players.includes(myUuid))) {
       return; // Hide in-progress games if not a player
     }
     const isReturning = r.status === 'in-progress';
@@ -517,10 +517,10 @@ function generateUUID() {
   });
 }
 
-gameState.userId = localStorage.getItem('timeline_user_id');
-if (!gameState.userId) {
-  gameState.userId = generateUUID();
-  localStorage.setItem('timeline_user_id', gameState.userId);
+let myUuid = localStorage.getItem('timeline_user_id');
+if (!myUuid) {
+  myUuid = generateUUID();
+  localStorage.setItem('timeline_user_id', myUuid);
 }
 
 let myTurn = false;
@@ -805,7 +805,7 @@ if (settingsUuidInput) {
   settingsUuidInput.addEventListener('input', (e) => {
     const val = e.target.value.trim();
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(val) && val !== gameState.userId) {
+    if (uuidRegex.test(val) && val !== myUuid) {
       updateUuidBtn.style.display = 'block';
     } else {
       updateUuidBtn.style.display = 'none';
@@ -815,7 +815,7 @@ if (settingsUuidInput) {
 
 if (copyUuidBtn) {
   copyUuidBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(gameState.userId).then(() => {
+    navigator.clipboard.writeText(myUuid).then(() => {
       showToast("Player ID copied!");
     }).catch(() => {
       showToast("Unable to copy ID");
@@ -847,7 +847,7 @@ if (updateUuidBtn) {
 if (confirmUuidNo) {
   confirmUuidNo.addEventListener('click', () => {
     confirmUuidModal.classList.add('hidden');
-    settingsUuidInput.value = gameState.userId;
+    settingsUuidInput.value = myUuid;
     updateUuidBtn.style.display = 'none';
     pendingUuid = null;
   });
@@ -855,7 +855,7 @@ if (confirmUuidNo) {
 
 if (confirmUuidYes) {
   confirmUuidYes.addEventListener('click', () => {
-    gameState.userId = pendingUuid;
+    myUuid = pendingUuid;
     localStorage.setItem('timeline_user_id', pendingUuid);
     confirmUuidModal.classList.add('hidden');
     showToast("Player ID synced! Reloading...");
