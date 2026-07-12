@@ -498,6 +498,25 @@ document.getElementById('btn-cancel-setup').addEventListener('click', () => {
   showScreen('screen-lobby');
 });
 
+const gameTypeSelect = document.getElementById('game-type-select');
+if (gameTypeSelect) {
+  gameTypeSelect.addEventListener('change', (e) => {
+    const playerCountSelect = document.getElementById('player-count');
+    playerCountSelect.innerHTML = '';
+    
+    if (e.target.value === 'Tic-Tac-Toe') {
+      playerCountSelect.innerHTML = '<option value="2">2 Players</option>';
+    } else if (e.target.value === '5 Dice') {
+      for (let i = 2; i <= 6; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.innerText = i + ' Players';
+        playerCountSelect.appendChild(option);
+      }
+    }
+  });
+}
+
 document.getElementById('room-name-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     document.getElementById('btn-create-room').click();
@@ -507,11 +526,12 @@ document.getElementById('room-name-input').addEventListener('keydown', (e) => {
 document.getElementById('btn-create-room').addEventListener('click', async () => {
   const roomName = document.getElementById('room-name-input').value || 'New Game';
   const gameType = document.getElementById('game-type-select') ? document.getElementById('game-type-select').value : 'Tic-Tac-Toe';
+  const maxPlayers = document.getElementById('player-count') ? parseInt(document.getElementById('player-count').value) : 2;
   
   showLoading('Creating Room...');
   
   const roomId = Math.random().toString(36).substr(2, 9);
-  const room = { id: roomId, name: roomName, gameType: gameType, host: myPeerId, status: 'open', players: [myUuid] };
+  const room = { id: roomId, name: roomName, gameType: gameType, host: myPeerId, status: 'open', players: [myUuid], maxPlayers: maxPlayers };
   activeRooms[roomId] = room;
   isHost = true;
   currentRoomId = roomId;
