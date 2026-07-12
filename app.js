@@ -7,10 +7,8 @@ const isDesktop = !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mi
 const myWeight = (isDesktop ? 100 : 50) + Math.floor(Math.random() * 10);
 
 function generateDarkColor() {
-  const r = Math.floor(Math.random() * 128).toString(16).padStart(2, '0');
-  const g = Math.floor(Math.random() * 128).toString(16).padStart(2, '0');
-  const b = Math.floor(Math.random() * 128).toString(16).padStart(2, '0');
-  return '#' + r + g + b;
+  const colors = ["#235880", "#3F1F74", "#6F4F1F", "#2E2B53", "#264C1C", "#533A51", "#220066", "MidnightBlue", "#4d004d", "RebeccaPurple", "Sienna", "#181B59", "#006652", "#006666", "#404040", "#404040"];
+  return colors[Math.floor(Math.random() * colors.length)];
 }
 
 let myColor = localStorage.getItem('playerColor');
