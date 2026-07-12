@@ -446,9 +446,12 @@ function setupGamePeer(targetId, pc, dc) {
       const msg = JSON.parse(e.data);
       if (msg.type === 'move') {
         gameState[msg.index] = msg.player;
-        myTurn = true; 
         updateBoard();
-        checkWin();
+        const gameOver = checkWin();
+        if (!gameOver) {
+          myTurn = true; 
+          document.getElementById('game-status').innerText = 'Your turn!';
+        }
       }
     };
   }
@@ -530,15 +533,17 @@ function handleMove(index) {
   const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
   gameState[index] = mySymbol;
   updateBoard();
-  checkWin();
+  const gameOver = checkWin();
   
   for (const p in gamePeers) {
     if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
       gamePeers[p].dc.send(JSON.stringify({ type: 'move', index, player: mySymbol }));
     }
   }
-  myTurn = false;
-  document.getElementById('game-status').innerText = `Opponent's turn`;
+  if (!gameOver) {
+    myTurn = false;
+    document.getElementById('game-status').innerText = `Opponent's turn`;
+  }
 }
 
 function updateBoard() {
@@ -562,13 +567,15 @@ function checkWin() {
       document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : 'Opponent Wins!';
       document.getElementById('tic-tac-toe-board').classList.add('disabled');
       myTurn = false;
-      return;
+      return true;
     }
   }
   if (!gameState.includes('')) {
     document.getElementById('game-status').innerText = "It's a draw!";
     myTurn = false;
+    return true;
   }
+  return false;
 }
 
 document.getElementById('btn-leave-game').addEventListener('click', () => {
