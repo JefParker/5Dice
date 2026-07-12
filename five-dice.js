@@ -30,6 +30,16 @@ function init5DiceGame() {
 function update5DiceUI() {
   const state = window.fiveDiceState;
   
+  if (window.myTurn) {
+    document.getElementById('fd-board').classList.remove('hidden');
+    document.getElementById('fd-scorecard').classList.add('hidden');
+  } else {
+    document.getElementById('fd-board').classList.add('hidden');
+    document.getElementById('fd-scorecard').classList.remove('hidden');
+    renderScorecard();
+  }
+  
+  
   // Render dice
   for (let i = 0; i < 5; i++) {
     const dieEl = document.querySelector(`.fd-die[data-index="${i}"]`);
@@ -66,12 +76,84 @@ function update5DiceUI() {
   });
   
   document.getElementById('fd-upper-total').innerText = upperTotal;
-  document.getElementById('fd-total-par').innerText = upperTotal;
-  let bonus = upperTotal >= 63 ? 35 : 0;
-  document.getElementById('fd-bonus').innerText = bonus;
   
-  document.getElementById('fd-lower-total').innerText = lowerTotal;
-  document.getElementById('fd-grand-total').innerText = upperTotal + bonus + lowerTotal;
+  // Final total UI
+  const total = upperTotal + lowerTotal + (upperTotal >= 63 ? 35 : 0);
+  // Optional: display my total somewhere else if needed
+}
+
+function renderScorecard() {
+  const state = window.fiveDiceState;
+  const players = Object.keys(state.scores);
+  
+  const cats = [
+    { id: 'ones', label: "1's" },
+    { id: 'twos', label: "2's" },
+    { id: 'threes', label: "3's" },
+    { id: 'fours', label: "4's" },
+    { id: 'fives', label: "5's" },
+    { id: 'sixes', label: "6's" },
+    { id: 'bonus', label: "Bonus (>= 63)" },
+    { id: 'chance', label: "Chance" },
+    { id: 'three-kind', label: "3 of a kind" },
+    { id: 'four-kind', label: "4 of a kind" },
+    { id: 'full-house', label: "Full House" },
+    { id: 'sm-straight', label: "Sm Strt" },
+    { id: 'lg-straight', label: "Lg Strt" },
+    { id: 'five-dice', label: "Yahtzee" },
+    { id: 'bonus-5s', label: "Bonus 5s" }
+  ];
+  
+  let html = `<div class="fd-sc-row fd-sc-header"><div class="fd-sc-cat">Categories</div>`;
+  players.forEach(p => {
+    let pName = p === window.myPeerId ? window.myName : (window.lobbyPeers[p] ? window.lobbyPeers[p].name : 'P');
+    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${pName}</div>`;
+  });
+  html += `</div>`;
+  
+  cats.forEach(c => {
+    html += `<div class="fd-sc-row ${c.id === 'bonus' ? 'fd-sc-totals' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
+    players.forEach(p => {
+      let score = state.scores[p][c.id];
+      if (c.id === 'bonus') {
+        const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+        score = u >= 63 ? 35 : 0;
+      }
+      let val = (score === null || score === undefined) ? '-' : score;
+      let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+      html += `<div class="fd-sc-score" style="background-color: ${pColor};">${val}</div>`;
+    });
+    html += `</div>`;
+  });
+  
+  html += `<div class="fd-sc-row fd-sc-totals"><div class="fd-sc-cat">Upper Tot</div>`;
+  players.forEach(p => {
+    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u}</div>`;
+  });
+  html += `</div>`;
+  
+  html += `<div class="fd-sc-row"><div class="fd-sc-cat">Lower Tot</div>`;
+  players.forEach(p => {
+    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${l}</div>`;
+  });
+  html += `</div>`;
+  
+  html += `<div class="fd-sc-row fd-sc-totals"><div class="fd-sc-cat">Total</div>`;
+  players.forEach(p => {
+    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+    const bonus = u >= 63 ? 35 : 0;
+    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u + l + bonus}</div>`;
+  });
+  html += `</div>`;
+  
+  document.getElementById('fd-scorecard').innerHTML = html;
 }
 
 // Bind dice click

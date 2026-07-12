@@ -706,3 +706,55 @@ body.bg-five-dice {
 .fd-die.wobble {
   animation: wobble 0.1s infinite;
 }
+
+.fd-scorecard {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  color: white;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: sans-serif;
+}
+
+.fd-sc-row {
+  display: flex;
+  border-bottom: 1px solid #333;
+}
+
+.fd-sc-row:last-child {
+  border-bottom: none;
+}
+
+.fd-sc-cat {
+  flex: 2;
+  padding: 8px;
+  background-color: #000;
+  border-right: 1px solid #333;
+}
+
+.fd-sc-score {
+  flex: 1;
+  padding: 8px;
+  text-align: right;
+  border-right: 1px solid #333;
+}
+
+.fd-sc-score:last-child {
+  border-right: none;
+}
+
+.fd-sc-header {
+  font-weight: bold;
+  font-size: 1.1em;
+  border-bottom: 2px solid #555;
+}
+
+.fd-sc-totals {
+  margin-top: 15px;
+  border-top: 2px solid #555;
+  font-weight: bold;
+}
