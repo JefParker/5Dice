@@ -34,7 +34,9 @@ function update5DiceUI() {
   for (let i = 0; i < 5; i++) {
     const dieEl = document.querySelector(`.fd-die[data-index="${i}"]`);
     if (dieEl) {
-      dieEl.className = `fd-die die-${state.dice[i]} ${state.held[i] ? 'held' : ''}`;
+      dieEl.classList.remove('die-1', 'die-2', 'die-3', 'die-4', 'die-5', 'die-6');
+      dieEl.classList.add(`die-${state.dice[i]}`);
+      dieEl.classList.toggle('held', state.held[i]);
     }
   }
   
