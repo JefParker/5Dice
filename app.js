@@ -95,7 +95,7 @@ if ('serviceWorker' in navigator) {
 function startLobbyMesh() {
   if (mqttClient) return;
 
-  mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
+  mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
 
   mqttClient.on('connect', () => {
     console.log('Connected to public MQTT signaling server');
