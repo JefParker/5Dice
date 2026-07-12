@@ -1,6 +1,35 @@
+
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
   ? 'http://127.0.0.1:8787' 
   : 'https://5dice-backend.jeffreyrobertparker.workers.dev';
+
+// --- GLOBALS ---
+let myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
+const isDesktop = !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+const myWeight = (isDesktop ? 100 : 50) + Math.floor(Math.random() * 10);
+
+let lobbyPeers = {}; // { [id]: { pc, dc, name } }
+let gamePeers = {};  // { [id]: { pc, dc } }
+
+let myName = localStorage.getItem('playerName') || 'Jeff';
+let currentRoomId = null; 
+
+let isLeader = false;
+let leaderId = null;
+let lobbyMeshInterval = null;
+let roomPollInterval = null;
+
+const rtcConfig = { 
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+  ] 
+};
+
+// UI Elements
+const chatInput = document.getElementById('chat-input');
+const btnChatSend = document.getElementById('btn-chat-send');
+const chatHistory = document.getElementById('chat-history');
 
 // UI State Management
 function showScreen(screenId) {
@@ -15,125 +44,213 @@ function showScreen(screenId) {
   });
 }
 
-function showLoading(text) {
-  document.getElementById('loading-text').innerText = text;
-  document.getElementById('loading-overlay').classList.remove('hidden');
-}
-
-function hideLoading() {
-  document.getElementById('loading-overlay').classList.add('hidden');
-}
-
-// iOS PWA Prompt Logic
-function checkIOSPWA() {
-  const isIos = () => {
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    return /iphone|ipad|ipod/.test(userAgent);
-  };
-  const isStandalone = () => {
-    return ('standalone' in window.navigator) && (window.navigator.standalone);
-  };
-  if (isIos() && !isStandalone()) {
-    document.getElementById('ios-install-modal').classList.remove('hidden');
-  }
-}
-document.getElementById('btn-close-ios-modal').addEventListener('click', () => {
-  document.getElementById('ios-pwa-modal').classList.add('hidden');
-});
-
-// Start separate chat polling
-setInterval(loadChat, 5000);
-loadChat();
-
-// Register Service Worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then(registration => {
-      console.log('SW registered: ', registration);
-    }).catch(registrationError => {
-      console.log('SW registration failed: ', registrationError);
-    });
+// iOS PWA Logic
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    document.body.style.height = window.visualViewport.height + 'px';
   });
 }
 
-// Global Application State
-let currentRoomId = null;
-let isHost = false;
-let myName = localStorage.getItem('playerName') || 'Jeff';
-let pollInterval = null;
-let gameState = ['', '', '', '', '', '', '', '', ''];
-let myTurn = false;
-let opponentName = 'Opponent';
+// --- TIER 1: LOBBY MESH ---
 
-// Screen Wake Lock
-let wakeLock = null;
+async function startLobbyMesh() {
+  if (lobbyMeshInterval) clearInterval(lobbyMeshInterval);
+  
+  // Announce presence
+  await fetch(`${API_BASE}/api/lobby/new_peers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peerId: myPeerId })
+  });
 
-async function requestWakeLock() {
-  if ('wakeLock' in navigator) {
+  lobbyMeshInterval = setInterval(async () => {
+    // 1. Leader Election
     try {
-      wakeLock = await navigator.wakeLock.request('screen');
-      console.log('Wake Lock acquired');
-    } catch (err) {
-      console.error('Wake Lock error:', err);
+      const res = await fetch(`${API_BASE}/api/lobby/leader`);
+      const leader = await res.json();
+      const now = Date.now();
+      
+      if (!leader.peerId || (now - leader.timestamp > 20000)) {
+        await claimLeadership();
+      } else if (leader.peerId === myPeerId) {
+        await claimLeadership();
+      } else if (leader.weight < myWeight && (now - leader.timestamp > 5000)) {
+        await claimLeadership();
+      } else {
+        isLeader = false;
+        leaderId = leader.peerId;
+      }
+    } catch (e) {}
+
+    // 2. If Leader, poll for new peers
+    if (isLeader) {
+      try {
+        const res = await fetch(`${API_BASE}/api/lobby/new_peers`);
+        const newPeers = await res.json();
+        for (const p of newPeers) {
+          if (p !== myPeerId && !lobbyPeers[p]) {
+            await initiateLobbyConnection(p);
+          }
+        }
+      } catch(e){}
     }
+
+    // 3. Everyone polls their own inbox for SDP/ICE until connected to leader
+    // Actually, just keep polling for robustness, maybe we get direct connections
+    try {
+      const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
+      const signals = await res.json();
+      for (const sig of signals) {
+        await handleLobbySignal(sig);
+      }
+    } catch(e){}
+    
+    updateDiagnostics();
+  }, 3000);
+}
+
+async function claimLeadership() {
+  isLeader = true;
+  leaderId = myPeerId;
+  await fetch(`${API_BASE}/api/lobby/leader`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peerId: myPeerId, weight: myWeight, timestamp: Date.now() })
+  });
+}
+
+async function initiateLobbyConnection(targetId) {
+  if (lobbyPeers[targetId]) return;
+  const pc = new RTCPeerConnection(rtcConfig);
+  const dc = pc.createDataChannel('lobby-channel');
+  lobbyPeers[targetId] = { pc, dc, name: 'Unknown' };
+  setupLobbyPeer(targetId, pc, dc);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  
+  await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: myPeerId, type: 'offer', sdp: offer })
+  });
+}
+
+function setupLobbyPeer(targetId, pc, dc) {
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: myPeerId, type: 'ice', candidate: e.candidate })
+      });
+    }
+  };
+
+  if (dc) {
+    dc.onopen = () => {
+      console.log(`Lobby channel open with ${targetId}`);
+      dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers) }));
+      updateDiagnostics();
+    };
+
+    dc.onmessage = async (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'handshake') {
+        lobbyPeers[targetId].name = msg.name;
+        if (msg.knownPeers) {
+          for (const p of msg.knownPeers) {
+            if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
+              await initiateLobbyConnection(p);
+            }
+          }
+        }
+        appendChatMessage('System', `${msg.name} connected.`);
+      } else if (msg.type === 'chat') {
+        appendChatMessage(msg.name, msg.text);
+      } else if (msg.type === 'START_GAME_SIGNAL') {
+        handleGameStartSignal(msg.players);
+      } else if (msg.type === 'game-offer' || msg.type === 'game-answer' || msg.type === 'game-ice') {
+        handleGameSignal(msg);
+      }
+      updateDiagnostics();
+    };
+  }
+  
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      delete lobbyPeers[targetId];
+      updateDiagnostics();
+    }
+  };
+}
+
+async function handleLobbySignal(sig) {
+  const { from, type } = sig;
+  if (!lobbyPeers[from]) {
+    const pc = new RTCPeerConnection(rtcConfig);
+    lobbyPeers[from] = { pc, dc: null, name: 'Unknown' };
+    
+    pc.ondatachannel = (e) => {
+      if (e.channel.label === 'lobby-channel') {
+        lobbyPeers[from].dc = e.channel;
+        setupLobbyPeer(from, pc, e.channel);
+      }
+    };
+    setupLobbyPeer(from, pc, null);
+  }
+
+  const pc = lobbyPeers[from].pc;
+  
+  if (type === 'offer') {
+    await pc.setRemoteDescription(sig.sdp);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await fetch(`${API_BASE}/api/lobby/signal/${from}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: myPeerId, type: 'answer', sdp: answer })
+    });
+  } else if (type === 'answer') {
+    await pc.setRemoteDescription(sig.sdp);
+  } else if (type === 'ice') {
+    await pc.addIceCandidate(sig.candidate);
   }
 }
 
-function releaseWakeLock() {
-  if (wakeLock !== null) {
-    wakeLock.release().then(() => {
-      wakeLock = null;
-      console.log('Wake Lock released');
-    }).catch(e => console.error(e));
-  }
+// --- GLOBAL CHAT ---
+
+function appendChatMessage(author, text) {
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  div.innerHTML = `<strong>${author}:</strong> ${text}`;
+  chatHistory.appendChild(div);
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+  setTimeout(() => { if (div.parentNode) div.remove(); }, 5 * 60 * 1000);
 }
 
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && currentRoomId) {
-    requestWakeLock();
+btnChatSend.addEventListener('click', () => {
+  if (chatInput.value.trim() !== '') {
+    const text = chatInput.value.trim();
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    
+    appendChatMessage(myName, text);
+    
+    for (const p in lobbyPeers) {
+      const dc = lobbyPeers[p].dc;
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'chat', name: myName, text }));
+      }
+    }
   }
 });
-
-// WebRTC Configuration
-const rtcConfig = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    }
-  ]
-};
-let peerConnection;
-let dataChannel;
-let processedIceCandidates = new Set();
-let lastHostSdpStr = null;
-let lastGuestSdpStr = null;
-
-// Setup UI Event Listeners
-document.getElementById('btn-create-new').addEventListener('click', () => {
-  stopLobbyPolling();
-  showScreen('screen-setup');
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    btnChatSend.click();
+  }
 });
-document.getElementById('btn-cancel-setup').addEventListener('click', () => {
-  showScreen('screen-lobby');
-  startLobbyPolling();
-});
-document.getElementById('btn-create-room').addEventListener('click', createRoom);
-document.getElementById('btn-leave-game').addEventListener('click', leaveGame);
-
-// Chat Logic
-const chatInput = document.getElementById('chat-input');
-const btnChatSend = document.getElementById('btn-chat-send');
-
-// Auto-resize textarea
-chatInput.addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = (this.scrollHeight) + 'px';
-});
-
-// Mobile slide-over logic
 document.getElementById('chat-sidebar').addEventListener('click', () => {
   if (window.innerWidth <= 768) {
     document.getElementById('chat-sidebar').classList.add('mobile-expanded');
@@ -149,405 +266,325 @@ document.querySelector('.main-content').addEventListener('click', () => {
   }
 });
 
-// Visual Viewport for mobile keyboard
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', () => {
-    document.body.style.height = window.visualViewport.height + 'px';
-  });
-}
+// --- ROOM LOGIC (Using Cloudflare for discovery) ---
 
-async function handleChatSend() {
-  if (chatInput.value.trim() !== '') {
-    const text = chatInput.value.trim();
-    chatInput.value = ''; // clear input immediately
-    chatInput.style.height = 'auto'; // reset height
-    
-    if (myName === 'Jeff') {
-      myName = prompt("Enter your chat name:", "Player") || "Anonymous";
-      localStorage.setItem('playerName', myName);
-    }
-    
-    try {
-      await fetch(`${API_BASE}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ author: myName, text })
-      });
-      loadChat();
-    } catch (err) { console.error("Chat error", err); }
-  }
-}
-
-chatInput.addEventListener('keydown', (e) => {
-  // Send on Enter (without shift key)
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault(); // Prevent adding a new line
-    handleChatSend();
-  }
-});
-btnChatSend.addEventListener('click', handleChatSend);
-
-async function loadChat() {
-  try {
-    const res = await fetch(`${API_BASE}/api/chat`);
-    const chat = await res.json();
-    const history = document.getElementById('chat-history');
-    history.innerHTML = '';
-    chat.forEach(msg => {
-      const div = document.createElement('div');
-      div.className = 'chat-msg';
-      div.innerHTML = `<strong>${msg.author}:</strong> ${msg.text}`;
-      history.appendChild(div);
-      setTimeout(() => { if (div.parentNode) div.remove(); }, 5 * 60 * 1000);
-    });
-    history.scrollTop = history.scrollHeight;
-  } catch(e) {}
-}
-
-// Fetch and display rooms
-async function loadRooms() {
-  if(document.getElementById('screen-lobby').classList.contains('hidden')) return;
-  try {
-    const res = await fetch(`${API_BASE}/api/rooms`);
-    const rooms = await res.json();
-    const grid = document.getElementById('room-list');
-    grid.innerHTML = '';
-    
-    document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
-    
-    rooms.forEach(room => {
-      const card = document.createElement('div');
-      card.className = 'room-card';
-      card.innerHTML = `
-        <div class="room-card-title">${room.name}</div>
-        <div class="room-card-status">${room.players}/${room.max_players} Players • ${room.status.toUpperCase()}</div>
-        <button class="capsule-button join-button" data-id="${room.id}">Join Game</button>
-      `;
-      grid.appendChild(card);
-    });
-    
-    document.querySelectorAll('.join-button').forEach(btn => {
-      btn.addEventListener('click', (e) => joinRoom(e.target.getAttribute('data-id')));
-    });
-  } catch (err) {
-    console.error("Failed to load rooms", err);
-  }
-}
-
-// Initial lobby load and polling
-let lobbyInterval = null;
-let lobbyTimeout = null;
-
-function stopLobbyPolling() {
-  if (lobbyInterval) clearInterval(lobbyInterval);
-  if (lobbyTimeout) clearTimeout(lobbyTimeout);
-}
-
-function startLobbyPolling() {
-  stopLobbyPolling();
-  
-  lobbyInterval = setInterval(() => {
-    loadRooms();
-  }, 5000);
-  
-  loadRooms();
-  
-  // Timeout after 3 minutes
-  lobbyTimeout = setTimeout(() => {
-    clearInterval(lobbyInterval);
-    document.getElementById('inactivity-overlay').classList.remove('hidden');
-  }, 3 * 60 * 1000);
-}
-
-document.getElementById('btn-stay-connected').addEventListener('click', () => {
-  document.getElementById('inactivity-overlay').classList.add('hidden');
-  startLobbyPolling();
+document.getElementById('btn-create-new').addEventListener('click', () => {
+  if (roomPollInterval) clearInterval(roomPollInterval);
+  showScreen('screen-setup');
 });
 
-startLobbyPolling();
-checkIOSPWA();
+document.getElementById('btn-cancel-setup').addEventListener('click', () => {
+  showScreen('screen-lobby');
+  startRoomPolling();
+});
 
-// Create Room & Host Signaling
-async function createRoom() {
-  const nameInput = document.getElementById('room-name-input').value || 'New Match';
-  const playerInput = document.getElementById('player-1-input').value;
-  if (playerInput) {
-    myName = playerInput;
-    localStorage.setItem('playerName', myName);
-  }
-  isHost = true;
+document.getElementById('btn-create-room').addEventListener('click', async () => {
+  const roomName = document.getElementById('room-name-input').value || 'New Game';
+  const myNameInput = document.getElementById('player-1-input').value || myName;
+  myName = myNameInput;
+  localStorage.setItem('playerName', myName);
+  
   showLoading('Creating Room...');
-
   try {
     const res = await fetch(`${API_BASE}/api/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: nameInput, host: myName })
+      body: JSON.stringify({ name: roomName, host: myPeerId })
     });
     const room = await res.json();
     currentRoomId = room.id;
+    isHost = true;
     
-    stopLobbyPolling();
-    requestWakeLock();
-    initWebRTC();
     showScreen('screen-game');
     document.getElementById('game-status').innerText = 'Waiting for opponent to join...';
-    startPolling();
-  } catch(e) {
-    alert("Error creating room.");
-  } finally {
     hideLoading();
+    
+    // As host, poll the room to see if a guest joined
+    if (roomPollInterval) clearInterval(roomPollInterval);
+    roomPollInterval = setInterval(async () => {
+      const gRes = await fetch(`${API_BASE}/api/rooms/${currentRoomId}/signal`);
+      const gRoom = await gRes.json();
+      if (gRoom.guest) {
+        clearInterval(roomPollInterval); // Stop polling cloudflare
+        const guestPeerId = gRoom.guest;
+        // Start Game Mesh Tier 2 using Lobby Channels
+        const gamePlayers = [myPeerId, guestPeerId].sort();
+        // Send signal via lobby mesh
+        if (lobbyPeers[guestPeerId] && lobbyPeers[guestPeerId].dc) {
+          lobbyPeers[guestPeerId].dc.send(JSON.stringify({ type: 'START_GAME_SIGNAL', players: gamePlayers }));
+          handleGameStartSignal(gamePlayers);
+        } else {
+          document.getElementById('game-status').innerText = 'Guest joined but not found in Lobby Mesh!';
+        }
+      }
+    }, 2000);
+  } catch (err) {
+    console.error(err);
+    hideLoading();
+    alert('Failed to create room.');
   }
-}
+});
 
-// Join Room & Guest Signaling
 async function joinRoom(roomId) {
-  isHost = false;
-  currentRoomId = roomId;
-  if (myName === 'Jeff') {
-    myName = prompt("Enter your name:", "Player 2") || "Player 2";
-    localStorage.setItem('playerName', myName);
-  }
+  if (roomPollInterval) clearInterval(roomPollInterval);
   showLoading('Joining Room...');
-
+  
   try {
     const res = await fetch(`${API_BASE}/api/rooms/${roomId}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guest: myName })
+      body: JSON.stringify({ guest: myPeerId })
     });
+    if (!res.ok) throw new Error('Room full or closed');
+    currentRoomId = roomId;
+    isHost = false;
     
-    if (!res.ok) {
-      alert("Room is full or unavailable.");
-      return;
-    }
-    
-    stopLobbyPolling();
-    requestWakeLock();
-    initWebRTC();
     showScreen('screen-game');
-    document.getElementById('game-status').innerText = 'Connecting to host...';
-    startPolling();
-  } catch (e) {
-    alert("Error joining room.");
-  } finally {
+    document.getElementById('game-status').innerText = 'Joined! Waiting for Game Mesh...';
     hideLoading();
+    // We now just wait for the START_GAME_SIGNAL over the Lobby Mesh
+  } catch (err) {
+    console.error(err);
+    hideLoading();
+    alert('Failed to join room.');
+    startRoomPolling();
   }
 }
 
-// WebRTC Initialization
-function initWebRTC() {
-  peerConnection = new RTCPeerConnection(rtcConfig);
-  processedIceCandidates.clear();
-
-  // Handle ICE connection state changes for reconnects
-  peerConnection.oniceconnectionstatechange = () => {
-    console.log("ICE State:", peerConnection.iceConnectionState);
-    if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed') {
-      document.getElementById('reconnecting-overlay').classList.remove('hidden');
-      document.getElementById('tic-tac-toe-board').classList.add('disabled');
+function startRoomPolling() {
+  if (roomPollInterval) clearInterval(roomPollInterval);
+  const fetchRooms = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/rooms`);
+      const rooms = await res.json();
+      const list = document.getElementById('room-list');
+      list.innerHTML = '';
       
-      startPolling(); // Resume polling for signaling data
+      document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
       
-      // A full ICE restart logic would be here, but for this prototype, we'll try a basic restart if host
-      if (isHost && peerConnection.iceConnectionState === 'failed') {
-        peerConnection.restartIce();
-        createOffer();
+      rooms.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'room-card';
+        div.innerHTML = `
+          <h3>${r.name}</h3>
+          <p>Host: ${r.host}</p>
+          <button class="capsule-button small">Join Game</button>
+        `;
+        div.querySelector('button').addEventListener('click', () => joinRoom(r.id));
+        list.appendChild(div);
+      });
+      if (rooms.length === 0) {
+        list.innerHTML = `<p class="empty-state">No games found. Create one!</p>`;
       }
-    } else if (peerConnection.iceConnectionState === 'connected') {
-      document.getElementById('reconnecting-overlay').classList.add('hidden');
-      document.getElementById('network-dot').classList.add('connected');
-      document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-      stopPolling();
+    } catch (e) {
+      console.error('Room fetch error', e);
+    }
+  };
+  fetchRooms();
+  roomPollInterval = setInterval(fetchRooms, 3000);
+}
+
+// --- TIER 2: GAME MESH (ZERO-SERVER) ---
+let gameState = ['', '', '', '', '', '', '', '', ''];
+let myTurn = false;
+let gamePlayers = [];
+let gameHost = null;
+
+async function handleGameStartSignal(players) {
+  gamePlayers = players;
+  gameHost = gamePlayers[0]; // Alphabetical sort means [0] is consistent host
+  gamePeers = {};
+  
+  gameState = ['', '', '', '', '', '', '', '', ''];
+  myTurn = (myPeerId === gameHost);
+  updateBoard();
+  document.getElementById('game-status').innerText = `Game Mesh: Syncing...`;
+
+  for (const p of gamePlayers) {
+    if (p !== myPeerId) {
+      if (myPeerId > p) {
+        await initiateGameConnection(p);
+      }
+    }
+  }
+  updateDiagnostics();
+}
+
+async function initiateGameConnection(targetId) {
+  const pc = new RTCPeerConnection(rtcConfig);
+  const dc = pc.createDataChannel('game-channel');
+  gamePeers[targetId] = { pc, dc };
+  setupGamePeer(targetId, pc, dc);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  
+  if (lobbyPeers[targetId] && lobbyPeers[targetId].dc) {
+    lobbyPeers[targetId].dc.send(JSON.stringify({
+      type: 'game-offer', from: myPeerId, sdp: offer
+    }));
+  }
+}
+
+function setupGamePeer(targetId, pc, dc) {
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      if (lobbyPeers[targetId] && lobbyPeers[targetId].dc) {
+        lobbyPeers[targetId].dc.send(JSON.stringify({
+          type: 'game-ice', from: myPeerId, candidate: e.candidate
+        }));
+      }
     }
   };
 
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      sendSignal({ ice: event.candidate });
-    }
-  };
-
-  if (isHost) {
-    dataChannel = peerConnection.createDataChannel('gameChannel');
-    setupDataChannel();
-    createOffer();
-  } else {
-    peerConnection.ondatachannel = (event) => {
-      dataChannel = event.channel;
-      setupDataChannel();
+  if (dc) {
+    dc.onopen = () => {
+      checkGameMeshReady();
+    };
+    dc.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'move') {
+        gameState[msg.index] = msg.player;
+        myTurn = true; 
+        updateBoard();
+        checkWin();
+      }
     };
   }
 }
 
-async function createOffer() {
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  await sendSignal({ sdp: peerConnection.localDescription });
-}
-
-function setupDataChannel() {
-  dataChannel.onopen = () => {
-    console.log("Data Channel OPEN");
-    document.getElementById('network-dot').classList.add('connected');
-    document.getElementById('game-status').innerText = "Match Started! " + (isHost ? "Your turn (X)" : "Opponent's turn (O)");
-    document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-    myTurn = isHost; 
-    stopPolling();
+async function handleGameSignal(msg) {
+  const { type, from, sdp, candidate } = msg;
+  
+  if (type === 'game-offer') {
+    const pc = new RTCPeerConnection(rtcConfig);
+    gamePeers[from] = { pc, dc: null };
     
-    // Exchange names
-    dataChannel.send(JSON.stringify({ type: 'handshake', name: myName }));
-  };
-  
-  dataChannel.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-    if (msg.type === 'handshake') {
-      opponentName = msg.name || 'Opponent';
-      document.getElementById('game-status').innerText = myTurn 
-        ? `Your turn (${isHost ? 'X' : 'O'}) vs ${opponentName}`
-        : `${opponentName}'s turn (${!isHost ? 'X' : 'O'})`;
-    } else if (msg.type === 'move') {
-      gameState[msg.index] = msg.player;
-      updateBoard();
-      myTurn = true;
-      document.getElementById('game-status').innerText = "Your turn (" + (isHost ? "X" : "O") + ")";
-      checkWin();
-    }
-  };
-}
-
-let signalQueue = Promise.resolve();
-
-function sendSignal(payload) {
-  if (!currentRoomId) return;
-  payload.role = isHost ? 'host' : 'guest';
-  
-  signalQueue = signalQueue.then(async () => {
-    try {
-      await fetch(`${API_BASE}/api/rooms/${currentRoomId}/signal`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      console.error("Signal error", e);
-    }
-  });
-}
-
-function startPolling() {
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(async () => {
-    if (!currentRoomId) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/rooms/${currentRoomId}/signal`);
-      const room = await res.json();
-      
-      if (isHost) {
-        if (room.guest_sdp && peerConnection.signalingState === 'have-local-offer') {
-          const sdpStr = JSON.stringify(room.guest_sdp);
-          if (sdpStr !== lastGuestSdpStr) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(room.guest_sdp));
-            lastGuestSdpStr = sdpStr;
-          }
-        }
-        room.guest_ice.forEach(async ice => {
-          const iceStr = JSON.stringify(ice);
-          if (!processedIceCandidates.has(iceStr)) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(ice));
-            processedIceCandidates.add(iceStr);
-          }
-        });
-      } else {
-        if (room.host_sdp) {
-          const sdpStr = JSON.stringify(room.host_sdp);
-          if (sdpStr !== lastHostSdpStr) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(room.host_sdp));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            await sendSignal({ sdp: peerConnection.localDescription });
-            lastHostSdpStr = sdpStr;
-          }
-        }
-        room.host_ice.forEach(async ice => {
-          const iceStr = JSON.stringify(ice);
-          if (!processedIceCandidates.has(iceStr)) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(ice));
-            processedIceCandidates.add(iceStr);
-          }
-        });
+    pc.ondatachannel = (e) => {
+      if (e.channel.label === 'game-channel') {
+        gamePeers[from].dc = e.channel;
+        setupGamePeer(from, pc, e.channel);
+        checkGameMeshReady();
       }
-    } catch (e) {
-      console.log("Polling error", e);
-    }
-  }, 1000); // Polling every 1 second
-}
-
-function stopPolling() {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+    };
+    setupGamePeer(from, pc, null);
+    
+    await pc.setRemoteDescription(sdp);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    
+    lobbyPeers[from].dc.send(JSON.stringify({
+      type: 'game-answer', from: myPeerId, sdp: answer
+    }));
+  } else if (type === 'game-answer') {
+    await gamePeers[from].pc.setRemoteDescription(sdp);
+  } else if (type === 'game-ice') {
+    await gamePeers[from].pc.addIceCandidate(candidate);
   }
 }
 
-// Tic-Tac-Toe Game Logic
-document.querySelectorAll('.cell').forEach(cell => {
-  cell.addEventListener('click', (e) => {
-    if (!myTurn || dataChannel?.readyState !== 'open') return;
-    const index = e.target.getAttribute('data-index');
-    if (gameState[index] !== '') return; // cell occupied
-    
-    const symbol = isHost ? 'X' : 'O';
-    gameState[index] = symbol;
-    updateBoard();
-    myTurn = false;
-    document.getElementById('game-status').innerText = "Opponent's turn";
-    
-    dataChannel.send(JSON.stringify({ type: 'move', index, player: symbol }));
-    checkWin();
-  });
-});
+function checkGameMeshReady() {
+  const ready = Object.values(gamePeers).every(p => p.dc && p.dc.readyState === 'open');
+  if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
+    document.getElementById('game-status').innerText = `Your turn!`;
+    if (!myTurn) document.getElementById('game-status').innerText = `Opponent's turn`;
+    document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+  }
+  updateDiagnostics();
+}
+
+function updateDiagnostics() {
+  const lobbyCount = Object.values(lobbyPeers).filter(p => p.dc && p.dc.readyState === 'open').length;
+  const gameCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
+  
+  const dot = document.getElementById('network-dot');
+  const txt = document.getElementById('status-text');
+  
+  if (dot && txt) {
+    if (lobbyCount > 0) {
+      dot.className = 'status-dot connected';
+      txt.innerText = `LOBBY MESH: ${lobbyCount} PEER(S) ${isLeader ? '[LEADER]' : ''}`;
+    } else {
+      dot.className = 'status-dot connecting';
+      txt.innerText = `LOBBY MESH: SEEKING... ${isLeader ? '[LEADER]' : ''}`;
+    }
+  }
+}
+
+// TIC TAC TOE LOGIC
+function createBoard() {
+  const board = document.getElementById('tic-tac-toe-board');
+  board.innerHTML = '';
+  for (let i=0; i<9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.index = i;
+    cell.addEventListener('click', () => handleMove(i));
+    board.appendChild(cell);
+  }
+}
+
+function handleMove(index) {
+  if (gameState[index] !== '' || !myTurn) return;
+  const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+  gameState[index] = mySymbol;
+  updateBoard();
+  checkWin();
+  
+  for (const p in gamePeers) {
+    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+      gamePeers[p].dc.send(JSON.stringify({ type: 'move', index, player: mySymbol }));
+    }
+  }
+  myTurn = false;
+  document.getElementById('game-status').innerText = `Opponent's turn`;
+}
 
 function updateBoard() {
-  document.querySelectorAll('.cell').forEach((cell, i) => {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => {
     cell.innerText = gameState[i];
   });
 }
 
 function checkWin() {
-  const winLines = [
-    [0,1,2],[3,4,5],[6,7,8], // rows
-    [0,3,6],[1,4,7],[2,5,8], // cols
-    [0,4,8],[2,4,6]          // diagonals
+  const winPatterns = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
   ];
-  
-  let winner = null;
-  for (let line of winLines) {
-    if (gameState[line[0]] && gameState[line[0]] === gameState[line[1]] && gameState[line[0]] === gameState[line[2]]) {
-      winner = gameState[line[0]];
-      break;
+  for (let pattern of winPatterns) {
+    const [a,b,c] = pattern;
+    if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
+      const winner = gameState[a];
+      const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+      document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : 'Opponent Wins!';
+      document.getElementById('tic-tac-toe-board').classList.add('disabled');
+      myTurn = false;
+      return;
     }
   }
-  
-  if (winner) {
-    document.getElementById('game-status').innerText = `${winner === (isHost ? 'X' : 'O') ? 'You win!' : `${opponentName} wins!`}`;
-    document.getElementById('tic-tac-toe-board').classList.add('disabled');
-    myTurn = false;
-  } else if (!gameState.includes('')) {
+  if (!gameState.includes('')) {
     document.getElementById('game-status').innerText = "It's a draw!";
     myTurn = false;
   }
 }
 
-function leaveGame() {
-  stopPolling();
-  if (peerConnection) peerConnection.close();
-  if (dataChannel) dataChannel.close();
-  currentRoomId = null;
-  releaseWakeLock();
+document.getElementById('btn-leave-game').addEventListener('click', () => {
+  for (const p in gamePeers) {
+    if (gamePeers[p].pc) gamePeers[p].pc.close();
+  }
+  gamePeers = {};
+  gamePlayers = [];
   gameState = ['', '', '', '', '', '', '', '', ''];
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.add('disabled');
+  
   showScreen('screen-lobby');
-  startLobbyPolling();
-}
+  startRoomPolling();
+  updateDiagnostics();
+});
+
+createBoard();
+startLobbyMesh();
+startRoomPolling();

@@ -92,29 +92,72 @@ export default {
       }
 
       if (action === 'signal' && method === 'GET') {
-        // Return current signaling state (polling)
         return new Response(JSON.stringify(room), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       if (action === 'signal' && method === 'POST') {
-        // Update signaling state (SDP offers/answers, ICE candidates)
         const body = await request.json();
-        const role = body.role; // 'host' or 'guest'
-        let updated = false;
+        Object.assign(room, body);
+        await env.FIVEDICE_KV.put(roomId, JSON.stringify(room), { expirationTtl: 3600 });
+        return new Response(JSON.stringify(room), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
 
-        if (body.sdp) {
-          if (role === 'host') { room.host_sdp = body.sdp; room.host_ice = []; updated = true; }
-          if (role === 'guest') { room.guest_sdp = body.sdp; room.guest_ice = []; updated = true; }
-        }
-        if (body.ice) {
-          if (role === 'host') { room.host_ice.push(body.ice); updated = true; }
-          if (role === 'guest') { room.guest_ice.push(body.ice); updated = true; }
-        }
+    // --- GLOBAL LOBBY MESH SIGNALING ---
 
-        if (updated) {
-          await env.FIVEDICE_KV.put(roomId, JSON.stringify(room), { expirationTtl: 3600 });
+    // Leader Election
+    if (path === '/api/lobby/leader') {
+      if (method === 'GET') {
+        let leader = await env.FIVEDICE_KV.get('lobby_leader', { type: 'json' });
+        return new Response(JSON.stringify(leader || {}), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (method === 'POST') {
+        const body = await request.json();
+        await env.FIVEDICE_KV.put('lobby_leader', JSON.stringify(body), { expirationTtl: 30 });
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+    }
+
+    // POST /api/lobby/new_peers - Announce a new peer
+    if (path === '/api/lobby/new_peers' && method === 'POST') {
+      const body = await request.json();
+      let newPeers = await env.FIVEDICE_KV.get('lobby_new_peers', { type: 'json' }) || [];
+      if (!newPeers.includes(body.peerId)) {
+        newPeers.push(body.peerId);
+        await env.FIVEDICE_KV.put('lobby_new_peers', JSON.stringify(newPeers), { expirationTtl: 60 });
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // GET /api/lobby/new_peers - Leader polls for new peers
+    if (path === '/api/lobby/new_peers' && method === 'GET') {
+      let newPeers = await env.FIVEDICE_KV.get('lobby_new_peers', { type: 'json' }) || [];
+      if (newPeers.length > 0) {
+        await env.FIVEDICE_KV.put('lobby_new_peers', JSON.stringify([]), { expirationTtl: 60 });
+      }
+      return new Response(JSON.stringify(newPeers), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Dynamic routing for peer signals: /api/lobby/signal/:peerId
+    const peerSignalMatch = path.match(/^\/api\/lobby\/signal\/([a-zA-Z0-9_-]+)$/);
+    if (peerSignalMatch) {
+      const peerId = peerSignalMatch[1];
+      const signalKey = 'signal:' + peerId;
+
+      if (method === 'GET') {
+        let signals = await env.FIVEDICE_KV.get(signalKey, { type: 'json' }) || [];
+        if (signals.length > 0) {
+          await env.FIVEDICE_KV.delete(signalKey); // clear after reading
         }
-        return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify(signals), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      if (method === 'POST') {
+        const payload = await request.json();
+        let signals = await env.FIVEDICE_KV.get(signalKey, { type: 'json' }) || [];
+        signals.push(payload);
+        await env.FIVEDICE_KV.put(signalKey, JSON.stringify(signals), { expirationTtl: 60 });
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
       }
     }
 
