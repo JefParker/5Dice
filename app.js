@@ -9,7 +9,7 @@ const myWeight = (isDesktop ? 100 : 50) + Math.floor(Math.random() * 10);
 let lobbyPeers = {}; // { [id]: { pc, dc, name } }
 let gamePeers = {};  // { [id]: { pc, dc } }
 
-let myName = localStorage.getItem('playerName') || 'Jeff';
+let myName = localStorage.getItem('playerName') || '';
 let currentRoomId = null; 
 let activeRooms = {}; // { roomId: { id, name, host } }
 let isHost = false;
@@ -162,6 +162,15 @@ function setupLobbyPeer(targetId, pc, dc) {
     if (dc.readyState === 'open') {
       onOpenHandler();
     }
+
+    dc.onclose = () => {
+      const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Unknown';
+      if (name !== 'Unknown') {
+        appendChatMessage('System', `${name} has left.`);
+      }
+      delete lobbyPeers[targetId];
+      updateDiagnostics();
+    };
 
     dc.onmessage = async (e) => {
       const msg = JSON.parse(e.data);
@@ -332,8 +341,14 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
   if (newName) {
     myName = newName;
     localStorage.setItem('playerName', myName);
+    showScreen('screen-lobby');
+    if (!mqttClient) {
+      startLobbyMesh();
+      startRoomPolling();
+    }
+  } else {
+    alert("Please enter a display name to continue.");
   }
-  showScreen('screen-lobby');
 });
 
 document.getElementById('btn-create-new').addEventListener('click', () => {
@@ -618,5 +633,9 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
 });
 
 createBoard();
-startLobbyMesh();
-startRoomPolling();
+if (!myName) {
+  showScreen('screen-settings');
+} else {
+  startLobbyMesh();
+  startRoomPolling();
+}
