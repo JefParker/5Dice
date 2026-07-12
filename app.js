@@ -669,8 +669,8 @@ function setupGamePeer(targetId, pc, dc) {
             broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
           }
         }
-        const newHostName = lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player';
-        showToast(`${newHostName} is now hosting`);
+        const newHostName = (newHostId === myPeerId) ? 'You' : (lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player');
+        showToast(`${newHostName} ${newHostId === myPeerId ? 'are' : 'is'} now hosting`);
       } else if (msg.type === 'PLAYER_LEFT') {
         handlePeerDisconnect(msg.peerId);
       }
@@ -875,7 +875,10 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
     if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
       gamePeers[p].dc.send(JSON.stringify({ type: 'PLAYER_LEFT', peerId: myPeerId }));
     }
-    if (gamePeers[p].pc) gamePeers[p].pc.close();
+    const pc = gamePeers[p].pc;
+    if (pc) {
+      setTimeout(() => pc.close(), 500);
+    }
   }
   gamePeers = {};
   gamePlayers = [];
