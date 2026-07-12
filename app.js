@@ -151,12 +151,17 @@ function setupLobbyPeer(targetId, pc, dc) {
   };
 
   if (dc) {
-    dc.onopen = () => {
+    const onOpenHandler = () => {
       console.log(`Lobby channel open with ${targetId}`);
       const myRooms = Object.values(activeRooms).filter(r => r.host === myPeerId);
       dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers), rooms: myRooms }));
       updateDiagnostics();
     };
+
+    dc.onopen = onOpenHandler;
+    if (dc.readyState === 'open') {
+      onOpenHandler();
+    }
 
     dc.onmessage = async (e) => {
       const msg = JSON.parse(e.data);
@@ -454,9 +459,13 @@ function setupGamePeer(targetId, pc, dc) {
   };
 
   if (dc) {
-    dc.onopen = () => {
+    const onOpenHandler = () => {
       checkGameMeshReady();
     };
+    dc.onopen = onOpenHandler;
+    if (dc.readyState === 'open') {
+      onOpenHandler();
+    }
     dc.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (msg.type === 'move') {
