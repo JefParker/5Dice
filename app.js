@@ -465,6 +465,10 @@ function renderRooms() {
   rooms.forEach(r => {
     const div = document.createElement('div');
     div.className = 'room-card';
+    const hostColor = (r.host === myPeerId) ? myColor : ((lobbyPeers[r.host] && lobbyPeers[r.host].color) ? lobbyPeers[r.host].color : '');
+    if (hostColor) {
+      div.style.backgroundColor = hostColor;
+    }
     div.innerHTML = `
       <h3>${r.name}</h3>
       <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : r.host}</p>
@@ -535,6 +539,13 @@ async function initiateGameConnection(targetId) {
 }
 
 function setupGamePeer(targetId, pc, dc) {
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
+      showToast(`${name} has left`);
+    }
+  };
+
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       if (lobbyPeers[targetId] && lobbyPeers[targetId].dc) {
@@ -693,9 +704,10 @@ function checkWin() {
       const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
       let opponentId = gamePlayers.find(p => p !== myPeerId);
       let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
+      let opponentName = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].name) ? lobbyPeers[opponentId].name : 'Opponent';
       let winnerColor = (winner === mySymbol) ? myColor : opponentColor;
       
-      document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : 'Opponent Wins!';
+      document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : `${opponentName} Wins!`;
       document.getElementById('tic-tac-toe-board').classList.add('disabled');
       myTurn = false;
       document.getElementById('screen-game').style.backgroundColor = winnerColor;
