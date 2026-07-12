@@ -360,10 +360,16 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
 
   if (recentChats.some(c => c.id === id)) return;
 
-  recentChats.push({ id, author, text, timestamp, color });
-  recentChats = recentChats.filter(c => Date.now() - c.timestamp < 5 * 60 * 1000);
+  const isSystem = (author === 'System');
+  const maxAge = isSystem ? 60 * 1000 : 5 * 60 * 1000;
 
-  const timeRemaining = (5 * 60 * 1000) - (Date.now() - timestamp);
+  recentChats.push({ id, author, text, timestamp, color });
+  recentChats = recentChats.filter(c => {
+    const cMaxAge = (c.author === 'System') ? 60 * 1000 : 5 * 60 * 1000;
+    return (Date.now() - c.timestamp) < cMaxAge;
+  });
+
+  const timeRemaining = maxAge - (Date.now() - timestamp);
   if (timeRemaining <= 0) return;
 
   const div = document.createElement('div');
