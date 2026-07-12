@@ -592,31 +592,36 @@ async function initiateGameConnection(targetId) {
   }
 }
 
+function handlePeerDisconnect(targetId) {
+  if (!gamePeers[targetId]) return;
+  const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
+  const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
+  showToast(`${name} has left`, color);
+
+  delete gamePeers[targetId];
+  gamePlayers = gamePlayers.filter(p => p !== targetId);
+
+  if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
+    const remainingPlayers = [...gamePlayers].sort();
+    if (remainingPlayers.length > 0 && remainingPlayers[0] === myPeerId) {
+       isHost = true;
+       activeRooms[currentRoomId].host = myPeerId;
+       broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
+       showToast(`You are now hosting`);
+       
+       for (const p in gamePeers) {
+         if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+           gamePeers[p].dc.send(JSON.stringify({ type: 'HOST_HANDOFF', newHostId: myPeerId }));
+         }
+       }
+    }
+  }
+}
+
 function setupGamePeer(targetId, pc, dc) {
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-      const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
-      const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
-      showToast(`${name} has left`, color);
-
-      if (gamePeers[targetId]) delete gamePeers[targetId];
-      gamePlayers = gamePlayers.filter(p => p !== targetId);
-
-      if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
-        const remainingPlayers = [...gamePlayers].sort();
-        if (remainingPlayers.length > 0 && remainingPlayers[0] === myPeerId) {
-           isHost = true;
-           activeRooms[currentRoomId].host = myPeerId;
-           broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
-           showToast(`You are now hosting`);
-           
-           for (const p in gamePeers) {
-             if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-               gamePeers[p].dc.send(JSON.stringify({ type: 'HOST_HANDOFF', newHostId: myPeerId }));
-             }
-           }
-        }
-      }
+      handlePeerDisconnect(targetId);
     }
   };
 
@@ -666,6 +671,8 @@ function setupGamePeer(targetId, pc, dc) {
         }
         const newHostName = lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player';
         showToast(`${newHostName} is now hosting`);
+      } else if (msg.type === 'PLAYER_LEFT') {
+        handlePeerDisconnect(msg.peerId);
       }
     };
   }
@@ -865,6 +872,9 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
   }
 
   for (const p in gamePeers) {
+    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+      gamePeers[p].dc.send(JSON.stringify({ type: 'PLAYER_LEFT', peerId: myPeerId }));
+    }
     if (gamePeers[p].pc) gamePeers[p].pc.close();
   }
   gamePeers = {};
