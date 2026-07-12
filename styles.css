@@ -496,3 +496,4 @@ label {
 @keyframes slideUpTie {
   to { bottom: 0; }
 }
+.hidden { display: none !important; }
