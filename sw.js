@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v1';
+const CACHE_NAME = '5dice-cache-v2';
 const urlsToCache = [
   './',
   './index.html',
@@ -24,5 +24,20 @@ self.addEventListener('fetch', event => {
         // If not in cache, fetch from network
         return fetch(event.request);
       })
+  );
+});
+
+self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
   );
 });
