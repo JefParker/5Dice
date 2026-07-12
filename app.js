@@ -464,16 +464,31 @@ window.joinRoom = function(roomId) {
   if (!room) return alert('Room no longer exists.');
   
   showLoading('Joining Room...');
-  if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
+  const sendJoin = () => {
     lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: myUuid }));
     currentRoomId = roomId;
     isHost = false;
     showScreen('screen-game');
     document.getElementById('game-status').innerText = 'Joined! Waiting for host to start game mesh...';
+    hideLoading();
+  };
+
+  if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
+    sendJoin();
   } else {
-    alert('Host is not connected to your mesh network!');
+    initiateLobbyConnection(room.host, null);
+    let attempts = 0;
+    const interval = setInterval(() => {
+      if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
+        clearInterval(interval);
+        sendJoin();
+      } else if (++attempts > 20) { // 5 seconds timeout
+        clearInterval(interval);
+        hideLoading();
+        alert('Failed to connect to the host. They might be offline.');
+      }
+    }, 250);
   }
-  hideLoading();
 };
 
 function renderRooms() {
