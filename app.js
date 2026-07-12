@@ -547,15 +547,15 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
 
 function setupGameUI(gameType) {
   const tttBoard = document.getElementById('tic-tac-toe-board');
-  const fdBoard = document.getElementById('five-dice-board');
+  const fdContainer = document.getElementById('five-dice-container');
   if (gameType === '5 Dice') {
     tttBoard.classList.add('hidden');
-    fdBoard.classList.remove('hidden');
+    fdContainer.classList.remove('hidden');
     document.body.classList.add('bg-five-dice');
     init5DiceGame();
   } else {
     tttBoard.classList.remove('hidden');
-    fdBoard.classList.add('hidden');
+    fdContainer.classList.add('hidden');
     document.body.classList.remove('bg-five-dice');
   }
 }
