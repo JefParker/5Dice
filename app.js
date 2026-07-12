@@ -355,6 +355,12 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = myName ? "Back to Lobby" : "Save & Return";
   btn.style.backgroundColor = myName ? "#28a745" : "#4a90e2";
+  
+  if (document.getElementById('settings-uuid')) {
+    document.getElementById('settings-uuid').value = gameState.userId;
+    document.getElementById('update-uuid-btn').style.display = 'none';
+  }
+
   showScreen('screen-settings');
 });
 
@@ -452,6 +458,20 @@ function startRoomPolling() {
 
 // --- TIER 2: GAME MESH (ZERO-SERVER) ---
 let gameState = ['', '', '', '', '', '', '', '', ''];
+
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+gameState.userId = localStorage.getItem('timeline_user_id');
+if (!gameState.userId) {
+  gameState.userId = generateUUID();
+  localStorage.setItem('timeline_user_id', gameState.userId);
+}
+
 let myTurn = false;
 let gamePlayers = [];
 let gameHost = null;
@@ -661,6 +681,88 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
   startRoomPolling();
   updateDiagnostics();
 });
+
+// --- PLAYER ID SYNC LOGIC ---
+const settingsUuidInput = document.getElementById('settings-uuid');
+const updateUuidBtn = document.getElementById('update-uuid-btn');
+const copyUuidBtn = document.getElementById('copy-uuid-btn');
+const pasteUuidBtn = document.getElementById('paste-uuid-btn');
+const confirmUuidModal = document.getElementById('confirm-uuid-modal');
+const confirmUuidYes = document.getElementById('confirm-uuid-yes');
+const confirmUuidNo = document.getElementById('confirm-uuid-no');
+const newUuidDisplay = document.getElementById('new-uuid-display');
+const toastEl = document.getElementById('toast');
+
+let pendingUuid = null;
+
+function showToast(msg) {
+  if (!toastEl) return;
+  toastEl.innerText = msg;
+  toastEl.classList.remove('hidden');
+  setTimeout(() => { toastEl.classList.add('hidden'); }, 3000);
+}
+
+if (settingsUuidInput) {
+  settingsUuidInput.addEventListener('input', (e) => {
+    const val = e.target.value.trim();
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(val) && val !== gameState.userId) {
+      updateUuidBtn.style.display = 'block';
+    } else {
+      updateUuidBtn.style.display = 'none';
+    }
+  });
+}
+
+if (copyUuidBtn) {
+  copyUuidBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(gameState.userId).then(() => {
+      showToast("Player ID copied!");
+    }).catch(() => {
+      showToast("Unable to copy ID");
+    });
+  });
+}
+
+if (pasteUuidBtn) {
+  pasteUuidBtn.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      settingsUuidInput.value = text.trim();
+      settingsUuidInput.dispatchEvent(new Event('input'));
+      showToast("ID pasted from clipboard");
+    } catch (e) {
+      showToast("Unable to paste ID");
+    }
+  });
+}
+
+if (updateUuidBtn) {
+  updateUuidBtn.addEventListener('click', () => {
+    pendingUuid = settingsUuidInput.value.trim();
+    newUuidDisplay.innerText = pendingUuid;
+    confirmUuidModal.classList.remove('hidden');
+  });
+}
+
+if (confirmUuidNo) {
+  confirmUuidNo.addEventListener('click', () => {
+    confirmUuidModal.classList.add('hidden');
+    settingsUuidInput.value = gameState.userId;
+    updateUuidBtn.style.display = 'none';
+    pendingUuid = null;
+  });
+}
+
+if (confirmUuidYes) {
+  confirmUuidYes.addEventListener('click', () => {
+    gameState.userId = pendingUuid;
+    localStorage.setItem('timeline_user_id', pendingUuid);
+    confirmUuidModal.classList.add('hidden');
+    showToast("Player ID synced! Reloading...");
+    setTimeout(() => location.reload(), 1500);
+  });
+}
 
 createBoard();
 if (!myName) {

@@ -52,6 +52,22 @@
       <div class="setup-container">
         <label for="global-player-name">Your Display Name</label>
         <input type="text" id="global-player-name" class="capsule-input" placeholder="Enter your name" style="margin-top: 8px;">
+        
+        <div class="settings-section" style="margin-top: 24px;">
+          <label>Player ID</label>
+          <p class="small-hint" style="text-align: left; margin-bottom: 8px;">1. Copy ID from your other device.<br>2. Paste it here and tap Update Player ID.</p>
+          <div class="input-group" style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="settings-uuid" class="capsule-input" placeholder="xxxx-xxxx-xxxx-xxxx" style="margin-bottom: 0;">
+            <button id="copy-uuid-btn" class="icon-btn" aria-label="Copy" style="padding: 10px; background: #3a3a3a; border: none; border-radius: 8px; color: white; cursor: pointer;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            </button>
+            <button id="paste-uuid-btn" class="icon-btn" aria-label="Paste" style="padding: 10px; background: #3a3a3a; border: none; border-radius: 8px; color: white; cursor: pointer;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+            </button>
+          </div>
+          <button id="update-uuid-btn" class="capsule-button" style="background-color: #dc3545; color: white; display: none;">Update Player ID</button>
+        </div>
+
         <button id="btn-save-settings" class="capsule-button" style="background-color: #4a90e2; color: #fff; margin-top: 20px;">Save & Return</button>
       </div>
     </div>
@@ -135,6 +151,21 @@
         <button id="btn-close-ios-modal" class="capsule-button">Dismiss</button>
       </div>
     </div>
+
+    <!-- Confirm UUID Modal -->
+    <div id="confirm-uuid-modal" class="overlay hidden">
+      <div class="overlay-content">
+        <h2 style="color: #dc3545;">Are you sure?</h2>
+        <p style="margin: 15px 0;">This will change your Player ID to <span id="new-uuid-display" style="font-family: monospace; font-weight: bold;"></span>. Your current device history will be merged or overwritten by the progress on this ID. This cannot be undone!</p>
+        <div class="action-group">
+          <button id="confirm-uuid-yes" class="capsule-button" style="background-color: #dc3545; color: white; margin-bottom: 0;">Yes, Sync</button>
+          <button id="confirm-uuid-no" class="capsule-button" style="margin-bottom: 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
   </div>
 
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
