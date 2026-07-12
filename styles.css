@@ -426,3 +426,19 @@ label {
   pointer-events: none;
 }
 
+.tie-background {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-1),
+    var(--color-1) 50px,
+    var(--color-2) 50px,
+    var(--color-2) 100px
+  ) !important;
+  background-size: 200px 200px !important;
+  animation: slideStripes 2s linear infinite;
+}
+
+@keyframes slideStripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 200px 200px; }
+}

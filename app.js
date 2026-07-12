@@ -601,6 +601,7 @@ async function handleGameSignal(msg) {
 
 function updateGameBackground() {
   const gameScreen = document.getElementById('screen-game');
+  gameScreen.classList.remove('tie-background');
   let opponentId = gamePlayers.find(p => p !== myPeerId);
   let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
   
@@ -690,24 +691,38 @@ function checkWin() {
     if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
       const winner = gameState[a];
       const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+      let opponentId = gamePlayers.find(p => p !== myPeerId);
+      let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
+      let winnerColor = (winner === mySymbol) ? myColor : opponentColor;
+      
       document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : 'Opponent Wins!';
       document.getElementById('tic-tac-toe-board').classList.add('disabled');
       myTurn = false;
-      document.getElementById('screen-game').style.backgroundColor = '#2a2a2a';
+      document.getElementById('screen-game').style.backgroundColor = winnerColor;
       return true;
     }
   }
   if (!gameState.includes('')) {
     document.getElementById('game-status').innerText = "It's a draw!";
     myTurn = false;
-    document.getElementById('screen-game').style.backgroundColor = '#2a2a2a';
+    
+    let opponentId = gamePlayers.find(p => p !== myPeerId);
+    let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
+    
+    const gameScreen = document.getElementById('screen-game');
+    gameScreen.style.setProperty('--color-1', myColor);
+    gameScreen.style.setProperty('--color-2', opponentColor);
+    gameScreen.style.backgroundColor = '';
+    gameScreen.classList.add('tie-background');
     return true;
   }
   return false;
 }
 
 document.getElementById('btn-leave-game').addEventListener('click', () => {
-  document.getElementById('screen-game').style.backgroundColor = '#2a2a2a';
+  const gameScreen = document.getElementById('screen-game');
+  gameScreen.style.backgroundColor = '#2a2a2a';
+  gameScreen.classList.remove('tie-background');
   for (const p in gamePeers) {
     if (gamePeers[p].pc) gamePeers[p].pc.close();
   }
