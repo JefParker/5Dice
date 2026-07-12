@@ -29,6 +29,31 @@ let isHost = false;
 let mqttClient = null;
 let recentChats = []; // { id, author, text, timestamp }
 
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+    } catch (err) {
+      console.error(`Wake Lock error: ${err.message}`);
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock !== null) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+});
+
 const rtcConfig = { 
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -43,6 +68,12 @@ const chatHistory = document.getElementById('chat-history');
 
 // UI State Management
 function showScreen(screenId) {
+  if (screenId === 'screen-lobby' || screenId === 'screen-game') {
+    requestWakeLock();
+  } else {
+    releaseWakeLock();
+  }
+
   document.querySelectorAll('.screen').forEach(el => {
     if (el.id === screenId) {
       el.classList.remove('hidden');
