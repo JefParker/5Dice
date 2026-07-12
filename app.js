@@ -169,7 +169,7 @@ function setupLobbyPeer(targetId, pc, dc) {
       console.log(`Lobby channel open with ${targetId}`);
       const myRooms = Object.values(activeRooms).filter(r => r.host === myPeerId);
       const shareableChats = recentChats.filter(c => c.author !== 'System');
-      dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers), rooms: myRooms, chats: shareableChats }));
+      dc.send(JSON.stringify({ type: 'handshake', name: myName, color: myColor, knownPeers: Object.keys(lobbyPeers), rooms: myRooms, chats: shareableChats }));
       updateDiagnostics();
     };
 
@@ -197,6 +197,7 @@ function setupLobbyPeer(targetId, pc, dc) {
         }
       } else if (msg.type === 'handshake') {
         lobbyPeers[targetId].name = msg.name;
+        if (msg.color) lobbyPeers[targetId].color = msg.color;
         if (msg.knownPeers) {
           for (const p of msg.knownPeers) {
             if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
@@ -565,6 +566,7 @@ function setupGamePeer(targetId, pc, dc) {
         if (!gameOver) {
           myTurn = true; 
           document.getElementById('game-status').innerText = 'Your turn!';
+          updateGameBackground();
         }
       }
     };
@@ -601,12 +603,25 @@ async function handleGameSignal(msg) {
   }
 }
 
+function updateGameBackground() {
+  const gameScreen = document.getElementById('screen-game');
+  let opponentId = gamePlayers.find(p => p !== myPeerId);
+  let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
+  
+  if (myTurn) {
+    gameScreen.style.backgroundColor = myColor;
+  } else {
+    gameScreen.style.backgroundColor = opponentColor;
+  }
+}
+
 function checkGameMeshReady() {
   const ready = Object.values(gamePeers).every(p => p.dc && p.dc.readyState === 'open');
   if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
     document.getElementById('game-status').innerText = `Your turn!`;
     if (!myTurn) document.getElementById('game-status').innerText = `Opponent's turn`;
     document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+    updateGameBackground();
   }
   updateDiagnostics();
 }
@@ -657,6 +672,7 @@ function handleMove(index) {
   if (!gameOver) {
     myTurn = false;
     document.getElementById('game-status').innerText = `Opponent's turn`;
+    updateGameBackground();
   }
 }
 
@@ -681,18 +697,21 @@ function checkWin() {
       document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : 'Opponent Wins!';
       document.getElementById('tic-tac-toe-board').classList.add('disabled');
       myTurn = false;
+      document.getElementById('screen-game').style.backgroundColor = '#2a2a2a';
       return true;
     }
   }
   if (!gameState.includes('')) {
     document.getElementById('game-status').innerText = "It's a draw!";
     myTurn = false;
+    document.getElementById('screen-game').style.backgroundColor = '#2a2a2a';
     return true;
   }
   return false;
 }
 
 document.getElementById('btn-leave-game').addEventListener('click', () => {
+  document.getElementById('screen-game').style.backgroundColor = '#2a2a2a';
   for (const p in gamePeers) {
     if (gamePeers[p].pc) gamePeers[p].pc.close();
   }
