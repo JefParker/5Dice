@@ -13,6 +13,7 @@ let myName = localStorage.getItem('playerName') || 'Jeff';
 let currentRoomId = null; 
 let activeRooms = {}; // { roomId: { id, name, host } }
 let isHost = false;
+let mqttClient = null;
 
 const rtcConfig = { 
   iceServers: [
