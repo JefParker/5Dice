@@ -11,8 +11,9 @@
   <div id="app-container">
     <!-- Screen A: Lobby -->
     <div id="screen-lobby" class="screen active">
-      <header class="top-header">
+      <header class="top-header" style="position: relative;">
         <h1>🎲 Public Game Lobby 🎲</h1>
+        <button id="btn-settings" style="position: absolute; right: 16px; top: 16px; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: white;" aria-label="Settings">⚙️</button>
       </header>
       <div class="content-layout">
         <aside id="chat-sidebar" class="sidebar">
@@ -41,6 +42,18 @@
           <span id="status-text">CONNECTED</span>
         </div>
       </footer>
+    </div>
+
+    <!-- Screen C: Settings -->
+    <div id="screen-settings" class="screen hidden">
+      <header class="top-header">
+        <h1>⚙️ Settings</h1>
+      </header>
+      <div class="setup-container">
+        <label for="global-player-name">Your Display Name</label>
+        <input type="text" id="global-player-name" class="capsule-input" placeholder="Enter your name" style="margin-top: 8px;">
+        <button id="btn-save-settings" class="capsule-button" style="background-color: #4a90e2; color: #fff; margin-top: 20px;">Save & Return</button>
+      </div>
     </div>
 
     <!-- Screen B: Setup -->

@@ -317,7 +317,22 @@ document.querySelector('.main-content').addEventListener('click', () => {
 
 // --- ROOM LOGIC ---
 
+document.getElementById('btn-settings').addEventListener('click', () => {
+  document.getElementById('global-player-name').value = myName;
+  showScreen('screen-settings');
+});
+
+document.getElementById('btn-save-settings').addEventListener('click', () => {
+  const newName = document.getElementById('global-player-name').value.trim();
+  if (newName) {
+    myName = newName;
+    localStorage.setItem('playerName', myName);
+  }
+  showScreen('screen-lobby');
+});
+
 document.getElementById('btn-create-new').addEventListener('click', () => {
+  document.getElementById('player-1-input').value = myName;
   showScreen('screen-setup');
 });
 
