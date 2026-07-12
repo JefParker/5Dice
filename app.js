@@ -1062,6 +1062,8 @@ if (!myName) {
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = "Head to Lobby";
   btn.style.backgroundColor = "#28a745";
+  const colorPicker = document.getElementById('player-color-picker');
+  if (colorPicker) colorPicker.value = myColor;
   showScreen('screen-settings');
 } else {
   startLobbyMesh();
