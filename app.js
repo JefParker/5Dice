@@ -6,6 +6,19 @@ let myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
 const isDesktop = !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 const myWeight = (isDesktop ? 100 : 50) + Math.floor(Math.random() * 10);
 
+function generateDarkColor() {
+  const r = Math.floor(Math.random() * 128).toString(16).padStart(2, '0');
+  const g = Math.floor(Math.random() * 128).toString(16).padStart(2, '0');
+  const b = Math.floor(Math.random() * 128).toString(16).padStart(2, '0');
+  return '#' + r + g + b;
+}
+
+let myColor = localStorage.getItem('playerColor');
+if (!myColor) {
+  myColor = generateDarkColor();
+  localStorage.setItem('playerColor', myColor);
+}
+
 let lobbyPeers = {}; // { [id]: { pc, dc, name } }
 let gamePeers = {};  // { [id]: { pc, dc } }
 
@@ -168,7 +181,7 @@ function setupLobbyPeer(targetId, pc, dc) {
     dc.onclose = () => {
       const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Unknown';
       if (name !== 'Unknown') {
-        appendChatMessage('System', `${name} has left.`);
+        appendChatMessage('System', `${name} has left.`, null, null, '#555');
       }
       delete lobbyPeers[targetId];
       updateDiagnostics();
@@ -196,9 +209,9 @@ function setupLobbyPeer(targetId, pc, dc) {
           renderRooms();
         }
         if (msg.chats) {
-          msg.chats.forEach(c => appendChatMessage(c.author, c.text, c.id, c.timestamp));
+          msg.chats.forEach(c => appendChatMessage(c.author, c.text, c.id, c.timestamp, c.color));
         }
-        appendChatMessage('System', `${msg.name} connected.`);
+        appendChatMessage('System', `${msg.name} connected.`, null, null, '#555');
       } else if (msg.type === 'ROOM_CREATED') {
         activeRooms[msg.room.id] = msg.room;
         renderRooms();
@@ -214,7 +227,7 @@ function setupLobbyPeer(targetId, pc, dc) {
           broadcastToLobby({ type: 'ROOM_CLOSED', roomId: msg.roomId });
         }
       } else if (msg.type === 'chat') {
-        appendChatMessage(msg.name, msg.text, msg.id, msg.timestamp);
+        appendChatMessage(msg.name, msg.text, msg.id, msg.timestamp, msg.color);
       } else if (msg.type === 'START_GAME_SIGNAL') {
         handleGameStartSignal(msg.players);
       } else if (msg.type === 'game-offer' || msg.type === 'game-answer' || msg.type === 'game-ice') {
@@ -287,13 +300,13 @@ async function handleLobbySignal(sig) {
 
 // --- GLOBAL CHAT ---
 
-function appendChatMessage(author, text, id = null, timestamp = null) {
+function appendChatMessage(author, text, id = null, timestamp = null, color = '#333') {
   if (!id) id = Math.random().toString(36).substring(2);
   if (!timestamp) timestamp = Date.now();
 
   if (recentChats.some(c => c.id === id)) return;
 
-  recentChats.push({ id, author, text, timestamp });
+  recentChats.push({ id, author, text, timestamp, color });
   recentChats = recentChats.filter(c => Date.now() - c.timestamp < 5 * 60 * 1000);
 
   const timeRemaining = (5 * 60 * 1000) - (Date.now() - timestamp);
@@ -301,6 +314,7 @@ function appendChatMessage(author, text, id = null, timestamp = null) {
 
   const div = document.createElement('div');
   div.className = 'chat-msg';
+  div.style.backgroundColor = color;
   div.innerHTML = `<strong>${author}:</strong> ${text}`;
   chatHistory.appendChild(div);
   chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -323,8 +337,8 @@ btnChatSend.addEventListener('click', () => {
   
   const chatId = Math.random().toString(36).substring(2);
   const timestamp = Date.now();
-  appendChatMessage(myName, text, chatId, timestamp);
-  broadcastToLobby({ type: 'chat', name: myName, text, id: chatId, timestamp });
+  appendChatMessage(myName, text, chatId, timestamp, myColor);
+  broadcastToLobby({ type: 'chat', name: myName, text, id: chatId, timestamp, color: myColor });
 });
 
 chatInput.addEventListener('keydown', (e) => {
@@ -356,6 +370,9 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   btn.innerText = myName ? "Back to Lobby" : "Save & Return";
   btn.style.backgroundColor = myName ? "#28a745" : "#4a90e2";
   
+  const colorPicker = document.getElementById('player-color-picker');
+  if (colorPicker) colorPicker.value = myColor;
+
   if (document.getElementById('settings-uuid')) {
     document.getElementById('settings-uuid').value = gameState.userId;
     document.getElementById('update-uuid-btn').style.display = 'none';
@@ -386,6 +403,14 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
     alert("Please enter a display name to continue.");
   }
 });
+
+const colorPickerEl = document.getElementById('player-color-picker');
+if (colorPickerEl) {
+  colorPickerEl.addEventListener('input', (e) => {
+    myColor = e.target.value;
+    localStorage.setItem('playerColor', myColor);
+  });
+}
 
 document.getElementById('btn-create-new').addEventListener('click', () => {
   document.getElementById('player-1-input').value = myName;
