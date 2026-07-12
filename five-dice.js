@@ -178,34 +178,26 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
   if (btn.classList.contains('is-rolling')) return;
   btn.classList.add('is-rolling');
   
-  let animationFrames = 0;
-  const maxFrames = 10;
-  
+  // Add rolling class to unheld dice
+  document.querySelectorAll('.fd-die').forEach((die, i) => {
+    if (!window.fiveDiceState.held[i]) die.classList.add('rolling');
+  });
+
+  let rolls = 0;
   const interval = setInterval(() => {
-    for (let i = 0; i < 5; i++) {
-      if (!window.fiveDiceState.held[i]) {
-        window.fiveDiceState.dice[i] = Math.floor(Math.random() * 6) + 1;
-        const dieEl = document.querySelector(`.fd-die[data-index="${i}"]`);
-        if (dieEl) dieEl.classList.add('wobble'); // Add CSS class for shaking
-      }
-    }
+    window.fiveDiceState.dice = window.fiveDiceState.dice.map((d, i) => {
+      return window.fiveDiceState.held[i] ? d : Math.floor(Math.random() * 6) + 1;
+    });
     update5DiceUI();
     
-    animationFrames++;
-    if (animationFrames >= maxFrames) {
+    rolls++;
+    if (rolls >= 10) {
       clearInterval(interval);
-      // Final roll
-      for (let i = 0; i < 5; i++) {
-        if (!window.fiveDiceState.held[i]) {
-          window.fiveDiceState.dice[i] = Math.floor(Math.random() * 6) + 1;
-        }
-        const dieEl = document.querySelector(`.fd-die[data-index="${i}"]`);
-        if (dieEl) dieEl.classList.remove('wobble');
-      }
+      document.querySelectorAll('.fd-die').forEach(die => die.classList.remove('rolling'));
+      btn.classList.remove('is-rolling');
       window.fiveDiceState.rollsLeft--;
       update5DiceUI();
       broadcast5DiceState();
-      btn.classList.remove('is-rolling');
     }
   }, 50);
 });
@@ -341,4 +333,24 @@ window.handle5DiceMessage = function(msg) {
     document.getElementById('game-status').innerText = 'Your turn!';
     update5DiceUI();
   }
+};
+
+window.reset5DiceGame = function() {
+  window.fiveDiceState = {
+    dice: [1, 1, 1, 1, 1],
+    held: [false, false, false, false, false],
+    rollsLeft: 3,
+    turnsLeft: 13,
+    scores: {}
+  };
+  window.gamePlayers.forEach(p => {
+    window.fiveDiceState.scores[p] = {
+      'ones': null, 'twos': null, 'threes': null, 'fours': null, 'fives': null, 'sixes': null,
+      'chance': null, 'sm-straight': null, 'lg-straight': null, 'three-kind': null, 'four-kind': null,
+      'five-dice': null, 'full-house': null, 'bonus-5s': null
+    };
+  });
+  window.myTurn = (window.myPeerId === window.gameHost);
+  document.getElementById('btn-play-again').classList.add('hidden');
+  update5DiceUI();
 };

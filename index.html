@@ -110,7 +110,8 @@
 
     <!-- Screen C: Game Area (Tic-Tac-Toe) -->
     <div id="screen-game" class="screen hidden">
-      <header class="top-header">
+      <header class="top-header" style="position: relative;">
+        <button id="btn-back-lobby-header" class="icon-btn" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; border: none; background: transparent; cursor: pointer;">⬅️</button>
         <h1 id="game-room-name">🎲 5Dice 🎲</h1>
       </header>
       <div class="game-container">
@@ -181,6 +182,8 @@
             <div class="fd-turns-left"><span id="fd-turns-count">13</span> turns remaining</div>
           </div>
         </div>
+        </div>
+
         
         <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
           <button id="btn-play-again" class="capsule-button hidden" style="background-color: darkgreen; color: white; width: auto; padding-left: 40px; padding-right: 40px; margin: 0;">Play again?</button>

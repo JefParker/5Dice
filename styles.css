@@ -321,8 +321,10 @@ label {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .bg-watermark-x {
@@ -623,6 +625,16 @@ body.bg-five-dice {
 .fd-die.held {
   border-color: #a0d8cc;
   background-color: rgba(160, 216, 204, 0.2);
+}
+
+@keyframes spinRoll {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.fd-die.rolling {
+  animation: spinRoll 0.2s linear infinite;
 }
 
 /* Dice dots via box-shadow relative to absolute pseudo element */

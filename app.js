@@ -662,7 +662,7 @@ async function handleGameStartSignal(players, resumeState = null) {
     myTurn = resumeState.myTurn;
     updateBoard();
     const isOver = checkWin();
-    if (isOver && isHost) {
+    if (isOver) {
       document.getElementById('btn-play-again').classList.remove('hidden');
     }
     const otherPeerId = gamePlayers.find(p => p !== myPeerId);
@@ -767,10 +767,15 @@ function setupGamePeer(targetId, pc, dc) {
           document.getElementById('game-status').innerText = 'Your turn!';
           updateGameBackground();
         } else {
-          if (isHost) document.getElementById('btn-play-again').classList.remove('hidden');
+          document.getElementById('btn-play-again').classList.remove('hidden');
         }
       } else if (msg.type === 'PLAY_AGAIN') {
-        resetGame();
+        const room = activeRooms[currentRoomId];
+        if (room && room.game === '5 Dice') {
+          if (window.reset5DiceGame) window.reset5DiceGame();
+        } else {
+          resetGame();
+        }
       } else if (msg.type === 'HOST_HANDOFF') {
         const newHostId = msg.newHostId;
         if (activeRooms[currentRoomId]) {
@@ -903,7 +908,7 @@ function handleMove(index) {
     document.getElementById('game-status').innerText = `Opponent's turn`;
     updateGameBackground();
   } else {
-    if (isHost) document.getElementById('btn-play-again').classList.remove('hidden');
+    document.getElementById('btn-play-again').classList.remove('hidden');
   }
 }
 
@@ -924,7 +929,12 @@ document.getElementById('btn-play-again').addEventListener('click', () => {
       gamePeers[p].dc.send(JSON.stringify({ type: 'PLAY_AGAIN' }));
     }
   }
-  resetGame();
+  const room = activeRooms[currentRoomId];
+  if (room && room.game === '5 Dice') {
+    if (window.reset5DiceGame) window.reset5DiceGame();
+  } else {
+    resetGame();
+  }
 });
 
 function updateBoard() {
@@ -974,7 +984,7 @@ function checkWin() {
   return false;
 }
 
-document.getElementById('btn-leave-game').addEventListener('click', () => {
+const handleLeaveGame = () => {
   const gameScreen = document.getElementById('screen-game');
   gameScreen.style.backgroundColor = '#2a2a2a';
   gameScreen.classList.remove('tie-background');
@@ -1016,7 +1026,11 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
   showScreen('screen-lobby');
   startRoomPolling();
   updateDiagnostics();
-});
+};
+
+document.getElementById('btn-leave-game').addEventListener('click', handleLeaveGame);
+const headerBackBtn = document.getElementById('btn-back-lobby-header');
+if (headerBackBtn) headerBackBtn.addEventListener('click', handleLeaveGame);
 
 // --- PLAYER ID SYNC LOGIC ---
 const settingsUuidInput = document.getElementById('settings-uuid');
