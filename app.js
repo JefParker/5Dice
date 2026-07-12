@@ -645,6 +645,7 @@ if (!myUuid) {
 }
 
 let myTurn = false;
+Object.defineProperty(window, 'myTurn', { get: () => myTurn, set: (v) => { myTurn = v; } });
 let gamePlayers = [];
 let gameHost = null;
 
