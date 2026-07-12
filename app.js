@@ -550,6 +550,12 @@ async function handleGameStartSignal(players, resumeState = null) {
   if (resumeState) {
     gameState = resumeState.board;
     myTurn = resumeState.myTurn;
+    const otherPeerId = gamePlayers.find(p => p !== myPeerId);
+    if (otherPeerId) {
+      const otherName = lobbyPeers[otherPeerId] ? lobbyPeers[otherPeerId].name : 'A player';
+      const otherColor = lobbyPeers[otherPeerId] ? lobbyPeers[otherPeerId].color : '#333';
+      showToast(`${otherName} is here`, otherColor);
+    }
   } else {
     gameState = ['', '', '', '', '', '', '', '', ''];
     myTurn = (myPeerId === gameHost);
