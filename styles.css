@@ -145,6 +145,7 @@ input.capsule-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  perspective: 800px;
 }
 
 .chat-input-container {
@@ -193,6 +194,19 @@ input.capsule-input {
   background: #333;
   padding: 6px;
   border-radius: 6px;
+  animation: floatTwistIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: center bottom;
+}
+
+@keyframes floatTwistIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) rotateX(-90deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotateX(0deg);
+  }
 }
 
 .main-content {
