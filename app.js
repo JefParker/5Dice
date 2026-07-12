@@ -542,7 +542,8 @@ function setupGamePeer(targetId, pc, dc) {
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
       const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
-      showToast(`${name} has left`);
+      const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
+      showToast(`${name} has left`, color);
     }
   };
 
@@ -762,9 +763,10 @@ const toastEl = document.getElementById('toast');
 
 let pendingUuid = null;
 
-function showToast(msg) {
+function showToast(msg, bgColor = null) {
   if (!toastEl) return;
   toastEl.innerText = msg;
+  toastEl.style.backgroundColor = bgColor || '#333';
   toastEl.classList.remove('hidden');
   setTimeout(() => { toastEl.classList.add('hidden'); }, 3000);
 }
