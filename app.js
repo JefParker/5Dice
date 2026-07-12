@@ -250,6 +250,14 @@ function setupLobbyPeer(targetId, pc, dc) {
       } else if (msg.type === 'ROOM_CLOSED') {
         delete activeRooms[msg.roomId];
         renderRooms();
+      } else if (msg.type === 'PROFILE_UPDATE') {
+        if (lobbyPeers[msg.from]) {
+          lobbyPeers[msg.from] = { ...lobbyPeers[msg.from], name: msg.name, color: msg.color, uuid: msg.uuid };
+          renderRooms();
+          if (currentRoomId && gamePlayers.includes(msg.from)) {
+            updateGameBackground();
+          }
+        }
       } else if (msg.type === 'JOIN_ROOM_REQUEST') {
         const room = activeRooms[msg.roomId];
         if (room && room.host === myPeerId) {
@@ -441,6 +449,18 @@ document.getElementById('global-player-name').addEventListener('input', (e) => {
   }
 });
 
+function broadcastProfileUpdate() {
+  const profileMsg = { type: 'PROFILE_UPDATE', from: myPeerId, name: myName, color: myColor, uuid: myUuid };
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish('5dice/lobby/announce', JSON.stringify({ peerId: myPeerId, name: myName, color: myColor, uuid: myUuid }));
+  }
+  Object.values(lobbyPeers).forEach(p => {
+    if (p.dc && p.dc.readyState === 'open') {
+      p.dc.send(JSON.stringify(profileMsg));
+    }
+  });
+}
+
 document.getElementById('btn-save-settings').addEventListener('click', () => {
   const newName = document.getElementById('global-player-name').value.trim();
   if (newName) {
@@ -450,6 +470,8 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
     if (!mqttClient) {
       startLobbyMesh();
       startRoomPolling();
+    } else {
+      broadcastProfileUpdate();
     }
   } else {
     alert("Please enter a display name to continue.");
