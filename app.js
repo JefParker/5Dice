@@ -598,6 +598,25 @@ function setupGamePeer(targetId, pc, dc) {
       const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
       const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
       showToast(`${name} has left`, color);
+
+      if (gamePeers[targetId]) delete gamePeers[targetId];
+      gamePlayers = gamePlayers.filter(p => p !== targetId);
+
+      if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
+        const remainingPlayers = [...gamePlayers].sort();
+        if (remainingPlayers.length > 0 && remainingPlayers[0] === myPeerId) {
+           isHost = true;
+           activeRooms[currentRoomId].host = myPeerId;
+           broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
+           showToast(`You are now hosting`);
+           
+           for (const p in gamePeers) {
+             if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+               gamePeers[p].dc.send(JSON.stringify({ type: 'HOST_HANDOFF', newHostId: myPeerId }));
+             }
+           }
+        }
+      }
     }
   };
 
@@ -629,7 +648,24 @@ function setupGamePeer(targetId, pc, dc) {
           myTurn = true; 
           document.getElementById('game-status').innerText = 'Your turn!';
           updateGameBackground();
+        } else {
+          if (isHost) document.getElementById('btn-play-again').classList.remove('hidden');
         }
+      } else if (msg.type === 'PLAY_AGAIN') {
+        resetGame();
+      } else if (msg.type === 'HOST_HANDOFF') {
+        const newHostId = msg.newHostId;
+        if (activeRooms[currentRoomId]) {
+          activeRooms[currentRoomId].host = newHostId;
+        }
+        if (myPeerId === newHostId) {
+          isHost = true;
+          if (activeRooms[currentRoomId]) {
+            broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
+          }
+        }
+        const newHostName = lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player';
+        showToast(`${newHostName} is now hosting`);
       }
     };
   }
@@ -736,8 +772,30 @@ function handleMove(index) {
     myTurn = false;
     document.getElementById('game-status').innerText = `Opponent's turn`;
     updateGameBackground();
+  } else {
+    if (isHost) document.getElementById('btn-play-again').classList.remove('hidden');
   }
 }
+
+function resetGame() {
+  gameState = ['', '', '', '', '', '', '', '', ''];
+  myTurn = (myPeerId === gameHost);
+  updateBoard();
+  document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+  document.getElementById('btn-play-again').classList.add('hidden');
+  document.getElementById('screen-game').classList.remove('tie-background');
+  updateGameBackground();
+  checkGameMeshReady();
+}
+
+document.getElementById('btn-play-again').addEventListener('click', () => {
+  for (const p in gamePeers) {
+    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+      gamePeers[p].dc.send(JSON.stringify({ type: 'PLAY_AGAIN' }));
+    }
+  }
+  resetGame();
+});
 
 function updateBoard() {
   const cells = document.querySelectorAll('.cell');
@@ -790,6 +848,22 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
   const gameScreen = document.getElementById('screen-game');
   gameScreen.style.backgroundColor = '#2a2a2a';
   gameScreen.classList.remove('tie-background');
+  
+  if (isHost && currentRoomId) {
+    const connectedPeers = Object.keys(gamePeers).filter(p => gamePeers[p].dc && gamePeers[p].dc.readyState === 'open');
+    if (connectedPeers.length > 0) {
+      const newHostId = connectedPeers[0];
+      for (const p in gamePeers) {
+        if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+          gamePeers[p].dc.send(JSON.stringify({ type: 'HOST_HANDOFF', newHostId }));
+        }
+      }
+    } else {
+      broadcastToLobby({ type: 'ROOM_CLOSED', roomId: currentRoomId });
+      delete activeRooms[currentRoomId];
+    }
+  }
+
   for (const p in gamePeers) {
     if (gamePeers[p].pc) gamePeers[p].pc.close();
   }
@@ -798,6 +872,10 @@ document.getElementById('btn-leave-game').addEventListener('click', () => {
   gameState = ['', '', '', '', '', '', '', '', ''];
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.add('disabled');
+  document.getElementById('btn-play-again').classList.add('hidden');
+  
+  isHost = false;
+  currentRoomId = null;
   
   showScreen('screen-lobby');
   startRoomPolling();
