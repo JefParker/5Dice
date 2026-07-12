@@ -15,17 +15,9 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
+    // GET /api/rooms
     if (path === '/api/rooms' && method === 'GET') {
-      // List active rooms
-      const list = await env.FIVEDICE_KV.list({ prefix: 'room:' });
-      const rooms = [];
-      for (const key of list.keys) {
-        const roomData = await env.FIVEDICE_KV.get(key.name, { type: 'json' });
-        if (roomData && roomData.status === 'open') {
-          rooms.push(roomData);
-        }
-      }
-      return new Response(JSON.stringify(rooms), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify([]), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (path === '/api/rooms' && method === 'POST') {
@@ -115,7 +107,8 @@ export default {
       }
       if (method === 'POST') {
         const body = await request.json();
-        await env.FIVEDICE_KV.put('lobby_leader', JSON.stringify(body), { expirationTtl: 30 });
+        body.timestamp = Date.now();
+        await env.FIVEDICE_KV.put('lobby_leader', JSON.stringify(body), { expirationTtl: 60 });
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
       }
     }
@@ -134,9 +127,6 @@ export default {
     // GET /api/lobby/new_peers - Leader polls for new peers
     if (path === '/api/lobby/new_peers' && method === 'GET') {
       let newPeers = await env.FIVEDICE_KV.get('lobby_new_peers', { type: 'json' }) || [];
-      if (newPeers.length > 0) {
-        await env.FIVEDICE_KV.put('lobby_new_peers', JSON.stringify([]), { expirationTtl: 60 });
-      }
       return new Response(JSON.stringify(newPeers), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -145,22 +135,20 @@ export default {
     if (peerSignalMatch) {
       const peerId = peerSignalMatch[1];
 
-      if (method === 'GET') {
-        const list = await env.FIVEDICE_KV.list({ prefix: 'signal:' + peerId + ':' });
-        let signals = [];
-        for (const key of list.keys) {
-          const sig = await env.FIVEDICE_KV.get(key.name, { type: 'json' });
-          if (sig) signals.push(sig);
-          await env.FIVEDICE_KV.delete(key.name);
-        }
-        return new Response(JSON.stringify(signals), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-
       if (method === 'POST') {
         const payload = await request.json();
-        const uniqueKey = 'signal:' + peerId + ':' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-        await env.FIVEDICE_KV.put(uniqueKey, JSON.stringify(payload), { expirationTtl: 60 });
+        let signals = await env.FIVEDICE_KV.get('signal:' + peerId, { type: 'json' }) || [];
+        signals.push(payload);
+        await env.FIVEDICE_KV.put('signal:' + peerId, JSON.stringify(signals), { expirationTtl: 60 });
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+
+      if (method === 'GET') {
+        let signals = await env.FIVEDICE_KV.get('signal:' + peerId, { type: 'json' }) || [];
+        if (signals.length > 0) {
+          await env.FIVEDICE_KV.put('signal:' + peerId, JSON.stringify([]), { expirationTtl: 60 });
+        }
+        return new Response(JSON.stringify(signals), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
 

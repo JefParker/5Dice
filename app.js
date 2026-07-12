@@ -87,11 +87,11 @@ async function startLobbyMesh() {
       const leader = await res.json();
       const now = leader.serverTime || Date.now();
       
-      if (!leader.peerId || (now - leader.timestamp > 20000)) {
+      if (!leader.peerId || (now - leader.timestamp > 65000)) {
         await claimLeadership();
       } else if (leader.peerId === myPeerId) {
         await claimLeadership();
-      } else if (leader.weight < myWeight && (now - leader.timestamp > 5000)) {
+      } else if (leader.weight < myWeight && (now - leader.timestamp > 65000)) {
         await claimLeadership();
       } else {
         isLeader = false;
