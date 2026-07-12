@@ -80,9 +80,13 @@ function startLobbyMesh() {
 
       if (topic === '5dice/lobby/announce') {
         const p = payload.peerId;
-        // If a new peer joins, we only initiate if our ID > their ID to natively prevent glare
-        if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
-          await initiateLobbyConnection(p, null);
+        if (p !== myPeerId) {
+          // Tell the new peer we exist so they can initiate if their ID > ours
+          mqttClient.publish(`5dice/lobby/signal/${p}`, JSON.stringify({ from: myPeerId, type: 'announce_reply' }));
+          
+          if (!lobbyPeers[p] && myPeerId > p) {
+            await initiateLobbyConnection(p, null);
+          }
         }
       } else if (topic === `5dice/lobby/signal/${myPeerId}`) {
         await handleLobbySignal(payload);
@@ -192,6 +196,14 @@ function setupLobbyPeer(targetId, pc, dc) {
 
 async function handleLobbySignal(sig) {
   const { from, type, via } = sig;
+
+  if (type === 'announce_reply') {
+    if (!lobbyPeers[from] && myPeerId > from) {
+      await initiateLobbyConnection(from, null);
+    }
+    return;
+  }
+
   if (!lobbyPeers[from]) {
     const pc = new RTCPeerConnection(rtcConfig);
     lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null };
@@ -473,10 +485,10 @@ function updateDiagnostics() {
   if (dot && txt) {
     if (lobbyCount > 0) {
       dot.className = 'status-dot connected';
-      txt.innerText = `LOBBY MESH: ${lobbyCount} PEER(S) ${isLeader ? '[LEADER]' : ''}`;
+      txt.innerText = `LOBBY MESH: ${lobbyCount} PEER(S)`;
     } else {
       dot.className = 'status-dot connecting';
-      txt.innerText = `LOBBY MESH: SEEKING... ${isLeader ? '[LEADER]' : ''}`;
+      txt.innerText = `LOBBY MESH: SEEKING...`;
     }
   }
 }
