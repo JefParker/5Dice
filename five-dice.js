@@ -86,18 +86,44 @@ document.querySelectorAll('.fd-die').forEach(die => {
 });
 
 // Bind roll click
-document.getElementById('fd-roll-btn').addEventListener('click', () => {
+document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
   if (!window.myTurn) return;
   if (window.fiveDiceState.rollsLeft <= 0) return;
   
-  for (let i = 0; i < 5; i++) {
-    if (!window.fiveDiceState.held[i]) {
-      window.fiveDiceState.dice[i] = Math.floor(Math.random() * 6) + 1;
+  const btn = e.currentTarget;
+  if (btn.classList.contains('is-rolling')) return;
+  btn.classList.add('is-rolling');
+  
+  let animationFrames = 0;
+  const maxFrames = 10;
+  
+  const interval = setInterval(() => {
+    for (let i = 0; i < 5; i++) {
+      if (!window.fiveDiceState.held[i]) {
+        window.fiveDiceState.dice[i] = Math.floor(Math.random() * 6) + 1;
+        const dieEl = document.querySelector(`.fd-die[data-index="${i}"]`);
+        if (dieEl) dieEl.classList.add('wobble'); // Add CSS class for shaking
+      }
     }
-  }
-  window.fiveDiceState.rollsLeft--;
-  update5DiceUI();
-  broadcast5DiceState();
+    update5DiceUI();
+    
+    animationFrames++;
+    if (animationFrames >= maxFrames) {
+      clearInterval(interval);
+      // Final roll
+      for (let i = 0; i < 5; i++) {
+        if (!window.fiveDiceState.held[i]) {
+          window.fiveDiceState.dice[i] = Math.floor(Math.random() * 6) + 1;
+        }
+        const dieEl = document.querySelector(`.fd-die[data-index="${i}"]`);
+        if (dieEl) dieEl.classList.remove('wobble');
+      }
+      window.fiveDiceState.rollsLeft--;
+      update5DiceUI();
+      broadcast5DiceState();
+      btn.classList.remove('is-rolling');
+    }
+  }, 50);
 });
 
 // Bind category click (Scoring)
