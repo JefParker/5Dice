@@ -508,4 +508,10 @@ label {
 @keyframes slideUpTie {
   to { bottom: 0; }
 }
+
+.setup-container {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
 .hidden { display: none !important; }
