@@ -106,15 +106,17 @@ async function startLobbyMesh() {
       } catch(e){}
     }
 
-    // 3. Everyone polls their own inbox for SDP/ICE until connected to leader
-    // Actually, just keep polling for robustness, maybe we get direct connections
-    try {
-      const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
-      const signals = await res.json();
-      for (const sig of signals) {
-        await handleLobbySignal(sig);
-      }
-    } catch(e){}
+    // 3. Poll own inbox ONLY if disconnected
+    const activePeers = Object.keys(lobbyPeers).filter(p => lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open');
+    if (activePeers.length === 0) {
+      try {
+        const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
+        const signals = await res.json();
+        for (const sig of signals) {
+          await handleLobbySignal(sig);
+        }
+      } catch(e){}
+    }
     
     updateDiagnostics();
   }, 3000);
@@ -130,6 +132,26 @@ async function claimLeadership() {
   });
 }
 
+
+async function sendSignal(targetId, signalPayload) {
+  const activePeers = Object.keys(lobbyPeers).filter(p => lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open');
+  
+  if (activePeers.length === 0) {
+    // HTTP Fallback when completely disconnected
+    await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: myPeerId, ...signalPayload })
+    });
+  } else {
+    // Relay over WebRTC Mesh!
+    const router = activePeers.includes(leaderId) ? leaderId : activePeers[0];
+    lobbyPeers[router].dc.send(JSON.stringify({
+      type: 'relay', to: targetId, from: myPeerId, signal: signalPayload
+    }));
+  }
+}
+
 async function initiateLobbyConnection(targetId) {
   if (lobbyPeers[targetId]) return;
   const pc = new RTCPeerConnection(rtcConfig);
@@ -140,21 +162,13 @@ async function initiateLobbyConnection(targetId) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   
-  await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: myPeerId, type: 'offer', sdp: offer })
-  });
+  await sendSignal(targetId, { type: 'offer', sdp: offer });
 }
 
 function setupLobbyPeer(targetId, pc, dc) {
   pc.onicecandidate = async (e) => {
     if (e.candidate) {
-      await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: myPeerId, type: 'ice', candidate: e.candidate })
-      });
+      await sendSignal(targetId, { type: 'ice', candidate: e.candidate });
     }
   };
 
@@ -167,7 +181,13 @@ function setupLobbyPeer(targetId, pc, dc) {
 
     dc.onmessage = async (e) => {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'handshake') {
+      if (msg.type === 'relay') {
+        if (msg.to === myPeerId) {
+          handleLobbySignal({ from: msg.from, ...msg.signal });
+        } else if (lobbyPeers[msg.to] && lobbyPeers[msg.to].dc && lobbyPeers[msg.to].dc.readyState === 'open') {
+          lobbyPeers[msg.to].dc.send(JSON.stringify(msg)); // Forward to target
+        }
+      } else if (msg.type === 'handshake') {
         lobbyPeers[targetId].name = msg.name;
         if (msg.knownPeers) {
           for (const p of msg.knownPeers) {
@@ -217,11 +237,7 @@ async function handleLobbySignal(sig) {
     await pc.setRemoteDescription(sig.sdp);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    await fetch(`${API_BASE}/api/lobby/signal/${from}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: myPeerId, type: 'answer', sdp: answer })
-    });
+    await sendSignal(from, { type: 'answer', sdp: answer });
   } else if (type === 'answer') {
     await pc.setRemoteDescription(sig.sdp);
   } else if (type === 'ice') {
