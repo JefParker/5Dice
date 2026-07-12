@@ -725,7 +725,13 @@ async function handleGameSignal(msg) {
 
 function updateGameBackground() {
   const gameScreen = document.getElementById('screen-game');
-  gameScreen.classList.remove('tie-background');
+  gameScreen.classList.remove('tie-background', 'bg-watermark-x', 'bg-watermark-o');
+  
+  if (gameHost !== null) {
+    const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+    gameScreen.classList.add(`bg-watermark-${mySymbol.toLowerCase()}`);
+  }
+
   let opponentId = gamePlayers.find(p => p !== myPeerId);
   let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
   
