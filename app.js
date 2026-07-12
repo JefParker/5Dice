@@ -14,6 +14,7 @@ let currentRoomId = null;
 let activeRooms = {}; // { roomId: { id, name, host } }
 let isHost = false;
 let mqttClient = null;
+let recentChats = []; // { id, author, text, timestamp }
 
 const rtcConfig = { 
   iceServers: [
@@ -154,7 +155,8 @@ function setupLobbyPeer(targetId, pc, dc) {
     const onOpenHandler = () => {
       console.log(`Lobby channel open with ${targetId}`);
       const myRooms = Object.values(activeRooms).filter(r => r.host === myPeerId);
-      dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers), rooms: myRooms }));
+      const shareableChats = recentChats.filter(c => c.author !== 'System');
+      dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers), rooms: myRooms, chats: shareableChats }));
       updateDiagnostics();
     };
 
@@ -193,6 +195,9 @@ function setupLobbyPeer(targetId, pc, dc) {
           msg.rooms.forEach(r => activeRooms[r.id] = r);
           renderRooms();
         }
+        if (msg.chats) {
+          msg.chats.forEach(c => appendChatMessage(c.author, c.text, c.id, c.timestamp));
+        }
         appendChatMessage('System', `${msg.name} connected.`);
       } else if (msg.type === 'ROOM_CREATED') {
         activeRooms[msg.room.id] = msg.room;
@@ -209,7 +214,7 @@ function setupLobbyPeer(targetId, pc, dc) {
           broadcastToLobby({ type: 'ROOM_CLOSED', roomId: msg.roomId });
         }
       } else if (msg.type === 'chat') {
-        appendChatMessage(msg.name, msg.text);
+        appendChatMessage(msg.name, msg.text, msg.id, msg.timestamp);
       } else if (msg.type === 'START_GAME_SIGNAL') {
         handleGameStartSignal(msg.players);
       } else if (msg.type === 'game-offer' || msg.type === 'game-answer' || msg.type === 'game-ice') {
@@ -282,13 +287,24 @@ async function handleLobbySignal(sig) {
 
 // --- GLOBAL CHAT ---
 
-function appendChatMessage(author, text) {
+function appendChatMessage(author, text, id = null, timestamp = null) {
+  if (!id) id = Math.random().toString(36).substring(2);
+  if (!timestamp) timestamp = Date.now();
+
+  if (recentChats.some(c => c.id === id)) return;
+
+  recentChats.push({ id, author, text, timestamp });
+  recentChats = recentChats.filter(c => Date.now() - c.timestamp < 5 * 60 * 1000);
+
+  const timeRemaining = (5 * 60 * 1000) - (Date.now() - timestamp);
+  if (timeRemaining <= 0) return;
+
   const div = document.createElement('div');
   div.className = 'chat-msg';
   div.innerHTML = `<strong>${author}:</strong> ${text}`;
   chatHistory.appendChild(div);
   chatHistory.scrollTop = chatHistory.scrollHeight;
-  setTimeout(() => { if (div.parentNode) div.remove(); }, 5 * 60 * 1000);
+  setTimeout(() => { if (div.parentNode) div.remove(); }, timeRemaining);
 }
 
 function broadcastToLobby(msgObj) {
@@ -304,8 +320,11 @@ btnChatSend.addEventListener('click', () => {
   const text = chatInput.value.trim();
   if (!text) return;
   chatInput.value = '';
-  appendChatMessage('Me', text);
-  broadcastToLobby({ type: 'chat', name: myName, text });
+  
+  const chatId = Math.random().toString(36).substring(2);
+  const timestamp = Date.now();
+  appendChatMessage(myName, text, chatId, timestamp);
+  broadcastToLobby({ type: 'chat', name: myName, text, id: chatId, timestamp });
 });
 
 chatInput.addEventListener('keydown', (e) => {
