@@ -109,7 +109,9 @@ export default {
     if (path === '/api/lobby/leader') {
       if (method === 'GET') {
         let leader = await env.FIVEDICE_KV.get('lobby_leader', { type: 'json' });
-        return new Response(JSON.stringify(leader || {}), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const resObj = leader || {};
+        resObj.serverTime = Date.now();
+        return new Response(JSON.stringify(resObj), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       if (method === 'POST') {
         const body = await request.json();
@@ -142,21 +144,22 @@ export default {
     const peerSignalMatch = path.match(/^\/api\/lobby\/signal\/([a-zA-Z0-9_-]+)$/);
     if (peerSignalMatch) {
       const peerId = peerSignalMatch[1];
-      const signalKey = 'signal:' + peerId;
 
       if (method === 'GET') {
-        let signals = await env.FIVEDICE_KV.get(signalKey, { type: 'json' }) || [];
-        if (signals.length > 0) {
-          await env.FIVEDICE_KV.delete(signalKey); // clear after reading
+        const list = await env.FIVEDICE_KV.list({ prefix: 'signal:' + peerId + ':' });
+        let signals = [];
+        for (const key of list.keys) {
+          const sig = await env.FIVEDICE_KV.get(key.name, { type: 'json' });
+          if (sig) signals.push(sig);
+          await env.FIVEDICE_KV.delete(key.name);
         }
         return new Response(JSON.stringify(signals), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       if (method === 'POST') {
         const payload = await request.json();
-        let signals = await env.FIVEDICE_KV.get(signalKey, { type: 'json' }) || [];
-        signals.push(payload);
-        await env.FIVEDICE_KV.put(signalKey, JSON.stringify(signals), { expirationTtl: 60 });
+        const uniqueKey = 'signal:' + peerId + ':' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+        await env.FIVEDICE_KV.put(uniqueKey, JSON.stringify(payload), { expirationTtl: 60 });
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
       }
     }

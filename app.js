@@ -85,7 +85,7 @@ async function startLobbyMesh() {
     try {
       const res = await fetch(`${API_BASE}/api/lobby/leader`);
       const leader = await res.json();
-      const now = Date.now();
+      const now = leader.serverTime || Date.now();
       
       if (!leader.peerId || (now - leader.timestamp > 20000)) {
         await claimLeadership();
