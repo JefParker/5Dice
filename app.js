@@ -421,6 +421,12 @@ document.getElementById('btn-cancel-setup').addEventListener('click', () => {
   showScreen('screen-lobby');
 });
 
+document.getElementById('room-name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    document.getElementById('btn-create-room').click();
+  }
+});
+
 document.getElementById('btn-create-room').addEventListener('click', async () => {
   const roomName = document.getElementById('room-name-input').value || 'New Game';
   
