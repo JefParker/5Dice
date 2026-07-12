@@ -119,7 +119,11 @@ async function startLobbyMesh() {
         const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
         const signals = await res.json();
         for (const sig of signals) {
-          await handleLobbySignal(sig);
+          try {
+            await handleLobbySignal(sig);
+          } catch(err) {
+            console.error('Error handling signal:', err);
+          }
         }
       } catch(e){}
     }
@@ -226,7 +230,7 @@ async function handleLobbySignal(sig) {
   const { from, type } = sig;
   if (!lobbyPeers[from]) {
     const pc = new RTCPeerConnection(rtcConfig);
-    lobbyPeers[from] = { pc, dc: null, name: 'Unknown' };
+    lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [] };
     
     pc.ondatachannel = (e) => {
       if (e.channel.label === 'lobby-channel') {
@@ -241,13 +245,29 @@ async function handleLobbySignal(sig) {
   
   if (type === 'offer') {
     await pc.setRemoteDescription(sig.sdp);
+    if (lobbyPeers[from].iceQueue) {
+      for (const cand of lobbyPeers[from].iceQueue) {
+        await pc.addIceCandidate(cand).catch(e => console.error(e));
+      }
+      lobbyPeers[from].iceQueue = [];
+    }
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     await sendSignal(from, { type: 'answer', sdp: answer });
   } else if (type === 'answer') {
     await pc.setRemoteDescription(sig.sdp);
+    if (lobbyPeers[from].iceQueue) {
+      for (const cand of lobbyPeers[from].iceQueue) {
+        await pc.addIceCandidate(cand).catch(e => console.error(e));
+      }
+      lobbyPeers[from].iceQueue = [];
+    }
   } else if (type === 'ice') {
-    await pc.addIceCandidate(sig.candidate);
+    if (pc.remoteDescription) {
+      await pc.addIceCandidate(sig.candidate).catch(e => console.error(e));
+    } else {
+      lobbyPeers[from].iceQueue.push(sig.candidate);
+    }
   }
 }
 
