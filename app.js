@@ -1,7 +1,5 @@
 
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-  ? 'http://127.0.0.1:8787' 
-  : 'https://5dice-backend.jeffreyrobertparker.workers.dev';
+
 
 // --- GLOBALS ---
 let myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
@@ -13,11 +11,8 @@ let gamePeers = {};  // { [id]: { pc, dc } }
 
 let myName = localStorage.getItem('playerName') || 'Jeff';
 let currentRoomId = null; 
-
-let isLeader = false;
-let leaderId = null;
-let lobbyMeshInterval = null;
-let roomPollInterval = null;
+let activeRooms = {}; // { roomId: { id, name, host } }
+let isHost = false;
 
 const rtcConfig = { 
   iceServers: [
@@ -64,81 +59,39 @@ if ('serviceWorker' in navigator) {
 
 // --- TIER 1: LOBBY MESH ---
 
-async function startLobbyMesh() {
-  if (lobbyMeshInterval) clearInterval(lobbyMeshInterval);
-  
-  // Announce presence
-  try {
-    await fetch(`${API_BASE}/api/lobby/new_peers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ peerId: myPeerId })
-    });
-  } catch (e) {
-    console.error("Lobby announce failed", e);
-  }
+function startLobbyMesh() {
+  if (mqttClient) return;
 
-  updateDiagnostics();
+  mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
 
-  lobbyMeshInterval = setInterval(async () => {
-    // 1. Leader Election
-    try {
-      const res = await fetch(`${API_BASE}/api/lobby/leader`);
-      const leader = await res.json();
-      const now = leader.serverTime || Date.now();
-      
-      if (!leader.peerId || (now - leader.timestamp > 65000)) {
-        await claimLeadership();
-      } else if (leader.peerId === myPeerId) {
-        await claimLeadership();
-      } else if (leader.weight < myWeight && (now - leader.timestamp > 65000)) {
-        await claimLeadership();
-      } else {
-        isLeader = false;
-        leaderId = leader.peerId;
-      }
-    } catch (e) {}
+  mqttClient.on('connect', () => {
+    console.log('Connected to public MQTT signaling server');
+    mqttClient.subscribe('5dice/lobby/announce');
+    mqttClient.subscribe(`5dice/lobby/signal/${myPeerId}`);
 
-    // 2. If Leader, poll for new peers
-    if (isLeader) {
-      try {
-        const res = await fetch(`${API_BASE}/api/lobby/new_peers`);
-        const newPeers = await res.json();
-        for (const p of newPeers) {
-          if (p !== myPeerId && !lobbyPeers[p]) {
-            await initiateLobbyConnection(p, null); // Leader uses HTTP for new peers
-          }
-        }
-      } catch(e){}
-    }
-
-    // 3. Always poll own inbox for fallback WebRTC signals from unconnected peers
-    try {
-      const res = await fetch(`${API_BASE}/api/lobby/signal/${myPeerId}`);
-      const signals = await res.json();
-      for (const sig of signals) {
-        try {
-          await handleLobbySignal(sig);
-        } catch(err) {
-          console.error('Error handling signal:', err);
-        }
-      }
-    } catch(e){}
-    
+    // Announce presence
+    mqttClient.publish('5dice/lobby/announce', JSON.stringify({ peerId: myPeerId }));
     updateDiagnostics();
-  }, 3000);
-}
+  });
 
-async function claimLeadership() {
-  isLeader = true;
-  leaderId = myPeerId;
-  await fetch(`${API_BASE}/api/lobby/leader`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ peerId: myPeerId, weight: myWeight, timestamp: Date.now() })
+  mqttClient.on('message', async (topic, message) => {
+    try {
+      const payload = JSON.parse(message.toString());
+
+      if (topic === '5dice/lobby/announce') {
+        const p = payload.peerId;
+        // If a new peer joins, we only initiate if our ID > their ID to natively prevent glare
+        if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
+          await initiateLobbyConnection(p, null);
+        }
+      } else if (topic === `5dice/lobby/signal/${myPeerId}`) {
+        await handleLobbySignal(payload);
+      }
+    } catch (err) {
+      console.error('MQTT message error:', err);
+    }
   });
 }
-
 
 async function sendSignal(targetId, signalPayload) {
   const route = lobbyPeers[targetId] ? lobbyPeers[targetId].routeVia : null;
@@ -148,13 +101,9 @@ async function sendSignal(targetId, signalPayload) {
     lobbyPeers[route].dc.send(JSON.stringify({
       type: 'relay', to: targetId, from: myPeerId, signal: signalPayload
     }));
-  } else {
-    // HTTP Fallback
-    await fetch(`${API_BASE}/api/lobby/signal/${targetId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: myPeerId, ...signalPayload })
-    });
+  } else if (mqttClient && mqttClient.connected) {
+    // MQTT WebSocket Fallback
+    mqttClient.publish(`5dice/lobby/signal/${targetId}`, JSON.stringify({ from: myPeerId, ...signalPayload }));
   }
 }
 
@@ -181,7 +130,8 @@ function setupLobbyPeer(targetId, pc, dc) {
   if (dc) {
     dc.onopen = () => {
       console.log(`Lobby channel open with ${targetId}`);
-      dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers) }));
+      const myRooms = Object.values(activeRooms).filter(r => r.host === myPeerId);
+      dc.send(JSON.stringify({ type: 'handshake', name: myName, knownPeers: Object.keys(lobbyPeers), rooms: myRooms }));
       updateDiagnostics();
     };
 
@@ -198,11 +148,29 @@ function setupLobbyPeer(targetId, pc, dc) {
         if (msg.knownPeers) {
           for (const p of msg.knownPeers) {
             if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
-              await initiateLobbyConnection(p, targetId); // Route via the peer who introduced us
+              await initiateLobbyConnection(p, targetId);
             }
           }
         }
+        if (msg.rooms) {
+          msg.rooms.forEach(r => activeRooms[r.id] = r);
+          renderRooms();
+        }
         appendChatMessage('System', `${msg.name} connected.`);
+      } else if (msg.type === 'ROOM_CREATED') {
+        activeRooms[msg.room.id] = msg.room;
+        renderRooms();
+      } else if (msg.type === 'ROOM_CLOSED') {
+        delete activeRooms[msg.roomId];
+        renderRooms();
+      } else if (msg.type === 'JOIN_ROOM_REQUEST') {
+        if (activeRooms[msg.roomId] && activeRooms[msg.roomId].host === myPeerId) {
+          const gamePlayers = [myPeerId, msg.guest].sort();
+          lobbyPeers[msg.guest].dc.send(JSON.stringify({ type: 'START_GAME_SIGNAL', players: gamePlayers }));
+          handleGameStartSignal(gamePlayers);
+          delete activeRooms[msg.roomId];
+          broadcastToLobby({ type: 'ROOM_CLOSED', roomId: msg.roomId });
+        }
       } else if (msg.type === 'chat') {
         appendChatMessage(msg.name, msg.text);
       } else if (msg.type === 'START_GAME_SIGNAL') {
@@ -278,22 +246,23 @@ function appendChatMessage(author, text) {
   setTimeout(() => { if (div.parentNode) div.remove(); }, 5 * 60 * 1000);
 }
 
-btnChatSend.addEventListener('click', () => {
-  if (chatInput.value.trim() !== '') {
-    const text = chatInput.value.trim();
-    chatInput.value = '';
-    chatInput.style.height = 'auto';
-    
-    appendChatMessage(myName, text);
-    
-    for (const p in lobbyPeers) {
-      const dc = lobbyPeers[p].dc;
-      if (dc && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'chat', name: myName, text }));
-      }
+function broadcastToLobby(msgObj) {
+  const payload = JSON.stringify(msgObj);
+  for (const peerId in lobbyPeers) {
+    if (lobbyPeers[peerId].dc && lobbyPeers[peerId].dc.readyState === 'open') {
+      lobbyPeers[peerId].dc.send(payload);
     }
   }
+}
+
+btnChatSend.addEventListener('click', () => {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = '';
+  appendChatMessage('Me', text);
+  broadcastToLobby({ type: 'chat', name: myName, text });
 });
+
 chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -315,16 +284,14 @@ document.querySelector('.main-content').addEventListener('click', () => {
   }
 });
 
-// --- ROOM LOGIC (Using Cloudflare for discovery) ---
+// --- ROOM LOGIC ---
 
 document.getElementById('btn-create-new').addEventListener('click', () => {
-  if (roomPollInterval) clearInterval(roomPollInterval);
   showScreen('screen-setup');
 });
 
 document.getElementById('btn-cancel-setup').addEventListener('click', () => {
   showScreen('screen-lobby');
-  startRoomPolling();
 });
 
 document.getElementById('btn-create-room').addEventListener('click', async () => {
@@ -334,103 +301,57 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   localStorage.setItem('playerName', myName);
   
   showLoading('Creating Room...');
-  try {
-    const res = await fetch(`${API_BASE}/api/rooms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: roomName, host: myPeerId })
-    });
-    const room = await res.json();
-    currentRoomId = room.id;
-    isHost = true;
-    
-    showScreen('screen-game');
-    document.getElementById('game-status').innerText = 'Waiting for opponent to join...';
-    hideLoading();
-    
-    // As host, poll the room to see if a guest joined
-    if (roomPollInterval) clearInterval(roomPollInterval);
-    roomPollInterval = setInterval(async () => {
-      const gRes = await fetch(`${API_BASE}/api/rooms/${currentRoomId}/signal`);
-      const gRoom = await gRes.json();
-      if (gRoom.guest) {
-        clearInterval(roomPollInterval); // Stop polling cloudflare
-        const guestPeerId = gRoom.guest;
-        // Start Game Mesh Tier 2 using Lobby Channels
-        const gamePlayers = [myPeerId, guestPeerId].sort();
-        // Send signal via lobby mesh
-        if (lobbyPeers[guestPeerId] && lobbyPeers[guestPeerId].dc) {
-          lobbyPeers[guestPeerId].dc.send(JSON.stringify({ type: 'START_GAME_SIGNAL', players: gamePlayers }));
-          handleGameStartSignal(gamePlayers);
-        } else {
-          document.getElementById('game-status').innerText = 'Guest joined but not found in Lobby Mesh!';
-        }
-      }
-    }, 2000);
-  } catch (err) {
-    console.error(err);
-    hideLoading();
-    alert('Failed to create room.');
-  }
+  
+  const roomId = Math.random().toString(36).substr(2, 9);
+  const room = { id: roomId, name: roomName, host: myPeerId, status: 'open' };
+  activeRooms[roomId] = room;
+  isHost = true;
+  currentRoomId = roomId;
+  
+  broadcastToLobby({ type: 'ROOM_CREATED', room });
+  
+  showScreen('screen-game');
+  document.getElementById('game-status').innerText = 'Waiting for opponent to join...';
+  hideLoading();
 });
 
-async function joinRoom(roomId) {
-  if (roomPollInterval) clearInterval(roomPollInterval);
-  showLoading('Joining Room...');
+window.joinRoom = function(roomId) {
+  const room = activeRooms[roomId];
+  if (!room) return alert('Room no longer exists.');
   
-  try {
-    const res = await fetch(`${API_BASE}/api/rooms/${roomId}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guest: myPeerId })
-    });
-    if (!res.ok) throw new Error('Room full or closed');
+  showLoading('Joining Room...');
+  if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
+    lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId }));
     currentRoomId = roomId;
     isHost = false;
-    
     showScreen('screen-game');
-    document.getElementById('game-status').innerText = 'Joined! Waiting for Game Mesh...';
-    hideLoading();
-    // We now just wait for the START_GAME_SIGNAL over the Lobby Mesh
-  } catch (err) {
-    console.error(err);
-    hideLoading();
-    alert('Failed to join room.');
-    startRoomPolling();
+    document.getElementById('game-status').innerText = 'Joined! Waiting for host to start game mesh...';
+  } else {
+    alert('Host is not connected to your mesh network!');
   }
+  hideLoading();
+};
+
+function renderRooms() {
+  const list = document.getElementById('room-list');
+  const rooms = Object.values(activeRooms);
+  list.innerHTML = '';
+  document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
+  
+  rooms.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'room-card';
+    div.innerHTML = `
+      <h3>${r.name}</h3>
+      <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : r.host}</p>
+      <button class="capsule-button small" onclick="joinRoom('${r.id}')">Join Game</button>
+    `;
+    list.appendChild(div);
+  });
 }
 
 function startRoomPolling() {
-  if (roomPollInterval) clearInterval(roomPollInterval);
-  const fetchRooms = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/rooms`);
-      const rooms = await res.json();
-      const list = document.getElementById('room-list');
-      list.innerHTML = '';
-      
-      document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
-      
-      rooms.forEach(r => {
-        const div = document.createElement('div');
-        div.className = 'room-card';
-        div.innerHTML = `
-          <h3>${r.name}</h3>
-          <p>Host: ${r.host}</p>
-          <button class="capsule-button small">Join Game</button>
-        `;
-        div.querySelector('button').addEventListener('click', () => joinRoom(r.id));
-        list.appendChild(div);
-      });
-      if (rooms.length === 0) {
-        list.innerHTML = `<p class="empty-state">No games found. Create one!</p>`;
-      }
-    } catch (e) {
-      console.error('Room fetch error', e);
-    }
-  };
-  fetchRooms();
-  roomPollInterval = setInterval(fetchRooms, 3000);
+  renderRooms();
 }
 
 // --- TIER 2: GAME MESH (ZERO-SERVER) ---

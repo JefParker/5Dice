@@ -1,8 +1,0 @@
-name = "5dice-backend"
-main = "worker.js"
-compatibility_date = "2024-03-20"
-
-[[kv_namespaces]]
-binding = "FIVEDICE_KV"
-id = "d0f5978442844efba09d08966d8f5fdd"
-preview_id = "preview_kv_id"
