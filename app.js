@@ -384,6 +384,7 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = myName ? "Back to Lobby" : "Save & Return";
   btn.style.backgroundColor = myName ? "#28a745" : "#4a90e2";
+  document.getElementById('settings-player-id-section').style.display = 'block';
   
   const colorPicker = document.getElementById('player-color-picker');
   if (colorPicker) colorPicker.value = myColor;
@@ -399,9 +400,14 @@ document.getElementById('btn-settings').addEventListener('click', () => {
 document.getElementById('global-player-name').addEventListener('input', (e) => {
   const newName = e.target.value.trim();
   const btn = document.getElementById('btn-save-settings');
-  const isChanged = (newName && newName !== myName);
-  btn.innerText = isChanged ? "Save & Return" : "Back to Lobby";
-  btn.style.backgroundColor = isChanged ? "#4a90e2" : "#28a745";
+  if (!myName) {
+    btn.innerText = "Head to Lobby";
+    btn.style.backgroundColor = "#28a745";
+  } else {
+    const isChanged = (newName && newName !== myName);
+    btn.innerText = isChanged ? "Save & Return" : "Back to Lobby";
+    btn.style.backgroundColor = isChanged ? "#4a90e2" : "#28a745";
+  }
 });
 
 document.getElementById('btn-save-settings').addEventListener('click', () => {
@@ -985,6 +991,10 @@ if (confirmUuidYes) {
 
 createBoard();
 if (!myName) {
+  document.getElementById('settings-player-id-section').style.display = 'none';
+  const btn = document.getElementById('btn-save-settings');
+  btn.innerText = "Head to Lobby";
+  btn.style.backgroundColor = "#28a745";
   showScreen('screen-settings');
 } else {
   startLobbyMesh();
