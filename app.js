@@ -213,24 +213,38 @@ function setupLobbyPeer(targetId, pc, dc) {
           msg.chats.forEach(c => appendChatMessage(c.author, c.text, c.id, c.timestamp, c.color));
         }
         appendChatMessage('System', `${msg.name} connected.`, null, null, '#555');
-      } else if (msg.type === 'ROOM_CREATED') {
+      } else if (msg.type === 'ROOM_CREATED' || msg.type === 'ROOM_UPDATED') {
         activeRooms[msg.room.id] = msg.room;
         renderRooms();
       } else if (msg.type === 'ROOM_CLOSED') {
         delete activeRooms[msg.roomId];
         renderRooms();
       } else if (msg.type === 'JOIN_ROOM_REQUEST') {
-        if (activeRooms[msg.roomId] && activeRooms[msg.roomId].host === myPeerId) {
-          const gamePlayers = [myPeerId, msg.guest].sort();
-          lobbyPeers[msg.guest].dc.send(JSON.stringify({ type: 'START_GAME_SIGNAL', players: gamePlayers }));
-          handleGameStartSignal(gamePlayers);
-          delete activeRooms[msg.roomId];
-          broadcastToLobby({ type: 'ROOM_CLOSED', roomId: msg.roomId });
+        const room = activeRooms[msg.roomId];
+        if (room && room.host === myPeerId) {
+          const isRejoin = room.status === 'in-progress' && room.players.includes(msg.guestUuid);
+          const isNew = room.status === 'open';
+          
+          if (isNew || isRejoin) {
+            if (isNew) {
+              room.players.push(msg.guestUuid);
+              room.status = 'in-progress';
+              broadcastToLobby({ type: 'ROOM_UPDATED', room });
+            }
+            const gamePlayers = [myPeerId, msg.guest].sort();
+            const resumeState = isRejoin ? { board: gameState, myTurn: !myTurn } : null;
+            lobbyPeers[msg.guest].dc.send(JSON.stringify({ 
+              type: 'START_GAME_SIGNAL', 
+              players: gamePlayers,
+              resumeState: resumeState
+            }));
+            handleGameStartSignal(gamePlayers, resumeState ? { board: gameState, myTurn: myTurn } : null);
+          }
         }
       } else if (msg.type === 'chat') {
         appendChatMessage(msg.name, msg.text, msg.id, msg.timestamp, msg.color);
       } else if (msg.type === 'START_GAME_SIGNAL') {
-        handleGameStartSignal(msg.players);
+        handleGameStartSignal(msg.players, msg.resumeState);
       } else if (msg.type === 'game-offer' || msg.type === 'game-answer' || msg.type === 'game-ice') {
         handleGameSignal(msg);
       }
@@ -433,7 +447,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   showLoading('Creating Room...');
   
   const roomId = Math.random().toString(36).substr(2, 9);
-  const room = { id: roomId, name: roomName, host: myPeerId, status: 'open' };
+  const room = { id: roomId, name: roomName, host: myPeerId, status: 'open', players: [gameState.userId] };
   activeRooms[roomId] = room;
   isHost = true;
   currentRoomId = roomId;
@@ -451,7 +465,7 @@ window.joinRoom = function(roomId) {
   
   showLoading('Joining Room...');
   if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
-    lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId }));
+    lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: gameState.userId }));
     currentRoomId = roomId;
     isHost = false;
     showScreen('screen-game');
@@ -469,6 +483,11 @@ function renderRooms() {
   document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
   
   rooms.forEach(r => {
+    if (r.status === 'in-progress' && !(r.players && r.players.includes(gameState.userId))) {
+      return; // Hide in-progress games if not a player
+    }
+    const isReturning = r.status === 'in-progress';
+    
     const div = document.createElement('div');
     div.className = 'room-card';
     const hostColor = (r.host === myPeerId) ? myColor : ((lobbyPeers[r.host] && lobbyPeers[r.host].color) ? lobbyPeers[r.host].color : '');
@@ -478,7 +497,7 @@ function renderRooms() {
     div.innerHTML = `
       <h3>${r.name}</h3>
       <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : r.host}</p>
-      <button class="capsule-button small" onclick="joinRoom('${r.id}')">Join Game</button>
+      <button class="capsule-button small" onclick="joinRoom('${r.id}')">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
     list.appendChild(div);
   });
@@ -508,13 +527,18 @@ let myTurn = false;
 let gamePlayers = [];
 let gameHost = null;
 
-async function handleGameStartSignal(players) {
+async function handleGameStartSignal(players, resumeState = null) {
   gamePlayers = players;
   gameHost = gamePlayers[0]; // Alphabetical sort means [0] is consistent host
   gamePeers = {};
   
-  gameState = ['', '', '', '', '', '', '', '', ''];
-  myTurn = (myPeerId === gameHost);
+  if (resumeState) {
+    gameState = resumeState.board;
+    myTurn = resumeState.myTurn;
+  } else {
+    gameState = ['', '', '', '', '', '', '', '', ''];
+    myTurn = (myPeerId === gameHost);
+  }
   updateBoard();
   document.getElementById('game-status').innerText = `Game Mesh: Syncing...`;
 
