@@ -16,8 +16,8 @@ if (!myColor) {
   myColor = generateDarkColor();
   localStorage.setItem('playerColor', myColor);
 }
-
 let lobbyPeers = {}; // { [id]: { pc, dc, name } }
+window.lobbyPeers = lobbyPeers;
 let gamePeers = {};  // { [id]: { pc, dc } }
 let reconnectTimers = {}; // { [id]: timeoutId }
 
@@ -376,6 +376,25 @@ async function handleLobbySignal(sig) {
       }
     };
     setupLobbyPeer(from, pc, null);
+  }
+
+  if (type === 'offer') {
+    if (lobbyPeers[from] && lobbyPeers[from].pc) {
+       // Only close if it's an old connection, to avoid reusing a broken state
+       if (Date.now() - lobbyPeers[from].lastInitiated > 5000) {
+          lobbyPeers[from].pc.close();
+          const newPc = new RTCPeerConnection(rtcConfig);
+          lobbyPeers[from] = { ...lobbyPeers[from], pc: newPc, dc: null, iceQueue: [], lastInitiated: Date.now() };
+          
+          newPc.ondatachannel = (e) => {
+            if (e.channel.label === 'lobby-channel') {
+              lobbyPeers[from].dc = e.channel;
+              setupLobbyPeer(from, newPc, e.channel);
+            }
+          };
+          setupLobbyPeer(from, newPc, null);
+       }
+    }
   }
 
   const pc = lobbyPeers[from].pc;
