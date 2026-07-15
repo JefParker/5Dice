@@ -284,6 +284,11 @@ function setupLobbyPeer(targetId, pc, dc) {
           msg.chats.forEach(c => appendChatMessage(c.author, c.text, c.id, c.timestamp, c.color));
         }
         appendChatMessage('System', `${msg.name} connected.`, null, null, '#555');
+        
+        if (currentRoomId && typeof gamePlayers !== 'undefined' && gamePlayers.includes(targetId)) {
+          updateGameBackground();
+          checkGameMeshReady();
+        }
       } else if (msg.type === 'ROOM_CREATED' || msg.type === 'ROOM_UPDATED') {
         activeRooms[msg.room.id] = msg.room;
         renderRooms();
