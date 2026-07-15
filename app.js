@@ -879,10 +879,12 @@ function updateGameBackground() {
 function checkGameMeshReady() {
   const ready = Object.values(gamePeers).every(p => p.dc && p.dc.readyState === 'open');
   if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
-    document.getElementById('game-status').innerText = `Your turn!`;
-    if (!myTurn) document.getElementById('game-status').innerText = `Opponent's turn`;
-    document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-    updateGameBackground();
+    if (!checkWin()) {
+      document.getElementById('game-status').innerText = `Your turn!`;
+      if (!myTurn) document.getElementById('game-status').innerText = `Opponent's turn`;
+      document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+      updateGameBackground();
+    }
   }
   updateDiagnostics();
 }
