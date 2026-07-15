@@ -264,6 +264,7 @@ function setupLobbyPeer(targetId, pc, dc) {
     }
 
     dc.onclose = () => {
+      if (lobbyPeers[targetId] && lobbyPeers[targetId].dc !== dc) return;
       const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Unknown';
       if (name !== 'Unknown') {
         appendChatMessage('System', `${name} has left.`, null, null, '#555');
