@@ -637,28 +637,59 @@ function renderRooms() {
   const list = document.getElementById('room-list');
   const rooms = Object.values(activeRooms);
   list.innerHTML = '';
-  document.getElementById('game-count').innerText = `Games Found: ${rooms.length}`;
   
+  let validRoomCount = 0;
+
   rooms.forEach(r => {
+    const isZombie = (r.host !== myPeerId && !lobbyPeers[r.host]);
+    
+    if (isZombie) {
+      if (!r.zombieSince) {
+        r.zombieSince = Date.now();
+        setTimeout(() => {
+          if (activeRooms[r.id] && !lobbyPeers[r.host]) {
+             delete activeRooms[r.id];
+             renderRooms();
+          }
+        }, 1000);
+      }
+      if (Date.now() - r.zombieSince >= 1000) {
+        delete activeRooms[r.id];
+        return; // Hide
+      }
+    } else {
+      if (r.zombieSince) delete r.zombieSince;
+    }
+
     if (r.status === 'in-progress' && !(r.players && r.players.includes(myUuid))) {
       return; // Hide in-progress games if not a player
     }
+    
+    validRoomCount++;
     const isReturning = r.status === 'in-progress';
     
     const div = document.createElement('div');
     div.className = 'room-card';
+    
     const hostColor = (r.host === myPeerId) ? myColor : ((lobbyPeers[r.host] && lobbyPeers[r.host].color) ? lobbyPeers[r.host].color : '');
-    if (hostColor) {
+    if (hostColor && !isZombie) {
       div.style.backgroundColor = hostColor;
+    } else if (isZombie) {
+      div.style.backgroundColor = '#555555';
+      div.style.opacity = '0.5';
+      div.style.filter = 'grayscale(100%)';
     }
+
     const displayGameType = r.gameType || 'Tic-Tac-Toe';
     div.innerHTML = `
       <h3>${r.name} - ${displayGameType}</h3>
-      <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : r.host}</p>
-      <button class="capsule-button small" onclick="joinRoom('${r.id}')">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
+      <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : (isZombie ? 'Disconnected' : r.host)}</p>
+      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isZombie ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
     list.appendChild(div);
   });
+  
+  document.getElementById('game-count').innerText = `Games Found: ${validRoomCount}`;
 }
 
 function startRoomPolling() {
