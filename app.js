@@ -19,6 +19,7 @@ if (!myColor) {
 
 let lobbyPeers = {}; // { [id]: { pc, dc, name } }
 let gamePeers = {};  // { [id]: { pc, dc } }
+let reconnectTimers = {}; // { [id]: timeoutId }
 
 let myName = localStorage.getItem('playerName') || '';
 let currentRoomId = null; 
@@ -785,10 +786,28 @@ async function initiateGameConnection(targetId) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   
-  if (lobbyPeers[targetId] && lobbyPeers[targetId].dc) {
-    lobbyPeers[targetId].dc.send(JSON.stringify({
-      type: 'game-offer', from: myPeerId, sdp: offer
-    }));
+  sendSignal(targetId, { type: 'game-offer', sdp: offer });
+}
+
+function handleConnectionFailure(targetId) {
+  if (!gamePeers[targetId]) return;
+  
+  if (reconnectTimers[targetId]) return;
+  
+  document.getElementById('reconnecting-overlay').classList.remove('hidden');
+  
+  reconnectTimers[targetId] = setTimeout(() => {
+    document.getElementById('reconnecting-overlay').classList.add('hidden');
+    delete reconnectTimers[targetId];
+    handlePeerDisconnect(targetId);
+  }, 30000);
+  
+  if (gamePeers[targetId].pc) gamePeers[targetId].pc.close();
+  
+  if (myPeerId < targetId) {
+    setTimeout(() => {
+      initiateGameConnection(targetId);
+    }, 1000);
   }
 }
 
@@ -831,22 +850,25 @@ function setupGamePeer(targetId, pc, dc) {
 
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-      handlePeerDisconnect(targetId);
+      handleConnectionFailure(targetId);
     }
   };
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      if (lobbyPeers[targetId] && lobbyPeers[targetId].dc) {
-        lobbyPeers[targetId].dc.send(JSON.stringify({
-          type: 'game-ice', from: myPeerId, candidate: e.candidate
-        }));
-      }
+      sendSignal(targetId, { type: 'game-ice', candidate: e.candidate });
     }
   };
 
   if (dc) {
     const onOpenHandler = () => {
+      if (reconnectTimers[targetId]) {
+        clearTimeout(reconnectTimers[targetId]);
+        delete reconnectTimers[targetId];
+        if (Object.keys(reconnectTimers).length === 0) {
+          document.getElementById('reconnecting-overlay').classList.add('hidden');
+        }
+      }
       checkGameMeshReady();
       broadcastAudioState();
     };
@@ -930,11 +952,7 @@ async function handleGameSignal(msg) {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     
-    if (lobbyPeers[from] && lobbyPeers[from].dc) {
-      lobbyPeers[from].dc.send(JSON.stringify({
-        type: 'game-answer', from: myPeerId, sdp: answer
-      }));
-    }
+    sendSignal(from, { type: 'game-answer', sdp: answer });
   } else if (type === 'game-answer') {
     await gamePeers[from].pc.setRemoteDescription(sdp);
   } else if (type === 'game-ice') {
@@ -1288,9 +1306,7 @@ async function enableMic() {
            });
            const offer = await gamePeers[p].pc.createOffer();
            await gamePeers[p].pc.setLocalDescription(offer);
-           if (lobbyPeers[p] && lobbyPeers[p].dc) {
-             lobbyPeers[p].dc.send(JSON.stringify({ type: 'game-offer', from: myPeerId, sdp: offer }));
-           }
+           sendSignal(p, { type: 'game-offer', sdp: offer });
         }
       }
     }
