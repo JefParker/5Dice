@@ -347,6 +347,11 @@ async function handleLobbySignal(sig) {
     return;
   }
 
+  if (type === 'game-offer' || type === 'game-answer' || type === 'game-ice') {
+    handleGameSignal(sig);
+    return;
+  }
+
   if (!lobbyPeers[from]) {
     const pc = new RTCPeerConnection(rtcConfig);
     lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null };
@@ -776,7 +781,10 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
 async function initiateGameConnection(targetId) {
   const pc = new RTCPeerConnection(rtcConfig);
   const dc = pc.createDataChannel('game-channel');
-  gamePeers[targetId] = { pc, dc };
+  if (!gamePeers[targetId]) gamePeers[targetId] = {};
+  gamePeers[targetId].pc = pc;
+  gamePeers[targetId].dc = dc;
+  if (!gamePeers[targetId].iceQueue) gamePeers[targetId].iceQueue = [];
   setupGamePeer(targetId, pc, dc);
 
   if (localAudioStream && micEnabled) {
@@ -932,7 +940,10 @@ async function handleGameSignal(msg) {
       pc = gamePeers[from].pc;
     } else {
       pc = new RTCPeerConnection(rtcConfig);
-      gamePeers[from] = { pc, dc: null };
+      if (!gamePeers[from]) gamePeers[from] = {};
+      gamePeers[from].pc = pc;
+      gamePeers[from].dc = null;
+      if (!gamePeers[from].iceQueue) gamePeers[from].iceQueue = [];
       
       if (localAudioStream && micEnabled) {
         localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
@@ -949,14 +960,34 @@ async function handleGameSignal(msg) {
     }
     
     await pc.setRemoteDescription(sdp);
+    
+    if (gamePeers[from].iceQueue) {
+      for (const cand of gamePeers[from].iceQueue) {
+        await pc.addIceCandidate(cand).catch(e => console.error(e));
+      }
+      gamePeers[from].iceQueue = [];
+    }
+    
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     
     sendSignal(from, { type: 'game-answer', sdp: answer });
   } else if (type === 'game-answer') {
     await gamePeers[from].pc.setRemoteDescription(sdp);
+    if (gamePeers[from].iceQueue) {
+      for (const cand of gamePeers[from].iceQueue) {
+        await gamePeers[from].pc.addIceCandidate(cand).catch(e => console.error(e));
+      }
+      gamePeers[from].iceQueue = [];
+    }
   } else if (type === 'game-ice') {
-    await gamePeers[from].pc.addIceCandidate(candidate);
+    if (gamePeers[from] && gamePeers[from].pc && gamePeers[from].pc.remoteDescription) {
+      await gamePeers[from].pc.addIceCandidate(candidate).catch(e => console.error(e));
+    } else {
+      if (!gamePeers[from]) gamePeers[from] = {};
+      if (!gamePeers[from].iceQueue) gamePeers[from].iceQueue = [];
+      gamePeers[from].iceQueue.push(candidate);
+    }
   }
 }
 
