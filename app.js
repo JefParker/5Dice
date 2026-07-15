@@ -395,8 +395,16 @@ async function handleLobbySignal(sig) {
 
   if (type === 'offer') {
     if (lobbyPeers[from] && lobbyPeers[from].pc) {
-       // Only close if it's an old connection, to avoid reusing a broken state
-       if (Date.now() - lobbyPeers[from].lastInitiated > 5000) {
+       const isOld = Date.now() - lobbyPeers[from].lastInitiated > 5000;
+       const hasGlare = lobbyPeers[from].pc.signalingState !== 'stable';
+       
+       // If it's an old connection, or if we have glare (both sides initiated simultaneously)
+       if (isOld || hasGlare) {
+          if (hasGlare && !isOld && myPeerId > from) {
+             // We are the designated initiator and this is a recent glare. Ignore their offer.
+             return;
+          }
+          // Yield to their offer by closing our PC and recreating it
           lobbyPeers[from].pc.onconnectionstatechange = null;
           lobbyPeers[from].pc.close();
           const newPc = new RTCPeerConnection(rtcConfig);
