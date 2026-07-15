@@ -216,10 +216,21 @@ async function sendSignal(targetId, signalPayload) {
 }
 
 async function initiateLobbyConnection(targetId, routeVia = null) {
-  if (lobbyPeers[targetId]) return;
+  if (lobbyPeers[targetId]) {
+    // If it was initiated very recently, let it finish. Otherwise, we assume it's broken and recreate it.
+    if (Date.now() - lobbyPeers[targetId].lastInitiated < 5000) return;
+    if (lobbyPeers[targetId].pc) lobbyPeers[targetId].pc.close();
+  }
+  
   const pc = new RTCPeerConnection(rtcConfig);
   const dc = pc.createDataChannel('lobby-channel');
-  lobbyPeers[targetId] = { pc, dc, name: 'Unknown', iceQueue: [], routeVia, lastInitiated: Date.now() };
+  
+  if (lobbyPeers[targetId]) {
+    lobbyPeers[targetId] = { ...lobbyPeers[targetId], pc, dc, iceQueue: [], routeVia, lastInitiated: Date.now() };
+  } else {
+    lobbyPeers[targetId] = { pc, dc, name: 'Unknown', iceQueue: [], routeVia, lastInitiated: Date.now() };
+  }
+  
   setupLobbyPeer(targetId, pc, dc);
 
   const offer = await pc.createOffer();
