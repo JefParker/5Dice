@@ -867,6 +867,8 @@ function handlePeerDisconnect(targetId) {
        }
     }
   }
+  
+  checkGameMeshReady();
 }
 
 function setupGamePeer(targetId, pc, dc) {
@@ -991,9 +993,12 @@ async function handleGameSignal(msg) {
   
   if (type === 'game-offer') {
     let pc;
-    if (gamePeers[from] && gamePeers[from].pc) {
+    if (gamePeers[from] && gamePeers[from].pc && gamePeers[from].pc.signalingState !== 'closed') {
       pc = gamePeers[from].pc;
     } else {
+      if (gamePeers[from] && gamePeers[from].pc) {
+        gamePeers[from].pc.close();
+      }
       pc = new RTCPeerConnection(rtcConfig);
       if (!gamePeers[from]) gamePeers[from] = {};
       gamePeers[from].pc = pc;
@@ -1066,13 +1071,23 @@ function updateGameBackground() {
 }
 
 function checkGameMeshReady() {
+  if (typeof gamePlayers === 'undefined' || gamePlayers.length === 0) return;
   const ready = Object.values(gamePeers).every(p => p.dc && p.dc.readyState === 'open');
   if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
     if (!checkWin()) {
-      document.getElementById('game-status').innerText = `Your turn!`;
-      if (!myTurn) document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
-      document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-      updateGameBackground();
+      if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
+        if (window.update5DiceUI) window.update5DiceUI();
+      } else {
+        document.getElementById('game-status').innerText = `Your turn!`;
+        if (!myTurn) document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
+        document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+        updateGameBackground();
+      }
+    }
+  } else {
+    if (!activeRooms[currentRoomId] || activeRooms[currentRoomId].gameType !== '5 Dice') {
+      const board = document.getElementById('tic-tac-toe-board');
+      if (board) board.classList.add('disabled');
     }
   }
   updateDiagnostics();
