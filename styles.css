@@ -770,3 +770,40 @@ body.bg-five-dice {
   border-top: 2px solid #555;
   font-weight: bold;
 }
+
+/* Audio Controls */
+.audio-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.audio-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.audio-btn.off {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+  border-color: rgba(220, 53, 69, 0.3);
+}
+
+.audio-btn svg {
+  transition: transform 0.2s;
+}
+
+.audio-btn:active svg {
+  transform: scale(0.9);
+}
+
+.audio-btn .hidden {
+  display: none;
+}

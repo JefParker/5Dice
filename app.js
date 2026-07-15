@@ -27,6 +27,11 @@ let isHost = false;
 let mqttClient = null;
 let recentChats = []; // { id, author, text, timestamp }
 
+// --- AUDIO GLOBALS ---
+let localAudioStream = null;
+let micEnabled = localStorage.getItem('micEnabled') === 'true';
+let speakerEnabled = localStorage.getItem('speakerEnabled') === 'true';
+
 let wakeLock = null;
 
 async function requestWakeLock() {
@@ -694,6 +699,10 @@ async function initiateGameConnection(targetId) {
   gamePeers[targetId] = { pc, dc };
   setupGamePeer(targetId, pc, dc);
 
+  if (localAudioStream && micEnabled) {
+    localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
+  }
+
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   
@@ -732,6 +741,13 @@ function handlePeerDisconnect(targetId) {
 }
 
 function setupGamePeer(targetId, pc, dc) {
+  pc.ontrack = (event) => {
+    const remoteAudio = document.getElementById('remote-audio');
+    if (remoteAudio && remoteAudio.srcObject !== event.streams[0]) {
+      remoteAudio.srcObject = event.streams[0];
+    }
+  };
+
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
       handlePeerDisconnect(targetId);
@@ -804,25 +820,36 @@ async function handleGameSignal(msg) {
   const { type, from, sdp, candidate } = msg;
   
   if (type === 'game-offer') {
-    const pc = new RTCPeerConnection(rtcConfig);
-    gamePeers[from] = { pc, dc: null };
-    
-    pc.ondatachannel = (e) => {
-      if (e.channel.label === 'game-channel') {
-        gamePeers[from].dc = e.channel;
-        setupGamePeer(from, pc, e.channel);
-        checkGameMeshReady();
+    let pc;
+    if (gamePeers[from] && gamePeers[from].pc) {
+      pc = gamePeers[from].pc;
+    } else {
+      pc = new RTCPeerConnection(rtcConfig);
+      gamePeers[from] = { pc, dc: null };
+      
+      if (localAudioStream && micEnabled) {
+        localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
       }
-    };
-    setupGamePeer(from, pc, null);
+      
+      pc.ondatachannel = (e) => {
+        if (e.channel.label === 'game-channel') {
+          gamePeers[from].dc = e.channel;
+          setupGamePeer(from, pc, e.channel);
+          checkGameMeshReady();
+        }
+      };
+      setupGamePeer(from, pc, null);
+    }
     
     await pc.setRemoteDescription(sdp);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     
-    lobbyPeers[from].dc.send(JSON.stringify({
-      type: 'game-answer', from: myPeerId, sdp: answer
-    }));
+    if (lobbyPeers[from] && lobbyPeers[from].dc) {
+      lobbyPeers[from].dc.send(JSON.stringify({
+        type: 'game-answer', from: myPeerId, sdp: answer
+      }));
+    }
   } else if (type === 'game-answer') {
     await gamePeers[from].pc.setRemoteDescription(sdp);
   } else if (type === 'game-ice') {
@@ -1127,4 +1154,105 @@ if (!myName) {
 } else {
   startLobbyMesh();
   startRoomPolling();
+}
+
+// --- AUDIO UI CONTROL LOGIC ---
+const btnToggleMic = document.getElementById('btn-toggle-mic');
+const btnToggleSpeaker = document.getElementById('btn-toggle-speaker');
+const iconMicOn = document.getElementById('icon-mic-on');
+const iconMicOff = document.getElementById('icon-mic-off');
+const iconSpeakerOn = document.getElementById('icon-speaker-on');
+const iconSpeakerOff = document.getElementById('icon-speaker-off');
+const remoteAudio = document.getElementById('remote-audio');
+
+async function enableMic() {
+  try {
+    if (!localAudioStream) {
+      localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    // Add track to all existing game peers if not already added
+    for (const p in gamePeers) {
+      if (gamePeers[p].pc) {
+        const senders = gamePeers[p].pc.getSenders();
+        const hasTrack = senders.find(s => s.track && s.track.kind === 'audio');
+        if (!hasTrack) {
+           localAudioStream.getTracks().forEach(track => {
+             gamePeers[p].pc.addTrack(track, localAudioStream);
+           });
+           const offer = await gamePeers[p].pc.createOffer();
+           await gamePeers[p].pc.setLocalDescription(offer);
+           if (lobbyPeers[p] && lobbyPeers[p].dc) {
+             lobbyPeers[p].dc.send(JSON.stringify({ type: 'game-offer', from: myPeerId, sdp: offer }));
+           }
+        }
+      }
+    }
+    localAudioStream.getTracks().forEach(t => t.enabled = true);
+    micEnabled = true;
+    localStorage.setItem('micEnabled', 'true');
+    if (btnToggleMic) {
+      btnToggleMic.classList.remove('off');
+      iconMicOn.classList.remove('hidden');
+      iconMicOff.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error("Microphone access denied:", err);
+    showToast("Microphone access denied", "#dc3545");
+    micEnabled = false;
+    localStorage.setItem('micEnabled', 'false');
+  }
+}
+
+function disableMic() {
+  if (localAudioStream) {
+    localAudioStream.getTracks().forEach(t => t.enabled = false);
+  }
+  micEnabled = false;
+  localStorage.setItem('micEnabled', 'false');
+  if (btnToggleMic) {
+    btnToggleMic.classList.add('off');
+    iconMicOn.classList.add('hidden');
+    iconMicOff.classList.remove('hidden');
+  }
+}
+
+function updateSpeakerState() {
+  if (remoteAudio) {
+    remoteAudio.muted = !speakerEnabled;
+  }
+  if (btnToggleSpeaker) {
+    if (speakerEnabled) {
+      btnToggleSpeaker.classList.remove('off');
+      iconSpeakerOn.classList.remove('hidden');
+      iconSpeakerOff.classList.add('hidden');
+    } else {
+      btnToggleSpeaker.classList.add('off');
+      iconSpeakerOn.classList.add('hidden');
+      iconSpeakerOff.classList.remove('hidden');
+    }
+  }
+}
+
+if (btnToggleMic && btnToggleSpeaker) {
+  if (micEnabled) {
+    // Defer a bit so UI doesn't block immediately on load
+    setTimeout(enableMic, 500);
+  } else {
+    disableMic();
+  }
+  updateSpeakerState();
+
+  btnToggleMic.addEventListener('click', () => {
+    if (micEnabled) {
+      disableMic();
+    } else {
+      enableMic();
+    }
+  });
+
+  btnToggleSpeaker.addEventListener('click', () => {
+    speakerEnabled = !speakerEnabled;
+    localStorage.setItem('speakerEnabled', speakerEnabled.toString());
+    updateSpeakerState();
+  });
 }
