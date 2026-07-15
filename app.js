@@ -893,6 +893,18 @@ function setupGamePeer(targetId, pc, dc) {
   };
 
   if (dc) {
+    let pingInterval;
+    let timeoutTimer;
+    
+    const resetTimeout = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      timeoutTimer = setTimeout(() => {
+        if (pc.connectionState !== 'closed') {
+          handleConnectionFailure(targetId);
+        }
+      }, 5000); // 5 seconds timeout
+    };
+
     const onOpenHandler = () => {
       if (reconnectTimers[targetId]) {
         clearTimeout(reconnectTimers[targetId]);
@@ -907,13 +919,33 @@ function setupGamePeer(targetId, pc, dc) {
       if (gameHost !== null && dc.readyState === 'open') {
         dc.send(JSON.stringify({ type: 'sync', state: gameState }));
       }
+      
+      pingInterval = setInterval(() => {
+        if (dc.readyState === 'open') {
+          try {
+            dc.send(JSON.stringify({ type: 'ping' }));
+          } catch (e) {}
+        }
+      }, 2000);
+      resetTimeout();
     };
     dc.onopen = onOpenHandler;
     if (dc.readyState === 'open') {
       onOpenHandler();
     }
+    
+    dc.onclose = () => {
+      if (pingInterval) clearInterval(pingInterval);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+    };
+
     dc.onmessage = (e) => {
       const msg = JSON.parse(e.data);
+      if (msg.type === 'ping') {
+        resetTimeout();
+        return;
+      }
+      
       if (msg.type === 'move') {
         gameState[msg.index] = msg.player;
         updateBoard();
