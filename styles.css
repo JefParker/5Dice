@@ -359,7 +359,6 @@ label {
 
 .tic-tac-toe-board.disabled {
   pointer-events: none;
-  filter: brightness(0.6);
 }
 
 .cell {
