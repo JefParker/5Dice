@@ -358,3 +358,70 @@ window.reset5DiceGame = function(firstTurnId = null) {
   document.getElementById('btn-play-again').classList.add('hidden');
   update5DiceUI();
 };
+
+window.sync5DiceState = function(incomingState) {
+  if (!incomingState || !incomingState.scores) return;
+  
+  const getScoreCount = (state, peerId) => {
+    let count = 0;
+    const pScores = state.scores[peerId];
+    if (pScores) {
+      for (const cat in pScores) {
+        if (pScores[cat] !== null) count++;
+      }
+    }
+    return count;
+  };
+  
+  const opponentId = window.gamePlayers.find(p => p !== window.myPeerId);
+  if (!opponentId) return;
+
+  const myCountCurrent = getScoreCount(window.fiveDiceState, window.myPeerId);
+  const myCountIncoming = getScoreCount(incomingState, window.myPeerId);
+  const oppCountCurrent = getScoreCount(window.fiveDiceState, opponentId);
+  const oppCountIncoming = getScoreCount(incomingState, opponentId);
+
+  const totalCurrent = myCountCurrent + oppCountCurrent;
+  const totalIncoming = myCountIncoming + oppCountIncoming;
+
+  let shouldUpdate = false;
+  
+  // Always accept a state that has more recorded scores than ours
+  if (totalIncoming > totalCurrent) {
+    shouldUpdate = true;
+  } else if (totalIncoming === totalCurrent) {
+    // If the scores are identical, accept the state if its rolls are further along
+    if (incomingState.turnsLeft < window.fiveDiceState.turnsLeft) {
+      shouldUpdate = true;
+    } else if (incomingState.turnsLeft === window.fiveDiceState.turnsLeft) {
+      if (incomingState.rollsLeft < window.fiveDiceState.rollsLeft) {
+        shouldUpdate = true;
+      }
+    }
+  }
+
+  if (shouldUpdate) {
+    window.fiveDiceState = incomingState;
+  }
+
+  // Recalculate myTurn robustly regardless of whether we updated (to ensure both clients agree)
+  const myCountFinal = getScoreCount(window.fiveDiceState, window.myPeerId);
+  const oppCountFinal = getScoreCount(window.fiveDiceState, opponentId);
+  
+  const firstPlayer = window.firstTurnPlayerId || window.gameHost;
+  
+  if (myCountFinal < oppCountFinal) {
+    window.myTurn = true;
+  } else if (oppCountFinal < myCountFinal) {
+    window.myTurn = false;
+  } else {
+    // Both have the same number of scores, meaning the round is even. It's the first player's turn again.
+    window.myTurn = (window.myPeerId === firstPlayer);
+  }
+
+  const elStatus = document.getElementById('game-status');
+  if (elStatus) {
+    elStatus.innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+  }
+  update5DiceUI();
+};

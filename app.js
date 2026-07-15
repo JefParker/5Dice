@@ -955,7 +955,7 @@ function setupGamePeer(targetId, pc, dc) {
       broadcastAudioState();
       
       if (gameHost !== null && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'sync', state: gameState, name: myName, color: myColor }));
+        dc.send(JSON.stringify({ type: 'sync', state: gameState, name: myName, color: myColor, fiveDiceState: window.fiveDiceState }));
       }
       
       pingInterval = setInterval(() => {
@@ -1036,6 +1036,10 @@ function setupGamePeer(targetId, pc, dc) {
           } else {
             document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
             updateGameBackground();
+          }
+        } else if (room && room.gameType === '5 Dice') {
+          if (msg.fiveDiceState && window.sync5DiceState) {
+            window.sync5DiceState(msg.fiveDiceState);
           }
         }
       } else if (msg.type === 'HOST_HANDOFF') {
