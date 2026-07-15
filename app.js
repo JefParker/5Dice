@@ -305,20 +305,22 @@ function setupLobbyPeer(targetId, pc, dc) {
               room.status = 'in-progress';
               broadcastToLobby({ type: 'ROOM_UPDATED', room });
             }
+            const randomFirstPlayer = Math.random() < 0.5 ? myPeerId : msg.guest;
             const gamePlayers = [myPeerId, msg.guest].sort();
             const resumeState = isRejoin ? { board: gameState, myTurn: !myTurn } : null;
             lobbyPeers[msg.guest].dc.send(JSON.stringify({ 
               type: 'START_GAME_SIGNAL', 
               players: gamePlayers,
-              resumeState: resumeState
+              resumeState: resumeState,
+              firstTurn: randomFirstPlayer
             }));
-            handleGameStartSignal(gamePlayers, resumeState ? { board: gameState, myTurn: myTurn } : null);
+            handleGameStartSignal(gamePlayers, resumeState ? { board: gameState, myTurn: myTurn } : null, randomFirstPlayer);
           }
         }
       } else if (msg.type === 'chat') {
         appendChatMessage(msg.name, msg.text, msg.id, msg.timestamp, msg.color);
       } else if (msg.type === 'START_GAME_SIGNAL') {
-        handleGameStartSignal(msg.players, msg.resumeState);
+        handleGameStartSignal(msg.players, msg.resumeState, msg.firstTurn);
       } else if (msg.type === 'game-offer' || msg.type === 'game-answer' || msg.type === 'game-ice') {
         handleGameSignal(msg);
       }
@@ -717,7 +719,7 @@ Object.defineProperty(window, 'myTurn', { get: () => myTurn, set: (v) => { myTur
 let gamePlayers = [];
 let gameHost = null;
 
-async function handleGameStartSignal(players, resumeState = null) {
+async function handleGameStartSignal(players, resumeState = null, firstTurn = null) {
   gamePlayers = players;
   gameHost = gamePlayers[0]; // Alphabetical sort means [0] is consistent host
   for (const p in gamePeers) {
@@ -741,8 +743,17 @@ async function handleGameStartSignal(players, resumeState = null) {
     }
   } else {
     gameState = ['', '', '', '', '', '', '', '', ''];
-    myTurn = (myPeerId === gameHost);
-    updateBoard();
+    if (firstTurn) {
+      myTurn = (myPeerId === firstTurn);
+    } else {
+      myTurn = (myPeerId === gameHost);
+    }
+    
+    if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
+      if (window.update5DiceUI) window.update5DiceUI();
+    } else {
+      updateBoard();
+    }
   }
   document.getElementById('game-status').innerText = `Game Mesh: Syncing...`;
 
@@ -853,10 +864,10 @@ function setupGamePeer(targetId, pc, dc) {
         }
       } else if (msg.type === 'PLAY_AGAIN') {
         const room = activeRooms[currentRoomId];
-        if (room && room.game === '5 Dice') {
-          if (window.reset5DiceGame) window.reset5DiceGame();
+        if (room && room.gameType === '5 Dice') {
+          if (window.reset5DiceGame) window.reset5DiceGame(msg.firstTurn);
         } else {
-          resetGame();
+          resetGame(msg.firstTurn);
         }
       } else if (msg.type === 'HOST_HANDOFF') {
         const newHostId = msg.newHostId;
@@ -1025,9 +1036,13 @@ function handleMove(index) {
   }
 }
 
-function resetGame() {
+function resetGame(firstTurn = null) {
   gameState = ['', '', '', '', '', '', '', '', ''];
-  myTurn = (myPeerId === gameHost);
+  if (firstTurn) {
+    myTurn = (myPeerId === firstTurn);
+  } else {
+    myTurn = (myPeerId === gameHost);
+  }
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.remove('disabled');
   document.getElementById('btn-play-again').classList.add('hidden');
@@ -1037,16 +1052,18 @@ function resetGame() {
 }
 
 document.getElementById('btn-play-again').addEventListener('click', () => {
+  const otherPeerId = gamePlayers.find(p => p !== myPeerId);
+  const nextFirstTurn = Math.random() < 0.5 ? myPeerId : otherPeerId;
   for (const p in gamePeers) {
     if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-      gamePeers[p].dc.send(JSON.stringify({ type: 'PLAY_AGAIN' }));
+      gamePeers[p].dc.send(JSON.stringify({ type: 'PLAY_AGAIN', firstTurn: nextFirstTurn }));
     }
   }
   const room = activeRooms[currentRoomId];
-  if (room && room.game === '5 Dice') {
-    if (window.reset5DiceGame) window.reset5DiceGame();
+  if (room && room.gameType === '5 Dice') {
+    if (window.reset5DiceGame) window.reset5DiceGame(nextFirstTurn);
   } else {
-    resetGame();
+    resetGame(nextFirstTurn);
   }
 });
 

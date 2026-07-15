@@ -335,7 +335,7 @@ window.handle5DiceMessage = function(msg) {
   }
 };
 
-window.reset5DiceGame = function() {
+window.reset5DiceGame = function(firstTurnId = null) {
   window.fiveDiceState = {
     dice: [1, 1, 1, 1, 1],
     held: [false, false, false, false, false],
@@ -350,7 +350,11 @@ window.reset5DiceGame = function() {
       'five-dice': null, 'full-house': null, 'bonus-5s': null
     };
   });
-  window.myTurn = (window.myPeerId === window.gameHost);
+  if (firstTurnId) {
+    window.myTurn = (window.myPeerId === firstTurnId);
+  } else {
+    window.myTurn = window.firstTurnPlayerId ? (window.myPeerId === window.firstTurnPlayerId) : (window.myPeerId === window.gameHost);
+  }
   document.getElementById('btn-play-again').classList.add('hidden');
   update5DiceUI();
 };
