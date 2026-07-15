@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v18';
+const CACHE_NAME = '5dice-cache-v19';
 const urlsToCache = [
   './',
   './index.html',
@@ -16,6 +16,9 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {
