@@ -943,6 +943,21 @@ function updateDiagnostics() {
       txt.innerText = `LOBBY MESH: SEEKING...`;
     }
   }
+
+  const gameDot = document.getElementById('game-network-dot');
+  const gameTxt = document.getElementById('game-status-text');
+  const gamePlayerCount = document.getElementById('game-player-count');
+
+  if (gameDot && gameTxt && gamePlayerCount) {
+    gamePlayerCount.innerText = `Players: ${gameCount + 1}`;
+    if (gameCount > 0) {
+      gameDot.className = 'status-dot connected';
+      gameTxt.innerText = `GAME MESH: ${gameCount} PEER(S)`;
+    } else {
+      gameDot.className = 'status-dot connecting';
+      gameTxt.innerText = `GAME MESH: SEEKING...`;
+    }
+  }
 }
 
 // TIC TAC TOE LOGIC
