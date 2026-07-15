@@ -851,7 +851,6 @@ function handlePeerDisconnect(targetId) {
   delete gamePeers[targetId];
   delete remoteAudioStates[targetId];
   updateAudioStateOutline();
-  gamePlayers = gamePlayers.filter(p => p !== targetId);
 
   if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
     const remainingPlayers = [...gamePlayers].sort();
@@ -976,6 +975,7 @@ function setupGamePeer(targetId, pc, dc) {
         remoteAudioStates[msg.peerId] = { micEnabled: msg.micEnabled, speakerEnabled: msg.speakerEnabled };
         updateAudioStateOutline();
       } else if (msg.type === 'PLAYER_LEFT') {
+        gamePlayers = gamePlayers.filter(p => p !== msg.peerId);
         handlePeerDisconnect(msg.peerId);
       } else if (msg.type.startsWith('5DICE_')) {
         if (typeof window.handle5DiceMessage === 'function') {
