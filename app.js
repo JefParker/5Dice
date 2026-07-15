@@ -767,6 +767,7 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
     }
   } else {
     gameState = ['', '', '', '', '', '', '', '', ''];
+    window.currentFirstTurn = firstTurn || gameHost;
     if (firstTurn) {
       myTurn = (myPeerId === firstTurn);
     } else {
@@ -1023,11 +1024,17 @@ function setupGamePeer(targetId, pc, dc) {
             if (!gameOver) {
                const xCount = gameState.filter(s => s === 'X').length;
                const oCount = gameState.filter(s => s === 'O').length;
-               if (myPeerId === gameHost) {
-                 myTurn = (xCount === oCount);
+               const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+               const myCount = mySymbol === 'X' ? xCount : oCount;
+               const oppCount = mySymbol === 'X' ? oCount : xCount;
+               
+               const firstPlayer = window.currentFirstTurn || gameHost;
+               if (myPeerId === firstPlayer) {
+                 myTurn = (myCount === oppCount);
                } else {
-                 myTurn = (xCount > oCount);
+                 myTurn = (oppCount > myCount);
                }
+               
                document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
                updateGameBackground();
             } else {
@@ -1248,6 +1255,7 @@ function handleMove(index) {
 }
 
 function resetGame(firstTurn = null) {
+  window.currentFirstTurn = firstTurn || gameHost;
   gameState = ['', '', '', '', '', '', '', '', ''];
   if (firstTurn) {
     myTurn = (myPeerId === firstTurn);
