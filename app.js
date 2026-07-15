@@ -955,7 +955,7 @@ function setupGamePeer(targetId, pc, dc) {
       broadcastAudioState();
       
       if (gameHost !== null && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'sync', state: gameState }));
+        dc.send(JSON.stringify({ type: 'sync', state: gameState, name: myName, color: myColor }));
       }
       
       pingInterval = setInterval(() => {
@@ -1003,6 +1003,11 @@ function setupGamePeer(targetId, pc, dc) {
           resetGame(msg.firstTurn);
         }
       } else if (msg.type === 'sync') {
+        if (msg.name) {
+          if (!lobbyPeers[targetId]) lobbyPeers[targetId] = { name: 'Unknown', iceQueue: [] };
+          lobbyPeers[targetId].name = msg.name;
+          if (msg.color) lobbyPeers[targetId].color = msg.color;
+        }
         const room = activeRooms[currentRoomId];
         if (room && room.gameType !== '5 Dice') {
           let updated = false;
@@ -1028,6 +1033,9 @@ function setupGamePeer(targetId, pc, dc) {
             } else {
                document.getElementById('btn-play-again').classList.remove('hidden');
             }
+          } else {
+            document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+            updateGameBackground();
           }
         }
       } else if (msg.type === 'HOST_HANDOFF') {
