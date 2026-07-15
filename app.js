@@ -221,6 +221,7 @@ async function initiateLobbyConnection(targetId, routeVia = null) {
     if (Date.now() - lobbyPeers[targetId].lastInitiated < 5000) return;
     if (lobbyPeers[targetId].pc) {
       lobbyPeers[targetId].pc.onconnectionstatechange = null;
+      if (lobbyPeers[targetId].dc) lobbyPeers[targetId].dc.onclose = null;
       lobbyPeers[targetId].pc.close();
     }
   }
@@ -406,6 +407,7 @@ async function handleLobbySignal(sig) {
           }
           // Yield to their offer by closing our PC and recreating it
           lobbyPeers[from].pc.onconnectionstatechange = null;
+          if (lobbyPeers[from].dc) lobbyPeers[from].dc.onclose = null;
           lobbyPeers[from].pc.close();
           const newPc = new RTCPeerConnection(rtcConfig);
           lobbyPeers[from] = { ...lobbyPeers[from], pc: newPc, dc: null, iceQueue: [], lastInitiated: Date.now() };
@@ -848,8 +850,7 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
             const isConnecting = lPeer && lPeer.pc && (lPeer.pc.connectionState === 'connecting' || lPeer.pc.connectionState === 'new');
             const isStuck = lPeer && lPeer.lastInitiated && (Date.now() - lPeer.lastInitiated > 6000);
             if ((!isConnecting || isStuck) && myPeerId > p) {
-              if (lPeer && lPeer.pc) lPeer.pc.close();
-              delete lobbyPeers[p];
+              // initiateLobbyConnection will safely close the old pc and preserve name/color
               initiateLobbyConnection(p, null);
             }
           }
