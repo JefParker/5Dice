@@ -330,6 +330,7 @@ function setupLobbyPeer(targetId, pc, dc) {
   }
   
   pc.onconnectionstatechange = () => {
+    if (lobbyPeers[targetId] && lobbyPeers[targetId].pc !== pc) return;
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
       delete lobbyPeers[targetId];
       updateDiagnostics();
@@ -857,6 +858,7 @@ function setupGamePeer(targetId, pc, dc) {
   };
 
   pc.onconnectionstatechange = () => {
+    if (gamePeers[targetId] && gamePeers[targetId].pc !== pc) return;
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
       handleConnectionFailure(targetId);
     }
@@ -1078,7 +1080,11 @@ function handleMove(index) {
   
   for (const p in gamePeers) {
     if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-      gamePeers[p].dc.send(JSON.stringify({ type: 'move', index, player: mySymbol }));
+      try {
+        gamePeers[p].dc.send(JSON.stringify({ type: 'move', index, player: mySymbol }));
+      } catch (err) {
+        console.error('Failed to send move:', err);
+      }
     }
   }
   if (!gameOver) {
