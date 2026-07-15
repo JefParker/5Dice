@@ -418,6 +418,11 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
   setTimeout(() => { if (div.parentNode) div.remove(); }, timeRemaining);
 }
 
+window.getOpponentName = function() {
+  const otherPeerId = gamePlayers.find(p => p !== myPeerId);
+  return (otherPeerId && lobbyPeers[otherPeerId]) ? lobbyPeers[otherPeerId].name : 'Opponent';
+};
+
 function broadcastToLobby(msgObj) {
   const payload = JSON.stringify(msgObj);
   for (const peerId in lobbyPeers) {
@@ -961,7 +966,7 @@ function checkGameMeshReady() {
   if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
     if (!checkWin()) {
       document.getElementById('game-status').innerText = `Your turn!`;
-      if (!myTurn) document.getElementById('game-status').innerText = `Opponent's turn`;
+      if (!myTurn) document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
       document.getElementById('tic-tac-toe-board').classList.remove('disabled');
       updateGameBackground();
     }
@@ -1029,7 +1034,7 @@ function handleMove(index) {
   }
   if (!gameOver) {
     myTurn = false;
-    document.getElementById('game-status').innerText = `Opponent's turn`;
+    document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
     updateGameBackground();
   } else {
     document.getElementById('btn-play-again').classList.remove('hidden');

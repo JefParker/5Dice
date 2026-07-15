@@ -242,7 +242,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       
       // Pass turn
       window.myTurn = false;
-      document.getElementById('game-status').innerText = 'Opponent\'s turn...';
+      document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn...`;
       
       broadcast5DiceScore(cat, score);
     };
