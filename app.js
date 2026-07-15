@@ -172,6 +172,7 @@ function startLobbyMesh() {
     // Announce presence
     mqttClient.publish('5dice/lobby/announce', JSON.stringify({ peerId: myPeerId }));
     updateDiagnostics();
+    retryGameConnections();
   });
 
   mqttClient.on('message', async (topic, message) => {
@@ -186,6 +187,9 @@ function startLobbyMesh() {
           
           if (!lobbyPeers[p] && myPeerId > p) {
             await initiateLobbyConnection(p, null);
+          }
+          if (gameHost !== null && typeof gamePlayers !== 'undefined' && gamePlayers.includes(p)) {
+            retryGameConnections();
           }
         }
       } else if (topic === `5dice/lobby/signal/${myPeerId}`) {
@@ -344,6 +348,9 @@ async function handleLobbySignal(sig) {
   if (type === 'announce_reply') {
     if (!lobbyPeers[from] && myPeerId > from) {
       await initiateLobbyConnection(from, null);
+    }
+    if (gameHost !== null && gamePlayers.includes(from)) {
+      retryGameConnections();
     }
     return;
   }
@@ -820,6 +827,20 @@ function handleConnectionFailure(targetId) {
   }
 }
 
+function retryGameConnections() {
+  if (gameHost !== null) {
+    for (const targetId of gamePlayers) {
+      if (targetId !== myPeerId) {
+        if (!gamePeers[targetId] || !gamePeers[targetId].dc || gamePeers[targetId].dc.readyState !== 'open') {
+          if (myPeerId < targetId) {
+            initiateGameConnection(targetId);
+          }
+        }
+      }
+    }
+  }
+}
+
 function handlePeerDisconnect(targetId) {
   if (!gamePeers[targetId]) return;
   const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
@@ -881,6 +902,10 @@ function setupGamePeer(targetId, pc, dc) {
       }
       checkGameMeshReady();
       broadcastAudioState();
+      
+      if (gameHost !== null && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'sync', state: gameState }));
+      }
     };
     dc.onopen = onOpenHandler;
     if (dc.readyState === 'open') {
@@ -905,6 +930,34 @@ function setupGamePeer(targetId, pc, dc) {
           if (window.reset5DiceGame) window.reset5DiceGame(msg.firstTurn);
         } else {
           resetGame(msg.firstTurn);
+        }
+      } else if (msg.type === 'sync') {
+        const room = activeRooms[currentRoomId];
+        if (room && room.gameType !== '5 Dice') {
+          let updated = false;
+          for (let i = 0; i < 9; i++) {
+            if (gameState[i] === '' && msg.state[i] !== '') {
+              gameState[i] = msg.state[i];
+              updated = true;
+            }
+          }
+          if (updated) {
+            updateBoard();
+            const gameOver = checkWin();
+            if (!gameOver) {
+               const xCount = gameState.filter(s => s === 'X').length;
+               const oCount = gameState.filter(s => s === 'O').length;
+               if (myPeerId === gameHost) {
+                 myTurn = (xCount === oCount);
+               } else {
+                 myTurn = (xCount > oCount);
+               }
+               document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+               updateGameBackground();
+            } else {
+               document.getElementById('btn-play-again').classList.remove('hidden');
+            }
+          }
         }
       } else if (msg.type === 'HOST_HANDOFF') {
         const newHostId = msg.newHostId;
