@@ -219,7 +219,7 @@ async function initiateLobbyConnection(targetId, routeVia = null) {
   if (lobbyPeers[targetId]) return;
   const pc = new RTCPeerConnection(rtcConfig);
   const dc = pc.createDataChannel('lobby-channel');
-  lobbyPeers[targetId] = { pc, dc, name: 'Unknown', iceQueue: [], routeVia };
+  lobbyPeers[targetId] = { pc, dc, name: 'Unknown', iceQueue: [], routeVia, lastInitiated: Date.now() };
   setupLobbyPeer(targetId, pc, dc);
 
   const offer = await pc.createOffer();
@@ -362,7 +362,7 @@ async function handleLobbySignal(sig) {
 
   if (!lobbyPeers[from]) {
     const pc = new RTCPeerConnection(rtcConfig);
-    lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null };
+    lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null, lastInitiated: Date.now() };
     
     pc.ondatachannel = (e) => {
       if (e.channel.label === 'lobby-channel') {
@@ -790,6 +790,21 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
       const readyCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
       if (readyCount < gamePlayers.length - 1) {
         retryGameConnections();
+      }
+      for (const p of gamePlayers) {
+        if (p !== myPeerId) {
+          const lPeer = lobbyPeers[p];
+          const lNotReady = !lPeer || !lPeer.dc || lPeer.dc.readyState !== 'open';
+          if (lNotReady) {
+            const isConnecting = lPeer && lPeer.pc && (lPeer.pc.connectionState === 'connecting' || lPeer.pc.connectionState === 'new');
+            const isStuck = lPeer && lPeer.lastInitiated && (Date.now() - lPeer.lastInitiated > 6000);
+            if ((!isConnecting || isStuck) && myPeerId > p) {
+              if (lPeer && lPeer.pc) lPeer.pc.close();
+              delete lobbyPeers[p];
+              initiateLobbyConnection(p, null);
+            }
+          }
+        }
       }
     }
   }, 3000);
@@ -1232,6 +1247,21 @@ function resetGame(firstTurn = null) {
       const readyCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
       if (readyCount < gamePlayers.length - 1) {
         retryGameConnections();
+      }
+      for (const p of gamePlayers) {
+        if (p !== myPeerId) {
+          const lPeer = lobbyPeers[p];
+          const lNotReady = !lPeer || !lPeer.dc || lPeer.dc.readyState !== 'open';
+          if (lNotReady) {
+            const isConnecting = lPeer && lPeer.pc && (lPeer.pc.connectionState === 'connecting' || lPeer.pc.connectionState === 'new');
+            const isStuck = lPeer && lPeer.lastInitiated && (Date.now() - lPeer.lastInitiated > 6000);
+            if ((!isConnecting || isStuck) && myPeerId > p) {
+              if (lPeer && lPeer.pc) lPeer.pc.close();
+              delete lobbyPeers[p];
+              initiateLobbyConnection(p, null);
+            }
+          }
+        }
       }
     }
   }, 3000);
