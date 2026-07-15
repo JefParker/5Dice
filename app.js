@@ -31,6 +31,38 @@ let recentChats = []; // { id, author, text, timestamp }
 let localAudioStream = null;
 let micEnabled = localStorage.getItem('micEnabled') === 'true';
 let speakerEnabled = localStorage.getItem('speakerEnabled') === 'true';
+let remoteAudioStates = {};
+
+function broadcastAudioState() {
+  const msgStr = JSON.stringify({
+    type: 'AUDIO_STATE',
+    peerId: myPeerId,
+    micEnabled: micEnabled,
+    speakerEnabled: speakerEnabled
+  });
+  for (const p in gamePeers) {
+    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
+      gamePeers[p].dc.send(msgStr);
+    }
+  }
+}
+
+function updateAudioStateOutline() {
+  const anyMicOn = Object.values(remoteAudioStates).some(state => state.micEnabled);
+  const anySpeakerOn = Object.values(remoteAudioStates).some(state => state.speakerEnabled);
+  
+  const micBtn = document.getElementById('btn-toggle-mic');
+  const speakerBtn = document.getElementById('btn-toggle-speaker');
+  
+  if (micBtn) {
+    if (anyMicOn) micBtn.classList.add('outline-red');
+    else micBtn.classList.remove('outline-red');
+  }
+  if (speakerBtn) {
+    if (anySpeakerOn) speakerBtn.classList.add('outline-red');
+    else speakerBtn.classList.remove('outline-red');
+  }
+}
 
 let wakeLock = null;
 
@@ -721,6 +753,8 @@ function handlePeerDisconnect(targetId) {
 
   if (gamePeers[targetId].pc) gamePeers[targetId].pc.close();
   delete gamePeers[targetId];
+  delete remoteAudioStates[targetId];
+  updateAudioStateOutline();
   gamePlayers = gamePlayers.filter(p => p !== targetId);
 
   if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
@@ -767,6 +801,7 @@ function setupGamePeer(targetId, pc, dc) {
   if (dc) {
     const onOpenHandler = () => {
       checkGameMeshReady();
+      broadcastAudioState();
     };
     dc.onopen = onOpenHandler;
     if (dc.readyState === 'open') {
@@ -805,6 +840,9 @@ function setupGamePeer(targetId, pc, dc) {
         }
         const newHostName = (newHostId === myPeerId) ? 'You' : (lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player');
         showToast(`${newHostName} ${newHostId === myPeerId ? 'are' : 'is'} now hosting`);
+      } else if (msg.type === 'AUDIO_STATE') {
+        remoteAudioStates[msg.peerId] = { micEnabled: msg.micEnabled, speakerEnabled: msg.speakerEnabled };
+        updateAudioStateOutline();
       } else if (msg.type === 'PLAYER_LEFT') {
         handlePeerDisconnect(msg.peerId);
       } else if (msg.type.startsWith('5DICE_')) {
@@ -1191,6 +1229,7 @@ async function enableMic() {
     localAudioStream.getTracks().forEach(t => t.enabled = true);
     micEnabled = true;
     localStorage.setItem('micEnabled', 'true');
+    broadcastAudioState();
     if (btnToggleMic) {
       btnToggleMic.classList.remove('off');
       iconMicOn.classList.remove('hidden');
@@ -1210,6 +1249,7 @@ function disableMic() {
   }
   micEnabled = false;
   localStorage.setItem('micEnabled', 'false');
+  broadcastAudioState();
   if (btnToggleMic) {
     btnToggleMic.classList.add('off');
     iconMicOn.classList.add('hidden');
@@ -1221,6 +1261,7 @@ function updateSpeakerState() {
   if (remoteAudio) {
     remoteAudio.muted = !speakerEnabled;
   }
+  broadcastAudioState();
   if (btnToggleSpeaker) {
     if (speakerEnabled) {
       btnToggleSpeaker.classList.remove('off');

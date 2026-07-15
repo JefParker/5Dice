@@ -806,3 +806,7 @@ body.bg-five-dice {
 .audio-btn .hidden {
   display: none;
 }
+
+.audio-btn.outline-red {
+  box-shadow: 0 0 0 2px #ff3b30;
+}
