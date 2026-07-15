@@ -1055,7 +1055,6 @@ const handleLeaveGame = () => {
   updateDiagnostics();
 };
 
-document.getElementById('btn-leave-game').addEventListener('click', handleLeaveGame);
 const headerBackBtn = document.getElementById('btn-back-lobby-header');
 if (headerBackBtn) headerBackBtn.addEventListener('click', handleLeaveGame);
 
