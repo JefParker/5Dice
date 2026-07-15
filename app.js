@@ -713,7 +713,7 @@ async function initiateGameConnection(targetId) {
   }
 }
 
-function handlePeerDisconnect(targetId) {
+function handlePeerDisconnect(targetId, intentional = false) {
   if (!gamePeers[targetId]) return;
   const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
   const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
@@ -722,6 +722,16 @@ function handlePeerDisconnect(targetId) {
   if (gamePeers[targetId].pc) gamePeers[targetId].pc.close();
   delete gamePeers[targetId];
   gamePlayers = gamePlayers.filter(p => p !== targetId);
+
+  if (intentional && currentRoomId && activeRooms[currentRoomId] && isHost) {
+    const room = activeRooms[currentRoomId];
+    const targetUuid = lobbyPeers[targetId] ? lobbyPeers[targetId].uuid : null;
+    if (targetUuid) {
+      room.players = room.players.filter(u => u !== targetUuid);
+      room.status = 'open';
+      broadcastToLobby({ type: 'ROOM_UPDATED', room });
+    }
+  }
 
   if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
     const remainingPlayers = [...gamePlayers].sort();
@@ -806,7 +816,7 @@ function setupGamePeer(targetId, pc, dc) {
         const newHostName = (newHostId === myPeerId) ? 'You' : (lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player');
         showToast(`${newHostName} ${newHostId === myPeerId ? 'are' : 'is'} now hosting`);
       } else if (msg.type === 'PLAYER_LEFT') {
-        handlePeerDisconnect(msg.peerId);
+        handlePeerDisconnect(msg.peerId, true);
       } else if (msg.type.startsWith('5DICE_')) {
         if (typeof window.handle5DiceMessage === 'function') {
           window.handle5DiceMessage(msg);
