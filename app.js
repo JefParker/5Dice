@@ -219,7 +219,10 @@ async function initiateLobbyConnection(targetId, routeVia = null) {
   if (lobbyPeers[targetId]) {
     // If it was initiated very recently, let it finish. Otherwise, we assume it's broken and recreate it.
     if (Date.now() - lobbyPeers[targetId].lastInitiated < 5000) return;
-    if (lobbyPeers[targetId].pc) lobbyPeers[targetId].pc.close();
+    if (lobbyPeers[targetId].pc) {
+      lobbyPeers[targetId].pc.onconnectionstatechange = null;
+      lobbyPeers[targetId].pc.close();
+    }
   }
   
   const pc = new RTCPeerConnection(rtcConfig);
@@ -393,6 +396,7 @@ async function handleLobbySignal(sig) {
     if (lobbyPeers[from] && lobbyPeers[from].pc) {
        // Only close if it's an old connection, to avoid reusing a broken state
        if (Date.now() - lobbyPeers[from].lastInitiated > 5000) {
+          lobbyPeers[from].pc.onconnectionstatechange = null;
           lobbyPeers[from].pc.close();
           const newPc = new RTCPeerConnection(rtcConfig);
           lobbyPeers[from] = { ...lobbyPeers[from], pc: newPc, dc: null, iceQueue: [], lastInitiated: Date.now() };
@@ -1116,6 +1120,7 @@ async function handleGameSignal(msg) {
       pc = gamePeers[from].pc;
     } else {
       if (gamePeers[from] && gamePeers[from].pc) {
+        gamePeers[from].pc.onconnectionstatechange = null;
         gamePeers[from].pc.close();
       }
       pc = new RTCPeerConnection(rtcConfig);
