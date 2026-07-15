@@ -185,7 +185,7 @@ function startLobbyMesh() {
           // Tell the new peer we exist so they can initiate if their ID > ours
           mqttClient.publish(`5dice/lobby/signal/${p}`, JSON.stringify({ from: myPeerId, type: 'announce_reply' }));
           
-          if (!lobbyPeers[p] && myPeerId > p) {
+          if (myPeerId > p) {
             await initiateLobbyConnection(p, null);
           }
           if (gameHost !== null && typeof gamePlayers !== 'undefined' && gamePlayers.includes(p)) {
@@ -362,7 +362,7 @@ async function handleLobbySignal(sig) {
   const { from, type, via } = sig;
 
   if (type === 'announce_reply') {
-    if (!lobbyPeers[from] && myPeerId > from) {
+    if (myPeerId > from) {
       await initiateLobbyConnection(from, null);
     }
     if (gameHost !== null && gamePlayers.includes(from)) {
