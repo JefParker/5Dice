@@ -783,6 +783,17 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
       }
     }
   }
+  
+  if (window.gameMeshRetryInterval) clearInterval(window.gameMeshRetryInterval);
+  window.gameMeshRetryInterval = setInterval(() => {
+    if (gamePlayers.length > 1) {
+      const readyCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
+      if (readyCount < gamePlayers.length - 1) {
+        retryGameConnections();
+      }
+    }
+  }, 3000);
+  
   updateDiagnostics();
 }
 
@@ -792,6 +803,7 @@ async function initiateGameConnection(targetId) {
   if (!gamePeers[targetId]) gamePeers[targetId] = {};
   gamePeers[targetId].pc = pc;
   gamePeers[targetId].dc = dc;
+  gamePeers[targetId].lastInitiated = Date.now();
   if (!gamePeers[targetId].iceQueue) gamePeers[targetId].iceQueue = [];
   setupGamePeer(targetId, pc, dc);
 
@@ -831,8 +843,14 @@ function retryGameConnections() {
   if (gameHost !== null) {
     for (const targetId of gamePlayers) {
       if (targetId !== myPeerId) {
-        if (!gamePeers[targetId] || !gamePeers[targetId].dc || gamePeers[targetId].dc.readyState !== 'open') {
-          if (myPeerId < targetId) {
+        const peer = gamePeers[targetId];
+        const isNotReady = !peer || !peer.dc || peer.dc.readyState !== 'open';
+        
+        if (isNotReady) {
+          const isConnecting = peer && peer.pc && (peer.pc.connectionState === 'connecting' || peer.pc.connectionState === 'new');
+          const isStuck = peer && peer.lastInitiated && (Date.now() - peer.lastInitiated > 6000);
+          
+          if ((!isConnecting || isStuck) && myPeerId < targetId) {
             initiateGameConnection(targetId);
           }
         }
@@ -1120,6 +1138,7 @@ function checkGameMeshReady() {
     if (!activeRooms[currentRoomId] || activeRooms[currentRoomId].gameType !== '5 Dice') {
       const board = document.getElementById('tic-tac-toe-board');
       if (board) board.classList.add('disabled');
+      document.getElementById('game-status').innerText = 'Waiting for opponent to reconnect...';
     }
   }
   updateDiagnostics();
@@ -1206,6 +1225,17 @@ function resetGame(firstTurn = null) {
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.remove('disabled');
   document.getElementById('btn-play-again').classList.add('hidden');
+  
+  if (window.gameMeshRetryInterval) clearInterval(window.gameMeshRetryInterval);
+  window.gameMeshRetryInterval = setInterval(() => {
+    if (gamePlayers.length > 1) {
+      const readyCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
+      if (readyCount < gamePlayers.length - 1) {
+        retryGameConnections();
+      }
+    }
+  }, 3000);
+
   document.getElementById('screen-game').classList.remove('tie-background');
   updateGameBackground();
   checkGameMeshReady();
@@ -1309,6 +1339,11 @@ const handleLeaveGame = () => {
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.add('disabled');
   document.getElementById('btn-play-again').classList.add('hidden');
+  
+  if (window.gameMeshRetryInterval) {
+    clearInterval(window.gameMeshRetryInterval);
+    window.gameMeshRetryInterval = null;
+  }
   
   isHost = false;
   currentRoomId = null;
