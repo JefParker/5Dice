@@ -184,7 +184,7 @@ document.querySelectorAll('.fd-die').forEach(die => {
     if (window.fiveDiceState.rollsLeft < 3) {
       window.fiveDiceState.held[idx] = !window.fiveDiceState.held[idx];
       update5DiceUI();
-      broadcast5DiceState();
+      broadcast5DiceHold();
     }
   });
 });
@@ -334,6 +334,20 @@ function broadcast5DiceState() {
   }
 }
 
+function broadcast5DiceHold() {
+  if (!window.gamePeers) return;
+  const msg = {
+    type: '5DICE_HOLD',
+    held: window.fiveDiceState.held
+  };
+  for (const peerId in window.gamePeers) {
+    const p = window.gamePeers[peerId];
+    if (p.dc && p.dc.readyState === 'open') {
+      p.dc.send(JSON.stringify(msg));
+    }
+  }
+}
+
 function broadcast5DiceScore(category, score) {
   if (!window.gamePeers) return;
   const msg = {
@@ -374,6 +388,9 @@ window.handle5DiceMessage = function(msg) {
         update5DiceUI();
       }
     }, 50);
+  } else if (msg.type === '5DICE_HOLD') {
+    window.fiveDiceState.held = msg.held;
+    update5DiceUI();
   } else if (msg.type === '5DICE_SCORE') {
     if (!window.fiveDiceState.scores[msg.player]) {
        window.fiveDiceState.scores[msg.player] = {};

@@ -611,6 +611,7 @@ body.bg-five-dice {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-top: 20px;
   margin-bottom: 10px;
 }
 
