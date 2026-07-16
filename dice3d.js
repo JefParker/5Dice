@@ -289,6 +289,13 @@ class Dice3D {
   snapToState(finalValues, heldState, targetElements) {
     this.rolling = false;
     this.settling = false;
+    this.snapData = { finalValues, heldState, targetElements };
+    this._applySnap();
+  }
+  
+  _applySnap() {
+    if (!this.snapData) return;
+    const { finalValues, heldState, targetElements } = this.snapData;
     for (let i = 0; i < 5; i++) {
       const el = targetElements[i];
       if (!el) {
@@ -394,10 +401,17 @@ class Dice3D {
       if (t >= 1) {
         this.rolling = false;
         this.settling = false;
+        this.snapData = {
+          finalValues: this.rollData.finalValues,
+          heldState: this.rollData.heldState,
+          targetElements: this.rollData.targetElements
+        };
         if (this.rollData.onComplete) {
           this.rollData.onComplete();
         }
       }
+    } else if (!this.rolling && !this.settling && this.snapData) {
+      this._applySnap();
     }
     
     this.renderer.render(this.scene, this.camera);
