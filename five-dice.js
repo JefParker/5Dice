@@ -259,6 +259,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       // Pass turn
       window.myTurn = false;
       document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn...`;
+      if (window.updateGameBackground) window.updateGameBackground();
       
       broadcast5DiceScore(cat, score);
     };
@@ -347,6 +348,7 @@ window.handle5DiceMessage = function(msg) {
     window.fiveDiceState.held = [false, false, false, false, false];
     window.fiveDiceState.dice = [1,1,1,1,1];
     document.getElementById('game-status').innerText = 'Your turn!';
+    if (window.updateGameBackground) window.updateGameBackground();
     update5DiceUI();
   }
 };

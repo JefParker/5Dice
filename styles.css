@@ -656,8 +656,7 @@ body.bg-five-dice {
 .die-3::after { background-color: white; box-shadow: -10px -10px 0 white, 10px 10px 0 white; }
 .die-4::after { box-shadow: -10px -10px 0 white, 10px 10px 0 white, -10px 10px 0 white, 10px -10px 0 white; }
 .die-5::after { background-color: white; box-shadow: -10px -10px 0 white, 10px 10px 0 white, -10px 10px 0 white, 10px -10px 0 white; }
-.die-6::after { box-shadow: -10px -10px 0 white, 10px 10px 0 white, -10px 10px 0 white, 10px -10px 0 white, -10px 0 0 white, 10px 0 0 white; }
-.fd-die.held::after { box-shadow: inherit; } /* We will need to color the dots in JS or just keep them white. Let's keep dots white for now */
+.die-6::after { background-color: transparent; box-shadow: -10px -10px 0 white, -10px 0 0 white, -10px 10px 0 white, 10px -10px 0 white, 10px 0 0 white, 10px 10px 0 white; }
 
 .fd-roll-btn {
   width: 50px;

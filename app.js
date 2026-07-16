@@ -1189,7 +1189,8 @@ function updateGameBackground() {
   const gameScreen = document.getElementById('screen-game');
   gameScreen.classList.remove('tie-background', 'bg-watermark-x', 'bg-watermark-o');
   
-  if (gameHost !== null) {
+  const room = activeRooms[currentRoomId];
+  if (gameHost !== null && (!room || room.gameType !== '5 Dice')) {
     const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
     gameScreen.classList.add(`bg-watermark-${mySymbol.toLowerCase()}`);
   }
@@ -1210,6 +1211,8 @@ function checkGameMeshReady() {
   if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
     if (!checkWin()) {
       if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
+        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
+        updateGameBackground();
         if (window.update5DiceUI) window.update5DiceUI();
       } else {
         document.getElementById('game-status').innerText = `Your turn!`;
