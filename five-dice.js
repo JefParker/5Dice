@@ -113,14 +113,14 @@ function renderScorecard() {
     { id: 'fours', label: "4's" },
     { id: 'fives', label: "5's" },
     { id: 'sixes', label: "6's" },
-    { id: 'bonus', label: "Bonus (>= 63)" },
+    { id: 'bonus', label: "Bonus (> 62)" },
     { id: 'chance', label: "Chance" },
     { id: 'three-kind', label: "3 of a kind" },
     { id: 'four-kind', label: "4 of a kind" },
     { id: 'full-house', label: "Full House" },
     { id: 'sm-straight', label: "Sm Strt" },
     { id: 'lg-straight', label: "Lg Strt" },
-    { id: 'five-dice', label: "Yahtzee" },
+    { id: 'five-dice', label: "5 Dice" },
     { id: 'bonus-5s', label: "Bonus 5s" }
   ];
   
@@ -133,7 +133,7 @@ function renderScorecard() {
   html += `</div>`;
   
   cats.forEach(c => {
-    html += `<div class="fd-sc-row ${c.id === 'bonus' ? 'fd-sc-totals' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
+    html += `<div class="fd-sc-row ${c.id === 'chance' ? 'fd-sc-totals' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
     players.forEach(p => {
       let score = state.scores[p][c.id];
       if (c.id === 'bonus') {
@@ -231,7 +231,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     const cat = catEl.getAttribute('data-category');
     if (window.fiveDiceState.scores[window.myPeerId][cat] !== null) return; // Already scored
     
-    const score = calculateYahtzeeScore(cat, window.fiveDiceState.dice);
+    const score = calculate5DiceScore(cat, window.fiveDiceState.dice);
     
     // Show commit dialog
     const commitDiv = document.createElement('div');
@@ -241,7 +241,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       <button id="btn-fd-undo">Undo</button>
       <button id="btn-fd-commit">Commit</button>
     `;
-    document.getElementById('five-dice-board').appendChild(commitDiv);
+    document.getElementById('five-dice-container').appendChild(commitDiv);
     
     document.getElementById('btn-fd-undo').onclick = () => {
       commitDiv.remove();
@@ -270,7 +270,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
   });
 });
 
-function calculateYahtzeeScore(category, dice) {
+function calculate5DiceScore(category, dice) {
   const counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
   let sum = 0;
   dice.forEach(d => { counts[d]++; sum += d; });
@@ -375,7 +375,7 @@ window.reset5DiceGame = function(firstTurnId = null) {
   if (firstTurnId) {
     window.myTurn = (window.myPeerId === firstTurnId);
   } else {
-    window.myTurn = window.firstTurnPlayerId ? (window.myPeerId === window.firstTurnPlayerId) : (window.myPeerId === window.gameHost);
+    window.myTurn = window.currentFirstTurn ? (window.myPeerId === window.currentFirstTurn) : (window.myPeerId === window.gameHost);
   }
   document.getElementById('btn-play-again').classList.add('hidden');
   update5DiceUI();

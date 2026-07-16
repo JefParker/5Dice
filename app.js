@@ -788,7 +788,13 @@ if (!myUuid) {
 let myTurn = false;
 Object.defineProperty(window, 'myTurn', { get: () => myTurn, set: (v) => { myTurn = v; } });
 let gamePlayers = [];
+Object.defineProperty(window, 'gamePlayers', { get: () => gamePlayers, set: (v) => { gamePlayers = v; } });
 let gameHost = null;
+Object.defineProperty(window, 'gameHost', { get: () => gameHost, set: (v) => { gameHost = v; } });
+Object.defineProperty(window, 'myPeerId', { get: () => myPeerId });
+Object.defineProperty(window, 'myName', { get: () => myName });
+Object.defineProperty(window, 'myColor', { get: () => myColor });
+Object.defineProperty(window, 'gamePeers', { get: () => gamePeers, set: (v) => { gamePeers = v; } });
 
 async function handleGameStartSignal(players, resumeState = null, firstTurn = null) {
   gamePlayers = players;

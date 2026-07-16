@@ -518,12 +518,16 @@ label {
 
 .hidden { display: none !important; }
 
-/* 5 Dice (Yahtzee) Styles */
+/* 5 Dice Styles */
 body.bg-five-dice {
   background-color: #1b4d36;
 }
 
-.five-dice-board {
+#five-dice-container {
+  position: relative;
+}
+
+.fd-board {
   width: 100%;
   max-width: 450px;
   margin: 0 auto;
