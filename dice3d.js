@@ -146,14 +146,15 @@ class Dice3D {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
   
-  get3DTarget(x, y) {
+  get3DTarget(x, y, targetSize) {
     const ndcX = (x / window.innerWidth) * 2 - 1;
     const ndcY = -(y / window.innerHeight) * 2 + 1;
     
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
     
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    // Intersect plane at Y = targetSize / 2 so the center perfectly matches the UI
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(targetSize / 2));
     const target = new THREE.Vector3();
     raycaster.ray.intersectPlane(plane, target);
     
@@ -190,16 +191,28 @@ class Dice3D {
     
     for (let i = 0; i < 5; i++) {
       const el = targetElements[i];
-      let targetPos = new THREE.Vector3(100,100,100);
+      let targetPos = new THREE.Vector3(100, 100, 100);
+      let targetSize = 1.0;
       if (el) {
         const rect = el.getBoundingClientRect();
         if (rect.width > 0) {
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
-          targetPos = this.get3DTarget(centerX, centerY);
-          targetPos.y = 0.5; // Half size
+          
+          // Calculate exact 3D size to match pixel width
+          const vFov = (this.camera.fov * Math.PI) / 180;
+          const visibleHeight = 2 * Math.tan(vFov / 2) * this.camera.position.y;
+          const pixelsPerUnit = window.innerHeight / visibleHeight;
+          targetSize = rect.width / pixelsPerUnit;
+          
+          targetPos = this.get3DTarget(centerX, centerY, targetSize);
         }
       }
+      
+      this.diceMeshes[i].scale.setScalar(targetSize);
+      
+      // Update physics shape to match visual scale
+      this.diceBodies[i].shapes[0] = new CANNON.Box(new CANNON.Vec3(targetSize/2, targetSize/2, targetSize/2));
       
       const targetRot = this.getTargetRotation(finalValues[i]);
       this.rollData.targets.push({ pos: targetPos, rot: targetRot });
@@ -257,8 +270,15 @@ class Dice3D {
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       
-      const targetPos = this.get3DTarget(centerX, centerY);
-      targetPos.y = 0.5; 
+      const vFov = (this.camera.fov * Math.PI) / 180;
+      const visibleHeight = 2 * Math.tan(vFov / 2) * this.camera.position.y;
+      const pixelsPerUnit = window.innerHeight / visibleHeight;
+      const targetSize = rect.width / pixelsPerUnit;
+      
+      this.diceMeshes[i].scale.setScalar(targetSize);
+      this.diceBodies[i].shapes[0] = new CANNON.Box(new CANNON.Vec3(targetSize/2, targetSize/2, targetSize/2));
+      
+      const targetPos = this.get3DTarget(centerX, centerY, targetSize);
       const targetRot = this.getTargetRotation(finalValues[i]);
       
       this.diceBodies[i].type = CANNON.Body.KINEMATIC;
