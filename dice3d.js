@@ -53,8 +53,8 @@ class Dice3D {
 
     this.diceMeshes = [];
     this.diceBodies = [];
-    this.normalMaterials = this.createDiceMaterials('#f8f8f8', '#e0e0e0');
-    this.heldMaterials = this.createDiceMaterials('#e0f0ff', '#3399ff');
+    this.normalMaterials = this.createDiceMaterials('#f8f8f8', '#e0e0e0', '#222222');
+    this.heldMaterials = this.createDiceMaterials('#007BFF', '#0056b3', '#ffffff');
     
     for(let i = 0; i < 5; i++) {
       const size = 1.0;
@@ -95,7 +95,7 @@ class Dice3D {
     this.animate();
   }
   
-  createDiceMaterials(bg = '#f8f8f8', border = '#e0e0e0') {
+  createDiceMaterials(bg = '#f8f8f8', border = '#e0e0e0', pipColor = '#222222') {
     const materials = [];
     for (let i = 1; i <= 6; i++) {
       const canvas = document.createElement('canvas');
@@ -110,7 +110,7 @@ class Dice3D {
       ctx.lineWidth = 8;
       ctx.strokeRect(4, 4, 248, 248);
       
-      ctx.fillStyle = '#222222';
+      ctx.fillStyle = pipColor;
       const drawPip = (x, y) => {
         ctx.beginPath();
         ctx.arc(x, y, 22, 0, Math.PI * 2);
