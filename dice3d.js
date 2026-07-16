@@ -53,7 +53,8 @@ class Dice3D {
 
     this.diceMeshes = [];
     this.diceBodies = [];
-    this.materials = this.createDiceMaterials();
+    this.normalMaterials = this.createDiceMaterials('#f8f8f8', '#e0e0e0');
+    this.heldMaterials = this.createDiceMaterials('#e0f0ff', '#3399ff');
     
     for(let i = 0; i < 5; i++) {
       const size = 1.0;
@@ -61,12 +62,12 @@ class Dice3D {
       
       // BoxGeometry face order: right, left, top, bottom, front, back
       const mesh = new THREE.Mesh(geometry, [
-        this.materials[2], // right - 3
-        this.materials[3], // left - 4
-        this.materials[0], // top - 1
-        this.materials[5], // bottom - 6
-        this.materials[1], // front - 2
-        this.materials[4], // back - 5
+        this.normalMaterials[2], // right - 3
+        this.normalMaterials[3], // left - 4
+        this.normalMaterials[0], // top - 1
+        this.normalMaterials[5], // bottom - 6
+        this.normalMaterials[1], // front - 2
+        this.normalMaterials[4], // back - 5
       ]);
       mesh.castShadow = true;
       this.scene.add(mesh);
@@ -94,7 +95,7 @@ class Dice3D {
     this.animate();
   }
   
-  createDiceMaterials() {
+  createDiceMaterials(bg = '#f8f8f8', border = '#e0e0e0') {
     const materials = [];
     for (let i = 1; i <= 6; i++) {
       const canvas = document.createElement('canvas');
@@ -102,12 +103,10 @@ class Dice3D {
       canvas.height = 256;
       const ctx = canvas.getContext('2d');
       
-      // White background, slightly off-white for realism
-      ctx.fillStyle = '#f8f8f8';
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, 256, 256);
       
-      // Add a subtle border to define edges
-      ctx.strokeStyle = '#e0e0e0';
+      ctx.strokeStyle = border;
       ctx.lineWidth = 8;
       ctx.strokeRect(4, 4, 248, 248);
       
@@ -218,15 +217,21 @@ class Dice3D {
       this.rollData.targets.push({ pos: targetPos, rot: targetRot });
       
       if (unheldIndices.includes(i)) {
-        // Spawn high and throw downwards
+        // Assign normal materials
+        this.diceMeshes[i].material = [
+          this.normalMaterials[2], this.normalMaterials[3], this.normalMaterials[0],
+          this.normalMaterials[5], this.normalMaterials[1], this.normalMaterials[4]
+        ];
+        
+        // Spawn inside camera view (near Y=8-12) so there's no lag before they appear
         this.diceBodies[i].position.set(
           (Math.random() - 0.5) * 5,
-          15 + Math.random() * 5,
+          8 + Math.random() * 4,
           (Math.random() - 0.5) * 5
         );
         this.diceBodies[i].velocity.set(
           (Math.random() - 0.5) * 10,
-          -10,
+          -15,
           (Math.random() - 0.5) * 10
         );
         this.diceBodies[i].angularVelocity.set(
@@ -237,6 +242,12 @@ class Dice3D {
         this.diceBodies[i].type = CANNON.Body.DYNAMIC;
         this.diceBodies[i].wakeUp();
       } else {
+        // Assign held materials (blue tint)
+        this.diceMeshes[i].material = [
+          this.heldMaterials[2], this.heldMaterials[3], this.heldMaterials[0],
+          this.heldMaterials[5], this.heldMaterials[1], this.heldMaterials[4]
+        ];
+        
         // Snap held dice directly to their spot
         this.diceBodies[i].type = CANNON.Body.KINEMATIC;
         this.diceBodies[i].position.copy(targetPos);
@@ -250,7 +261,7 @@ class Dice3D {
     }
   }
   
-  snapToState(finalValues, targetElements) {
+  snapToState(finalValues, heldState, targetElements) {
     this.rolling = false;
     this.settling = false;
     for (let i = 0; i < 5; i++) {
@@ -286,6 +297,15 @@ class Dice3D {
       this.diceBodies[i].quaternion.copy(targetRot);
       this.diceBodies[i].velocity.set(0,0,0);
       this.diceBodies[i].angularVelocity.set(0,0,0);
+      
+      
+      this.diceMeshes[i].material = heldState && heldState[i] ? [
+        this.heldMaterials[2], this.heldMaterials[3], this.heldMaterials[0],
+        this.heldMaterials[5], this.heldMaterials[1], this.heldMaterials[4]
+      ] : [
+        this.normalMaterials[2], this.normalMaterials[3], this.normalMaterials[0],
+        this.normalMaterials[5], this.normalMaterials[1], this.normalMaterials[4]
+      ];
       
       this.diceMeshes[i].position.copy(targetPos);
       this.diceMeshes[i].quaternion.copy(targetRot);

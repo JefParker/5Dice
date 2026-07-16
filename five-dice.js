@@ -60,7 +60,7 @@ function update5DiceUI() {
     for (let i = 0; i < 5; i++) {
       targetElements.push(document.querySelector(`.fd-die[data-index="${i}"]`));
     }
-    window.dice3d.snapToState(state.dice, targetElements);
+    window.dice3d.snapToState(state.dice, state.held, targetElements);
   }
   
   // Render rolls left
