@@ -366,9 +366,6 @@ class Dice3D {
       let t = elapsed / duration;
       if (t >= 1) {
         t = 1;
-        this.rolling = false;
-        this.settling = false;
-        if (this.rollData.onComplete) this.rollData.onComplete();
       }
       
       const easeT = 1 - Math.pow(1 - t, 3);
@@ -377,13 +374,21 @@ class Dice3D {
         const startPos = this.rollData.startLerpPos[i];
         const startQuat = this.rollData.startLerpQuats[i];
         const targetPos = this.rollData.targets[i].pos;
-        const targetQuat = this.rollData.targets[i].rot;
+        const targetRot = this.rollData.targets[i].rot;
         
         this.diceMeshes[i].position.lerpVectors(startPos, targetPos, easeT);
-        this.diceMeshes[i].quaternion.slerpQuaternions(startQuat, targetQuat, easeT);
+        this.diceMeshes[i].quaternion.slerpQuaternions(startQuat, targetRot, easeT);
         
         this.diceBodies[i].position.copy(this.diceMeshes[i].position);
         this.diceBodies[i].quaternion.copy(this.diceMeshes[i].quaternion);
+      }
+      
+      if (t >= 1) {
+        this.rolling = false;
+        this.settling = false;
+        if (this.rollData.onComplete) {
+          this.rollData.onComplete();
+        }
       }
     }
     
