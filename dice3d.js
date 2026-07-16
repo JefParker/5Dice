@@ -172,7 +172,6 @@ class Dice3D {
       case 3: rot.set(0, 0, -Math.PI/2); break;
       case 4: rot.set(0, 0, Math.PI/2); break;
     }
-    rot.y = (Math.random() - 0.5) * Math.PI; 
     return new THREE.Quaternion().setFromEuler(rot);
   }
   
