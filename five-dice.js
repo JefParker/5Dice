@@ -309,14 +309,13 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       window.fiveDiceState.dice = [1, 1, 1, 1, 1];
       window.fiveDiceState.turnsLeft--; 
       
-      update5DiceUI();
-      
       if (check5DiceGameOver()) {
         handle5DiceGameOver();
       } else {
         window.myTurn = false;
         document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn...`;
         if (window.updateGameBackground) window.updateGameBackground();
+        update5DiceUI();
       }
     };
   });
