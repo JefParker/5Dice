@@ -76,10 +76,26 @@ function update5DiceUI() {
   });
   
   document.getElementById('fd-upper-total').innerText = upperTotal;
+  document.getElementById('fd-lower-total').innerText = lowerTotal;
+  
+  const bonus = upperTotal >= 63 ? 35 : 0;
+  document.getElementById('fd-bonus').innerText = bonus;
+  
+  // Par calculation: each upper category should average 3 * the face value.
+  let par = 0;
+  if (myScores['ones'] !== null) par += (myScores['ones'] - 3);
+  if (myScores['twos'] !== null) par += (myScores['twos'] - 6);
+  if (myScores['threes'] !== null) par += (myScores['threes'] - 9);
+  if (myScores['fours'] !== null) par += (myScores['fours'] - 12);
+  if (myScores['fives'] !== null) par += (myScores['fives'] - 15);
+  if (myScores['sixes'] !== null) par += (myScores['sixes'] - 18);
+  
+  const parText = par === 0 ? ' (on par)' : (par > 0 ? ` (+${par})` : ` (${par})`);
+  document.getElementById('fd-total-par').innerText = `${upperTotal}${parText}`;
   
   // Final total UI
-  const total = upperTotal + lowerTotal + (upperTotal >= 63 ? 35 : 0);
-  // Optional: display my total somewhere else if needed
+  const total = upperTotal + lowerTotal + bonus;
+  document.getElementById('fd-grand-total').innerText = total;
 }
 
 function renderScorecard() {
@@ -266,7 +282,7 @@ function calculateYahtzeeScore(category, dice) {
     case 'chance': return sum;
     case 'three-kind': return hasN(3) ? sum : 0;
     case 'four-kind': return hasN(4) ? sum : 0;
-    case 'full-house': return (hasN(3) && hasN(2)) || hasN(5) ? 25 : 0;
+    case 'full-house': return (Object.values(counts).includes(3) && Object.values(counts).includes(2)) || hasN(5) ? 25 : 0;
     case 'sm-straight': 
       if (counts[1] && counts[2] && counts[3] && counts[4]) return 30;
       if (counts[2] && counts[3] && counts[4] && counts[5]) return 30;
