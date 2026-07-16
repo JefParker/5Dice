@@ -166,10 +166,10 @@ class Dice3D {
     switch(value) {
       case 1: rot.set(0, 0, 0); break;
       case 6: rot.set(Math.PI, 0, 0); break;
-      case 2: rot.set(Math.PI/2, 0, 0); break;
-      case 5: rot.set(-Math.PI/2, 0, 0); break;
-      case 3: rot.set(0, 0, -Math.PI/2); break;
-      case 4: rot.set(0, 0, Math.PI/2); break;
+      case 2: rot.set(-Math.PI/2, 0, 0); break;
+      case 5: rot.set(Math.PI/2, 0, 0); break;
+      case 3: rot.set(0, 0, Math.PI/2); break;
+      case 4: rot.set(0, 0, -Math.PI/2); break;
     }
     return new THREE.Quaternion().setFromEuler(rot);
   }
