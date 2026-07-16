@@ -1,6 +1,7 @@
 {
   "name": "5 Dice",
   "short_name": "5 Dice",
+  "description": "A multiplayer, real-time 3D dice game with a digital scorecard.",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
@@ -8,9 +9,29 @@
   "theme_color": "#1a2a40",
   "icons": [
     {
-      "src": "images/die-5.png",
+      "src": "images/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png"
+    },
+    {
+      "src": "images/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "images/screenshot-mobile.png",
+      "sizes": "768x1376",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "images/screenshot-desktop.png",
+      "sizes": "1376x768",
+      "type": "image/png",
+      "form_factor": "wide"
     }
   ]
 }
