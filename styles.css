@@ -542,13 +542,13 @@ body.bg-five-dice {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px 40px;
-  margin-bottom: 20px;
+  margin-bottom: 40px;
 }
 
 .fd-cat {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
@@ -568,10 +568,9 @@ body.bg-five-dice {
 }
 
 .fd-cat-score {
-  font-size: 2rem;
-  color: #a0d8cc;
-  min-width: 40px;
-  text-align: right;
+  font-size: 1.2rem;
+  color: inherit;
+  margin-left: 10px;
 }
 
 .fd-upper-totals {

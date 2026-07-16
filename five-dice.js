@@ -229,6 +229,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     if (window.fiveDiceState.rollsLeft === 3) return; // Must roll at least once
     
     const cat = catEl.getAttribute('data-category');
+    if (cat === 'bonus-5s') return; // Not a direct user input
     if (window.fiveDiceState.scores[window.myPeerId][cat] !== null) return; // Already scored
     
     const score = calculate5DiceScore(cat, window.fiveDiceState.dice);
@@ -238,8 +239,8 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     commitDiv.className = 'fd-commit-overlay';
     commitDiv.innerHTML = `
       <div>Score ${score} in ${cat}?</div>
-      <button id="btn-fd-undo">Undo</button>
       <button id="btn-fd-commit">Commit</button>
+      <button id="btn-fd-undo">Undo</button>
     `;
     document.getElementById('five-dice-container').appendChild(commitDiv);
     
@@ -251,21 +252,35 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       window.fiveDiceState.scores[window.myPeerId][cat] = score;
       commitDiv.remove();
       
-      // Reset for next player
+      // Yahtzee Bonus Rule: if 5 of a kind rolled, and 'five-dice' already 50, add 100 to 'bonus-5s'
+      if (cat !== 'five-dice') {
+        const is5Dice = window.fiveDiceState.dice.every(d => d === window.fiveDiceState.dice[0]);
+        if (is5Dice) {
+          const has5DiceScore = window.fiveDiceState.scores[window.myPeerId]['five-dice'] === 50;
+          if (has5DiceScore) {
+            let currentBonus = window.fiveDiceState.scores[window.myPeerId]['bonus-5s'] || 0;
+            window.fiveDiceState.scores[window.myPeerId]['bonus-5s'] = currentBonus + 100;
+            broadcast5DiceScore('bonus-5s', currentBonus + 100);
+          }
+        }
+      }
+      
+      broadcast5DiceScore(cat, score);
+
       window.fiveDiceState.rollsLeft = 3;
       window.fiveDiceState.held = [false, false, false, false, false];
-      window.fiveDiceState.dice = [1, 1, 1, 1, 1]; // Reset visually
-      
+      window.fiveDiceState.dice = [1, 1, 1, 1, 1];
       window.fiveDiceState.turnsLeft--; 
       
       update5DiceUI();
       
-      // Pass turn
-      window.myTurn = false;
-      document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn...`;
-      if (window.updateGameBackground) window.updateGameBackground();
-      
-      broadcast5DiceScore(cat, score);
+      if (check5DiceGameOver()) {
+        handle5DiceGameOver();
+      } else {
+        window.myTurn = false;
+        document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn...`;
+        if (window.updateGameBackground) window.updateGameBackground();
+      }
     };
   });
 });
@@ -337,23 +352,54 @@ function broadcast5DiceScore(category, score) {
 
 window.handle5DiceMessage = function(msg) {
   if (msg.type === '5DICE_ROLL') {
-    window.fiveDiceState.dice = msg.dice;
     window.fiveDiceState.held = msg.held;
     window.fiveDiceState.rollsLeft = msg.rollsLeft;
-    update5DiceUI();
+    
+    document.querySelectorAll('.fd-die').forEach((die, i) => {
+      if (!window.fiveDiceState.held[i]) die.classList.add('rolling');
+    });
+
+    let rolls = 0;
+    const interval = setInterval(() => {
+      window.fiveDiceState.dice = window.fiveDiceState.dice.map((d, i) => {
+        return window.fiveDiceState.held[i] ? d : Math.floor(Math.random() * 6) + 1;
+      });
+      update5DiceUI();
+      
+      rolls++;
+      if (rolls >= 10) {
+        clearInterval(interval);
+        document.querySelectorAll('.fd-die').forEach(die => die.classList.remove('rolling'));
+        window.fiveDiceState.dice = msg.dice;
+        update5DiceUI();
+      }
+    }, 50);
   } else if (msg.type === '5DICE_SCORE') {
     if (!window.fiveDiceState.scores[msg.player]) {
        window.fiveDiceState.scores[msg.player] = {};
     }
-    window.fiveDiceState.scores[msg.player][msg.category] = msg.score;
-    // When opponent scores, it's my turn
-    window.myTurn = true;
-    window.fiveDiceState.rollsLeft = 3;
-    window.fiveDiceState.held = [false, false, false, false, false];
-    window.fiveDiceState.dice = [1,1,1,1,1];
-    document.getElementById('game-status').innerText = 'Your turn!';
-    if (window.updateGameBackground) window.updateGameBackground();
+    // Update score (accumulate if bonus-5s)
+    if (msg.category === 'bonus-5s') {
+      window.fiveDiceState.scores[msg.player][msg.category] = msg.score;
+      update5DiceUI();
+      return; // Bonus score doesn't end turn
+    } else {
+      window.fiveDiceState.scores[msg.player][msg.category] = msg.score;
+    }
+    
     update5DiceUI();
+    
+    if (check5DiceGameOver()) {
+      handle5DiceGameOver();
+    } else {
+      window.myTurn = true;
+      window.fiveDiceState.rollsLeft = 3;
+      window.fiveDiceState.held = [false, false, false, false, false];
+      window.fiveDiceState.dice = [1,1,1,1,1];
+      document.getElementById('game-status').innerText = 'Your turn!';
+      if (window.updateGameBackground) window.updateGameBackground();
+      update5DiceUI();
+    }
   }
 };
 
@@ -446,4 +492,50 @@ window.sync5DiceState = function(incomingState) {
     elStatus.innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
   }
   update5DiceUI();
+};
+
+window.check5DiceGameOver = function() {
+  const players = window.gamePlayers || [window.myPeerId];
+  const requiredCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'sm-straight', 'lg-straight', 'three-kind', 'four-kind', 'five-dice', 'full-house'];
+  for (const p of players) {
+    const pScores = window.fiveDiceState.scores[p];
+    if (!pScores) return false;
+    for (const cat of requiredCats) {
+      if (pScores[cat] === null) return false;
+    }
+  }
+  return true;
+};
+
+window.handle5DiceGameOver = function() {
+  const players = window.gamePlayers || [window.myPeerId];
+  let maxScore = -1;
+  let winners = [];
+  players.forEach(p => {
+    let total = 0;
+    const pScores = window.fiveDiceState.scores[p] || {};
+    let upper = 0;
+    ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].forEach(c => upper += pScores[c] || 0);
+    if (upper >= 63) total += 35;
+    total += upper;
+    ['chance', 'sm-straight', 'lg-straight', 'three-kind', 'four-kind', 'five-dice', 'full-house', 'bonus-5s'].forEach(c => total += pScores[c] || 0);
+    if (total > maxScore) {
+      maxScore = total;
+      winners = [p];
+    } else if (total === maxScore) {
+      winners.push(p);
+    }
+  });
+  
+  if (winners.includes(window.myPeerId)) {
+    if (winners.length > 1) {
+      document.getElementById('game-status').innerText = "It's a Tie!";
+    } else {
+      document.getElementById('game-status').innerText = "You Win!";
+      if (window.confetti) window.confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    }
+  } else {
+    document.getElementById('game-status').innerText = `${window.lobbyPeers[winners[0]]?.name || 'Opponent'} Wins!`;
+  }
+  document.getElementById('btn-play-again').classList.remove('hidden');
 };
