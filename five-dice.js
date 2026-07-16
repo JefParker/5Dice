@@ -552,11 +552,15 @@ window.sync5DiceState = function(incomingState) {
     window.myTurn = (window.myPeerId === firstPlayer);
   }
 
-  const elStatus = document.getElementById('game-status');
-  if (elStatus) {
-    elStatus.innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+  if (window.check5DiceGameOver()) {
+    window.handle5DiceGameOver();
+  } else {
+    const elStatus = document.getElementById('game-status');
+    if (elStatus) {
+      elStatus.innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+    }
+    update5DiceUI();
   }
-  update5DiceUI();
 };
 
 window.check5DiceGameOver = function() {
