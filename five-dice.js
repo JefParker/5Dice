@@ -121,7 +121,19 @@ function update5DiceUI() {
 
 function renderScorecard() {
   const state = window.fiveDiceState;
-  const players = Object.keys(state.scores);
+  let players = Object.keys(state.scores);
+  
+  if (state.isGameOver) {
+    players.sort((a, b) => {
+      const getGrandTotal = (p) => {
+        let u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+        let l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+        let bonus = u >= 63 ? 35 : 0;
+        return u + l + bonus;
+      };
+      return getGrandTotal(b) - getGrandTotal(a);
+    });
+  }
   
   const cats = [
     { id: 'ones', label: "1's" },
