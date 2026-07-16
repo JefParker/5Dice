@@ -54,7 +54,19 @@ function update5DiceUI() {
     }
   }
   
-  // Sync 3D dice state
+  if (state.isGameOver) {
+    const playArea = document.getElementById('fd-play-area');
+    if (playArea) playArea.style.display = 'none';
+  } else {
+    const playArea = document.getElementById('fd-play-area');
+    if (playArea) playArea.style.display = 'flex';
+  }
+
+  // Render rolls left
+  document.getElementById('fd-rolls-left').innerText = state.rollsLeft;
+  document.getElementById('fd-turns-count').innerText = state.turnsLeft;
+
+  // Sync 3D dice state AFTER updating playArea visibility so it can detect if it's hidden
   if (window.dice3d && !window.dice3d.rolling) {
     const targetElements = [];
     for (let i = 0; i < 5; i++) {
@@ -63,22 +75,8 @@ function update5DiceUI() {
     window.dice3d.snapToState(state.dice, state.held, targetElements);
   }
   
-  // Render rolls left
-  document.getElementById('fd-rolls-left').innerText = state.rollsLeft;
-  document.getElementById('fd-turns-count').innerText = state.turnsLeft;
-  
-  // Render Scorecard Player values
   const myScores = state.scores[window.myPeerId] || {};
   let upperTotal = 0;
-  
-  if (state.isGameOver) {
-    const playArea = document.getElementById('fd-play-area');
-    if (playArea) playArea.style.display = 'none';
-  } else {
-    const playArea = document.getElementById('fd-play-area');
-    if (playArea) playArea.style.display = 'flex';
-  }
-  
   let lowerTotal = 0;
   
   document.querySelectorAll('.fd-cat').forEach(catEl => {
