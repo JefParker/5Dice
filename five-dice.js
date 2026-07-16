@@ -54,6 +54,15 @@ function update5DiceUI() {
     }
   }
   
+  // Sync 3D dice state
+  if (window.dice3d && !window.dice3d.rolling) {
+    const targetElements = [];
+    for (let i = 0; i < 5; i++) {
+      targetElements.push(document.querySelector(`.fd-die[data-index="${i}"]`));
+    }
+    window.dice3d.snapToState(state.dice, targetElements);
+  }
+  
   // Render rolls left
   document.getElementById('fd-rolls-left').innerText = state.rollsLeft;
   document.getElementById('fd-turns-count').innerText = state.turnsLeft;
@@ -206,28 +215,36 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
   if (btn.classList.contains('is-rolling')) return;
   btn.classList.add('is-rolling');
   
-  // Add rolling class to unheld dice
-  document.querySelectorAll('.fd-die').forEach((die, i) => {
-    if (!window.fiveDiceState.held[i]) die.classList.add('rolling');
-  });
-
-  let rolls = 0;
-  const interval = setInterval(() => {
-    window.fiveDiceState.dice = window.fiveDiceState.dice.map((d, i) => {
-      return window.fiveDiceState.held[i] ? d : Math.floor(Math.random() * 6) + 1;
-    });
-    update5DiceUI();
-    
-    rolls++;
-    if (rolls >= 10) {
-      clearInterval(interval);
-      document.querySelectorAll('.fd-die').forEach(die => die.classList.remove('rolling'));
+  let unheldIndices = [];
+  let finalValues = [];
+  for (let i = 0; i < 5; i++) {
+    if (window.fiveDiceState.held[i]) {
+      finalValues.push(window.fiveDiceState.dice[i]);
+    } else {
+      finalValues.push(Math.floor(Math.random() * 6) + 1);
+      unheldIndices.push(i);
+    }
+  }
+  
+  window.fiveDiceState.dice = finalValues;
+  window.fiveDiceState.rollsLeft--;
+  
+  const targetElements = [];
+  for (let i = 0; i < 5; i++) {
+    targetElements.push(document.querySelector(`.fd-die[data-index="${i}"]`));
+  }
+  
+  if (window.dice3d) {
+    window.dice3d.roll(finalValues, unheldIndices, targetElements, () => {
       btn.classList.remove('is-rolling');
-      window.fiveDiceState.rollsLeft--;
       update5DiceUI();
       broadcast5DiceState();
-    }
-  }, 50);
+    });
+  } else {
+    btn.classList.remove('is-rolling');
+    update5DiceUI();
+    broadcast5DiceState();
+  }
 });
 
 // Bind category click (Scoring)
@@ -376,26 +393,28 @@ window.handle5DiceMessage = function(msg) {
   if (msg.type === '5DICE_ROLL') {
     window.fiveDiceState.held = msg.held;
     window.fiveDiceState.rollsLeft = msg.rollsLeft;
-    
-    document.querySelectorAll('.fd-die').forEach((die, i) => {
-      if (!window.fiveDiceState.held[i]) die.classList.add('rolling');
-    });
-
-    let rolls = 0;
-    const interval = setInterval(() => {
-      window.fiveDiceState.dice = window.fiveDiceState.dice.map((d, i) => {
-        return window.fiveDiceState.held[i] ? d : Math.floor(Math.random() * 6) + 1;
-      });
-      update5DiceUI();
-      
-      rolls++;
-      if (rolls >= 10) {
-        clearInterval(interval);
-        document.querySelectorAll('.fd-die').forEach(die => die.classList.remove('rolling'));
-        window.fiveDiceState.dice = msg.dice;
-        update5DiceUI();
+    const finalValues = msg.dice;
+    let unheldIndices = [];
+    for (let i = 0; i < 5; i++) {
+      if (!window.fiveDiceState.held[i]) {
+        unheldIndices.push(i);
       }
-    }, 50);
+    }
+    
+    const targetElements = [];
+    for (let i = 0; i < 5; i++) {
+      targetElements.push(document.querySelector(`.fd-die[data-index="${i}"]`));
+    }
+    
+    if (window.dice3d) {
+      window.dice3d.roll(finalValues, unheldIndices, targetElements, () => {
+        window.fiveDiceState.dice = finalValues;
+        update5DiceUI();
+      });
+    } else {
+      window.fiveDiceState.dice = finalValues;
+      update5DiceUI();
+    }
   } else if (msg.type === '5DICE_HOLD') {
     window.fiveDiceState.held = msg.held;
     update5DiceUI();

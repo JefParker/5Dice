@@ -626,6 +626,10 @@ body.bg-five-dice {
   transition: transform 0.2s, background-color 0.2s;
 }
 
+body.dice3d-active .fd-die {
+  opacity: 0 !important;
+}
+
 .fd-die.held {
   border-color: #a0d8cc;
   background-color: rgba(160, 216, 204, 0.2);
