@@ -270,7 +270,10 @@ function setupLobbyPeer(targetId, pc, dc) {
       if (name !== 'Unknown') {
         appendChatMessage('System', `${name} has left.`, null, null, '#555');
       }
-      delete lobbyPeers[targetId];
+      if (lobbyPeers[targetId]) {
+        lobbyPeers[targetId].pc = null;
+        lobbyPeers[targetId].dc = null;
+      }
       updateDiagnostics();
     };
 
@@ -357,8 +360,7 @@ function setupLobbyPeer(targetId, pc, dc) {
   pc.onconnectionstatechange = () => {
     if (lobbyPeers[targetId] && lobbyPeers[targetId].pc !== pc) return;
     if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-      delete lobbyPeers[targetId];
-      updateDiagnostics();
+      handleConnectionFailure(targetId);
     }
   };
 }
@@ -1329,8 +1331,6 @@ function resetGame(firstTurn = null) {
             const isConnecting = lPeer && lPeer.pc && (lPeer.pc.connectionState === 'connecting' || lPeer.pc.connectionState === 'new');
             const isStuck = lPeer && lPeer.lastInitiated && (Date.now() - lPeer.lastInitiated > 6000);
             if ((!isConnecting || isStuck) && myPeerId > p) {
-              if (lPeer && lPeer.pc) lPeer.pc.close();
-              delete lobbyPeers[p];
               initiateLobbyConnection(p, null);
             }
           }

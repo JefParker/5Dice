@@ -33,9 +33,13 @@ function update5DiceUI() {
   if (window.myTurn) {
     document.getElementById('fd-board').classList.remove('hidden');
     document.getElementById('fd-scorecard').classList.add('hidden');
+    document.getElementById('fd-roll-btn').style.opacity = '1';
+    document.getElementById('fd-roll-btn').style.pointerEvents = 'auto';
   } else {
     document.getElementById('fd-board').classList.add('hidden');
     document.getElementById('fd-scorecard').classList.remove('hidden');
+    document.getElementById('fd-roll-btn').style.opacity = '0.3';
+    document.getElementById('fd-roll-btn').style.pointerEvents = 'none';
     renderScorecard();
   }
   
