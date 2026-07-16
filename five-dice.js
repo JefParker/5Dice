@@ -30,7 +30,7 @@ function init5DiceGame() {
 function update5DiceUI() {
   const state = window.fiveDiceState;
   
-  if (window.myTurn) {
+  if (window.myTurn && !window.fiveDiceState.isGameOver) {
     document.getElementById('fd-board').classList.remove('hidden');
     document.getElementById('fd-scorecard').classList.add('hidden');
     document.getElementById('fd-roll-btn').style.opacity = '1';
@@ -58,10 +58,18 @@ function update5DiceUI() {
   document.getElementById('fd-rolls-left').innerText = state.rollsLeft;
   document.getElementById('fd-turns-count').innerText = state.turnsLeft;
   
-  // Render scores for myself for now
+  // Render Scorecard Player values
   const myScores = state.scores[window.myPeerId] || {};
-  
   let upperTotal = 0;
+  
+  if (state.isGameOver) {
+    const playArea = document.getElementById('fd-play-area');
+    if (playArea) playArea.style.display = 'none';
+  } else {
+    const playArea = document.getElementById('fd-play-area');
+    if (playArea) playArea.style.display = 'flex';
+  }
+  
   let lowerTotal = 0;
   
   document.querySelectorAll('.fd-cat').forEach(catEl => {
@@ -525,6 +533,8 @@ window.check5DiceGameOver = function() {
 };
 
 window.handle5DiceGameOver = function() {
+  window.fiveDiceState.isGameOver = true;
+  update5DiceUI();
   const players = window.gamePlayers || [window.myPeerId];
   let maxScore = -1;
   let winners = [];

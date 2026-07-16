@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v25';
+const CACHE_NAME = '5dice-cache-v26';
 const urlsToCache = [
   './',
   './index.html',
