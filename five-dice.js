@@ -241,6 +241,8 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
   window.fiveDiceState.dice = finalValues;
   window.fiveDiceState.rollsLeft--;
   
+  broadcast5DiceState();
+  
   const targetElements = [];
   for (let i = 0; i < 5; i++) {
     targetElements.push(document.querySelector(`.fd-die[data-index="${i}"]`));
@@ -250,12 +252,10 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
     window.dice3d.roll(finalValues, unheldIndices, targetElements, () => {
       btn.classList.remove('is-rolling');
       update5DiceUI();
-      broadcast5DiceState();
     });
   } else {
     btn.classList.remove('is-rolling');
     update5DiceUI();
-    broadcast5DiceState();
   }
 });
 

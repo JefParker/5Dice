@@ -43,6 +43,31 @@ class Dice3D {
     floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
     this.world.addBody(floorBody);
 
+    // Physics walls to keep dice in a smaller bouncing area
+    const wallShape = new CANNON.Plane();
+    const wallTop = new CANNON.Body({ mass: 0 });
+    wallTop.addShape(wallShape);
+    wallTop.position.set(0, 0, -5);
+    this.world.addBody(wallTop);
+
+    const wallBottom = new CANNON.Body({ mass: 0 });
+    wallBottom.addShape(wallShape);
+    wallBottom.position.set(0, 0, 5);
+    wallBottom.quaternion.setFromEuler(0, Math.PI, 0);
+    this.world.addBody(wallBottom);
+
+    const wallLeft = new CANNON.Body({ mass: 0 });
+    wallLeft.addShape(wallShape);
+    wallLeft.position.set(-4, 0, 0);
+    wallLeft.quaternion.setFromEuler(0, Math.PI / 2, 0);
+    this.world.addBody(wallLeft);
+
+    const wallRight = new CANNON.Body({ mass: 0 });
+    wallRight.addShape(wallShape);
+    wallRight.position.set(4, 0, 0);
+    wallRight.quaternion.setFromEuler(0, -Math.PI / 2, 0);
+    this.world.addBody(wallRight);
+
     // Bouncy material
     const defaultMaterial = new CANNON.Material();
     const diceContactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
