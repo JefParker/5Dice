@@ -4,14 +4,19 @@
 class Dice3D {
   constructor() {
     this.container = document.createElement('div');
-    this.container.style.position = 'fixed';
+    this.container.style.position = 'absolute';
     this.container.style.top = '0';
     this.container.style.left = '0';
-    this.container.style.width = '100vw';
-    this.container.style.height = '100vh';
+    this.container.style.width = '100%';
+    this.container.style.height = '100%';
     this.container.style.pointerEvents = 'none';
     this.container.style.zIndex = '999';
-    document.body.appendChild(this.container);
+    const screenGame = document.getElementById('screen-game');
+    if (screenGame) {
+      screenGame.appendChild(this.container);
+    } else {
+      document.body.appendChild(this.container);
+    }
 
     this.scene = new THREE.Scene();
     

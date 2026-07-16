@@ -56,7 +56,8 @@ button, input, select, textarea {
   padding: 16px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  z-index: 10;
+  z-index: 1000;
+  position: relative;
 }
 
 .top-header h1 {
@@ -262,6 +263,8 @@ input.capsule-input {
   justify-content: space-between;
   align-items: center;
   font-size: 0.8rem;
+  position: relative;
+  z-index: 1000;
 }
 
 .status-indicator {
