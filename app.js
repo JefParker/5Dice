@@ -828,7 +828,7 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
     }
     
     if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
-      if (window.update5DiceUI) window.update5DiceUI();
+      if (window.reset5DiceGame) window.reset5DiceGame(firstTurn);
     } else {
       updateBoard();
     }
