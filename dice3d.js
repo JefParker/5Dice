@@ -18,6 +18,7 @@ class Dice3D {
     // Setup camera
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, 15, 0);
+    this.camera.up.set(0, 0, -1);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
