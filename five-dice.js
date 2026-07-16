@@ -456,6 +456,13 @@ window.handle5DiceMessage = function(msg) {
   }
 };
 
+window.cleanup5DiceGame = function() {
+  if (window.dice3d) {
+    window.dice3d.destroy();
+    window.dice3d = null;
+  }
+};
+
 window.reset5DiceGame = function(firstTurnId = null) {
   window.fiveDiceState = {
     dice: [1, 1, 1, 1, 1],
@@ -497,29 +504,34 @@ window.sync5DiceState = function(incomingState) {
   const opponentId = window.gamePlayers.find(p => p !== window.myPeerId);
   if (!opponentId) return;
 
-  const myCountCurrent = getScoreCount(window.fiveDiceState, window.myPeerId);
-  const myCountIncoming = getScoreCount(incomingState, window.myPeerId);
-  const oppCountCurrent = getScoreCount(window.fiveDiceState, opponentId);
-  const oppCountIncoming = getScoreCount(incomingState, opponentId);
-
-  const totalCurrent = myCountCurrent + oppCountCurrent;
-  const totalIncoming = myCountIncoming + oppCountIncoming;
-
   let shouldUpdate = false;
-  
-  // Always accept a state that has more recorded scores than ours
-  if (totalIncoming > totalCurrent) {
+
+  if (!window.fiveDiceState) {
     shouldUpdate = true;
-  } else if (totalIncoming === totalCurrent) {
-    // If the scores are identical, accept the state if its rolls are further along
-    if (incomingState.turnsLeft < window.fiveDiceState.turnsLeft) {
+  } else {
+    const myCountCurrent = getScoreCount(window.fiveDiceState, window.myPeerId);
+    const myCountIncoming = getScoreCount(incomingState, window.myPeerId);
+    const oppCountCurrent = getScoreCount(window.fiveDiceState, opponentId);
+    const oppCountIncoming = getScoreCount(incomingState, opponentId);
+
+    const totalCurrent = myCountCurrent + oppCountCurrent;
+    const totalIncoming = myCountIncoming + oppCountIncoming;
+
+    // Always accept a state that has more recorded scores than ours
+    if (totalIncoming > totalCurrent) {
       shouldUpdate = true;
-    } else if (incomingState.turnsLeft === window.fiveDiceState.turnsLeft) {
-      if (incomingState.rollsLeft < window.fiveDiceState.rollsLeft) {
+    } else if (totalIncoming === totalCurrent) {
+      // If the scores are identical, accept the state if its rolls are further along
+      if (incomingState.turnsLeft < window.fiveDiceState.turnsLeft) {
         shouldUpdate = true;
+      } else if (incomingState.turnsLeft === window.fiveDiceState.turnsLeft) {
+        if (incomingState.rollsLeft < window.fiveDiceState.rollsLeft) {
+          shouldUpdate = true;
+        }
       }
     }
   }
+
 
   if (shouldUpdate) {
     window.fiveDiceState = incomingState;

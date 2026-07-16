@@ -336,8 +336,16 @@ class Dice3D {
       this.diceMeshes[i].quaternion.copy(targetRot);
     }
   }
-  
+  destroy() {
+    this.destroyed = true;
+    if (this.container && this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+    document.body.classList.remove('dice3d-active');
+  }
+
   animate() {
+    if (this.destroyed) return;
     requestAnimationFrame(this.animate.bind(this));
     
     if (this.rolling && !this.settling) {

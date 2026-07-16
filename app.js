@@ -336,14 +336,26 @@ function setupLobbyPeer(targetId, pc, dc) {
             }
             const randomFirstPlayer = Math.random() < 0.5 ? myPeerId : msg.guest;
             const gamePlayers = [myPeerId, msg.guest].sort();
-            const resumeState = isRejoin ? { board: gameState, myTurn: !myTurn } : null;
+            
+            let guestResumeState = null;
+            let hostResumeState = null;
+            if (isRejoin) {
+              if (room.gameType === '5 Dice') {
+                guestResumeState = { fiveDiceState: window.fiveDiceState };
+                hostResumeState = { fiveDiceState: window.fiveDiceState };
+              } else {
+                guestResumeState = { board: gameState, myTurn: !myTurn };
+                hostResumeState = { board: gameState, myTurn: myTurn };
+              }
+            }
+
             lobbyPeers[msg.guest].dc.send(JSON.stringify({ 
               type: 'START_GAME_SIGNAL', 
               players: gamePlayers,
-              resumeState: resumeState,
+              resumeState: guestResumeState,
               firstTurn: randomFirstPlayer
             }));
-            handleGameStartSignal(gamePlayers, resumeState ? { board: gameState, myTurn: myTurn } : null, randomFirstPlayer);
+            handleGameStartSignal(gamePlayers, hostResumeState, randomFirstPlayer);
           }
         }
       } else if (msg.type === 'chat') {
@@ -805,12 +817,16 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
   gamePeers = {};
   
   if (resumeState) {
-    gameState = resumeState.board;
-    myTurn = resumeState.myTurn;
-    updateBoard();
-    const isOver = checkWin();
-    if (isOver) {
-      document.getElementById('btn-play-again').classList.remove('hidden');
+    if (resumeState.fiveDiceState) {
+      if (window.sync5DiceState) window.sync5DiceState(resumeState.fiveDiceState);
+    } else if (resumeState.board) {
+      gameState = resumeState.board;
+      myTurn = resumeState.myTurn;
+      updateBoard();
+      const isOver = checkWin();
+      if (isOver) {
+        document.getElementById('btn-play-again').classList.remove('hidden');
+      }
     }
     const otherPeerId = gamePlayers.find(p => p !== myPeerId);
     if (otherPeerId) {
@@ -1460,6 +1476,10 @@ const handleLeaveGame = () => {
   showScreen('screen-lobby');
   startRoomPolling();
   updateDiagnostics();
+  
+  if (window.cleanup5DiceGame) {
+    window.cleanup5DiceGame();
+  }
 };
 
 const headerBackBtn = document.getElementById('btn-back-lobby-header');
