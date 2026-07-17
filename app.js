@@ -328,34 +328,54 @@ function setupLobbyPeer(targetId, pc, dc) {
           const isRejoin = room.status === 'in-progress' && room.players.includes(msg.guestUuid);
           const isNew = room.status === 'open';
           
+          if (!room.peerIds) room.peerIds = [myPeerId];
+          if (!room.peerIds.includes(msg.guest)) room.peerIds.push(msg.guest);
+          
           if (isNew || isRejoin) {
             if (isNew) {
               room.players.push(msg.guestUuid);
-              room.status = 'in-progress';
-              broadcastToLobby({ type: 'ROOM_UPDATED', room });
-            }
-            const randomFirstPlayer = Math.random() < 0.5 ? myPeerId : msg.guest;
-            const gamePlayers = [myPeerId, msg.guest].sort();
-            
-            let guestResumeState = null;
-            let hostResumeState = null;
-            if (isRejoin) {
-              if (room.gameType === '5 Dice') {
-                guestResumeState = { fiveDiceState: window.fiveDiceState };
-                hostResumeState = { fiveDiceState: window.fiveDiceState };
+              if (room.players.length >= room.maxPlayers) {
+                room.status = 'in-progress';
+                broadcastToLobby({ type: 'ROOM_UPDATED', room });
+                
+                const gamePlayers = [...room.peerIds].sort();
+                const randomFirstPlayer = gamePlayers[Math.floor(Math.random() * gamePlayers.length)];
+                
+                for (const p of room.peerIds) {
+                  if (p !== myPeerId && lobbyPeers[p] && lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open') {
+                    lobbyPeers[p].dc.send(JSON.stringify({ 
+                      type: 'START_GAME_SIGNAL', 
+                      players: gamePlayers,
+                      resumeState: null,
+                      firstTurn: randomFirstPlayer
+                    }));
+                  }
+                }
+                handleGameStartSignal(gamePlayers, null, randomFirstPlayer);
               } else {
-                guestResumeState = { board: gameState, myTurn: !myTurn };
-                hostResumeState = { board: gameState, myTurn: myTurn };
+                broadcastToLobby({ type: 'ROOM_UPDATED', room });
               }
+            } else if (isRejoin) {
+              const gamePlayers = [...room.peerIds].sort();
+              let resumeState = null;
+              if (room.gameType === '5 Dice') {
+                resumeState = { fiveDiceState: window.fiveDiceState };
+              } else {
+                resumeState = { board: gameState, myTurn: !myTurn };
+              }
+              
+              for (const p of room.peerIds) {
+                if (p !== myPeerId && lobbyPeers[p] && lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open') {
+                  lobbyPeers[p].dc.send(JSON.stringify({ 
+                    type: 'START_GAME_SIGNAL', 
+                    players: gamePlayers,
+                    resumeState: resumeState,
+                    firstTurn: window.currentFirstTurn || myPeerId
+                  }));
+                }
+              }
+              handleGameStartSignal(gamePlayers, resumeState, window.currentFirstTurn || myPeerId);
             }
-
-            lobbyPeers[msg.guest].dc.send(JSON.stringify({ 
-              type: 'START_GAME_SIGNAL', 
-              players: gamePlayers,
-              resumeState: guestResumeState,
-              firstTurn: randomFirstPlayer
-            }));
-            handleGameStartSignal(gamePlayers, hostResumeState, randomFirstPlayer);
           }
         }
       } else if (msg.type === 'chat') {
