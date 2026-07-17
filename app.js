@@ -766,10 +766,21 @@ function renderRooms() {
     }
 
     const displayGameType = r.gameType || 'Tic-Tac-Toe';
+    let seatText = '';
+    let isFull = false;
+    if (r.maxPlayers && r.players && r.status === 'open') {
+      const emptySeats = Math.max(0, r.maxPlayers - r.players.length);
+      isFull = emptySeats === 0;
+      seatText = `<p style="font-size: 0.85rem; margin-top: 4px; font-weight: bold; color: ${isFull ? '#ff4444' : '#44ff44'};">` + 
+                 (isFull ? 'Game Full' : `${emptySeats} Seat${emptySeats === 1 ? '' : 's'} Remaining`) + 
+                 `</p>`;
+    }
+    
     div.innerHTML = `
       <h3>${r.name} - ${displayGameType}</h3>
       <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : (isZombie ? 'Disconnected' : r.host)}</p>
-      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isZombie ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
+      ${seatText}
+      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isZombie || (isFull && !isReturning) ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
     list.appendChild(div);
   });
