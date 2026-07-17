@@ -64,7 +64,13 @@ function update5DiceUI() {
 
   // Render rolls left
   document.getElementById('fd-rolls-left').innerText = state.rollsLeft;
-  document.getElementById('fd-turns-count').innerText = state.turnsLeft;
+  
+  let myScoreCount = 0;
+  const pScores = state.scores[window.myPeerId] || {};
+  for (const cat in pScores) {
+    if (pScores[cat] !== null) myScoreCount++;
+  }
+  document.getElementById('fd-turns-count').innerText = 13 - myScoreCount;
 
   // Sync 3D dice state AFTER updating playArea visibility so it can detect if it's hidden
   if (window.dice3d && !window.dice3d.rolling) {
@@ -322,6 +328,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
         if (window.sync5DiceState) {
           window.sync5DiceState(window.fiveDiceState);
         }
+        if (window.merge5DiceState) window.merge5DiceState(window.fiveDiceState);
         if (window.updateGameBackground) window.updateGameBackground();
       }
     };
