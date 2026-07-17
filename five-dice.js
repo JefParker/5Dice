@@ -400,6 +400,9 @@ function broadcast5DiceScore(category, score) {
 
 window.handle5DiceMessage = function(msg) {
   if (msg.type === '5DICE_ROLL') {
+    const playArea = document.getElementById('fd-play-area');
+    if (playArea) playArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    
     window.fiveDiceState.held = msg.held;
     window.fiveDiceState.rollsLeft = msg.rollsLeft;
     const finalValues = msg.dice;
