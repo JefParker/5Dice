@@ -310,10 +310,10 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       if (check5DiceGameOver()) {
         handle5DiceGameOver();
       } else {
-        window.myTurn = false;
-        document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn...`;
+        if (window.sync5DiceState) {
+          window.sync5DiceState(window.fiveDiceState);
+        }
         if (window.updateGameBackground) window.updateGameBackground();
-        update5DiceUI();
       }
     };
   });
@@ -445,11 +445,12 @@ window.handle5DiceMessage = function(msg) {
     if (check5DiceGameOver()) {
       handle5DiceGameOver();
     } else {
-      window.myTurn = true;
       window.fiveDiceState.rollsLeft = 3;
       window.fiveDiceState.held = [false, false, false, false, false];
       window.fiveDiceState.dice = [1,1,1,1,1];
-      document.getElementById('game-status').innerText = 'Your turn!';
+      if (window.sync5DiceState) {
+        window.sync5DiceState(window.fiveDiceState);
+      }
       if (window.updateGameBackground) window.updateGameBackground();
       update5DiceUI();
     }
@@ -537,27 +538,38 @@ window.sync5DiceState = function(incomingState) {
     window.fiveDiceState = incomingState;
   }
 
-  // Recalculate myTurn robustly regardless of whether we updated (to ensure both clients agree)
-  const myCountFinal = getScoreCount(window.fiveDiceState, window.myPeerId);
-  const oppCountFinal = getScoreCount(window.fiveDiceState, opponentId);
+  // Recalculate turn order robustly
+  const getCount = p => getScoreCount(window.fiveDiceState, p);
+  const counts = window.gamePlayers.map(p => getCount(p));
+  const minCount = Math.min(...counts);
   
+  // Find turn order starting from firstTurnPlayerId
   const firstPlayer = window.firstTurnPlayerId || window.gameHost;
+  let firstIdx = window.gamePlayers.indexOf(firstPlayer);
+  if (firstIdx === -1) firstIdx = 0;
   
-  if (myCountFinal < oppCountFinal) {
-    window.myTurn = true;
-  } else if (oppCountFinal < myCountFinal) {
-    window.myTurn = false;
-  } else {
-    // Both have the same number of scores, meaning the round is even. It's the first player's turn again.
-    window.myTurn = (window.myPeerId === firstPlayer);
+  const turnOrder = [];
+  for (let i = 0; i < window.gamePlayers.length; i++) {
+    turnOrder.push(window.gamePlayers[(firstIdx + i) % window.gamePlayers.length]);
   }
+  
+  // The person whose turn it is, is the first person in turnOrder who has the minCount
+  let currentTurnId = turnOrder.find(p => getCount(p) === minCount);
+  
+  window.myTurn = (window.myPeerId === currentTurnId);
+  window.currentTurnPlayerId = currentTurnId;
 
   if (window.check5DiceGameOver()) {
     window.handle5DiceGameOver();
   } else {
     const elStatus = document.getElementById('game-status');
     if (elStatus) {
-      elStatus.innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+      if (window.myTurn) {
+        elStatus.innerText = 'Your turn!';
+      } else {
+        const turnName = (lobbyPeers[currentTurnId] && lobbyPeers[currentTurnId].name) ? lobbyPeers[currentTurnId].name : 'Opponent';
+        elStatus.innerText = `${turnName}'s turn`;
+      }
     }
     update5DiceUI();
   }
