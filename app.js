@@ -402,7 +402,12 @@ function setupLobbyPeer(targetId, pc, dc) {
               } else {
                 broadcastToLobby({ type: 'ROOM_UPDATED', room });
               }
-            } else if (isRejoin) {
+            } else {
+              // Always pass resume state for any player joining an in-progress game
+              if (!isRejoin && room.players.length < room.maxPlayers) {
+                room.players.push(msg.guestUuid);
+                broadcastToLobby({ type: 'ROOM_UPDATED', room });
+              }
               const gamePlayers = [...room.peerIds].sort();
               let resumeState = null;
               if (room.gameType === '5 Dice') {
