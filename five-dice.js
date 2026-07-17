@@ -274,8 +274,10 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     commitDiv.className = 'fd-commit-overlay';
     commitDiv.innerHTML = `
       <div>Score ${score} in ${cat}?</div>
-      <button id="btn-fd-commit">Commit</button>
-      <button id="btn-fd-undo">Undo</button>
+      <div class="fd-commit-buttons">
+        <button id="btn-fd-commit">Commit</button>
+        <button id="btn-fd-undo">Undo</button>
+      </div>
     `;
     document.getElementById('five-dice-container').appendChild(commitDiv);
     

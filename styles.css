@@ -555,7 +555,7 @@ body.bg-five-dice {
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
 }
 
 .fd-cat:active {
@@ -571,7 +571,8 @@ body.bg-five-dice {
 }
 
 .fd-cat-score {
-  font-size: 1.2rem;
+  font-size: 1.5rem;
+  font-weight: bold;
   color: inherit;
   margin-left: 10px;
 }
@@ -698,18 +699,27 @@ body.dice3d-active .fd-die {
   left: 50%;
   transform: translate(-50%, -50%);
   background: #4a4a4a;
-  padding: 20px;
+  padding: 30px;
   border-radius: 12px;
   display: flex;
-  gap: 15px;
+  flex-direction: column;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  gap: 20px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.5);
   border: 1px solid #777;
   z-index: 100;
 }
 
+.fd-commit-buttons {
+  display: flex;
+  gap: 15px;
+}
+
 .fd-commit-overlay button {
-  padding: 10px 20px;
-  font-size: 1.2rem;
+  padding: 15px 30px;
+  font-size: 1.3rem;
   border-radius: 8px;
   border: none;
   cursor: pointer;
