@@ -690,6 +690,10 @@ if (colorPickerEl) {
 
 document.getElementById('btn-create-new').addEventListener('click', () => {
   showScreen('screen-setup');
+  setTimeout(() => {
+    const input = document.getElementById('room-name-input');
+    if (input) input.focus();
+  }, 50);
 });
 
 document.getElementById('btn-cancel-setup').addEventListener('click', () => {

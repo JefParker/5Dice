@@ -52,24 +52,24 @@ class Dice3D {
     const wallShape = new CANNON.Plane();
     const wallTop = new CANNON.Body({ mass: 0 });
     wallTop.addShape(wallShape);
-    wallTop.position.set(0, 0, -5);
+    wallTop.position.set(0, 0, -3.5);
     this.world.addBody(wallTop);
 
     const wallBottom = new CANNON.Body({ mass: 0 });
     wallBottom.addShape(wallShape);
-    wallBottom.position.set(0, 0, 5);
+    wallBottom.position.set(0, 0, 3.5);
     wallBottom.quaternion.setFromEuler(0, Math.PI, 0);
     this.world.addBody(wallBottom);
 
     const wallLeft = new CANNON.Body({ mass: 0 });
     wallLeft.addShape(wallShape);
-    wallLeft.position.set(-4, 0, 0);
+    wallLeft.position.set(-2.5, 0, 0);
     wallLeft.quaternion.setFromEuler(0, Math.PI / 2, 0);
     this.world.addBody(wallLeft);
 
     const wallRight = new CANNON.Body({ mass: 0 });
     wallRight.addShape(wallShape);
-    wallRight.position.set(4, 0, 0);
+    wallRight.position.set(2.5, 0, 0);
     wallRight.quaternion.setFromEuler(0, -Math.PI / 2, 0);
     this.world.addBody(wallRight);
 
@@ -255,14 +255,14 @@ class Dice3D {
         
         // Spawn inside camera view (near Y=8-12) so there's no lag before they appear
         this.diceBodies[i].position.set(
-          (Math.random() - 0.5) * 5,
+          (Math.random() - 0.5) * 3,
           8 + Math.random() * 4,
-          (Math.random() - 0.5) * 5
+          (Math.random() - 0.5) * 3
         );
         this.diceBodies[i].velocity.set(
-          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 6,
           -15,
-          (Math.random() - 0.5) * 10
+          (Math.random() - 0.5) * 6
         );
         this.diceBodies[i].angularVelocity.set(
           Math.random() * 20,

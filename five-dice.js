@@ -459,7 +459,8 @@ window.handle5DiceMessage = function(msg) {
       };
       const catLabel = catLabels[msg.category] || msg.category;
       if (typeof window.showToast === 'function') {
-        window.showToast(`${pName} took ${msg.score} points on ${catLabel}.`, pColor);
+        const ptsWord = msg.score === 1 ? 'point' : 'points';
+        window.showToast(`${pName} took ${msg.score} ${ptsWord} on ${catLabel}.`, pColor);
       }
     }
     
@@ -642,7 +643,12 @@ window.handle5DiceGameOver = function() {
       if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
       
       setTimeout(() => {
-        if (window.confetti) window.confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        if (window.confetti) {
+          const config = { spread: 100, startVelocity: 50, scalar: 1.2 };
+          window.confetti({ ...config, particleCount: 150, origin: { x: 0.2, y: 0.8 } });
+          window.confetti({ ...config, particleCount: 150, origin: { x: 0.8, y: 0.8 } });
+          setTimeout(() => window.confetti({ ...config, particleCount: 200, origin: { x: 0.5, y: 0.6 } }), 300);
+        }
       }, 300); // Give it a tiny bit of time to scroll before confetti fires
     }
   } else {
