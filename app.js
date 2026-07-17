@@ -2,7 +2,12 @@
 
 
 // --- GLOBALS ---
-let myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
+let myPeerId = localStorage.getItem('myPeerId');
+if (!myPeerId) {
+  myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('myPeerId', myPeerId);
+}
+window.myPeerId = myPeerId;
 const isDesktop = !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 const myWeight = (isDesktop ? 100 : 50) + Math.floor(Math.random() * 10);
 
