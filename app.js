@@ -674,6 +674,9 @@ function setupGameUI(gameType) {
     tttBoard.classList.add('hidden');
     fdContainer.classList.remove('hidden');
     document.body.classList.add('bg-five-dice');
+    if (!window.dice3d && typeof Dice3D !== 'undefined') {
+      window.dice3d = new Dice3D();
+    }
     init5DiceGame();
   } else {
     tttBoard.classList.remove('hidden');
