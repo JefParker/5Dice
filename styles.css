@@ -787,9 +787,12 @@ body.dice3d-active .fd-die {
   border-bottom: 2px solid #555;
 }
 
-.fd-sc-totals {
+.fd-sc-section {
   margin-top: 15px;
   border-top: 2px solid #555;
+}
+
+.fd-sc-grand-total {
   font-weight: bold;
 }
 

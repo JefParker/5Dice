@@ -133,14 +133,17 @@ function renderScorecard() {
     });
   }
   
-  const cats = [
+  const upperCats = [
     { id: 'ones', label: "1's" },
     { id: 'twos', label: "2's" },
     { id: 'threes', label: "3's" },
     { id: 'fours', label: "4's" },
     { id: 'fives', label: "5's" },
     { id: 'sixes', label: "6's" },
-    { id: 'bonus', label: "Bonus (> 62)" },
+    { id: 'bonus', label: "Bonus (> 62)" }
+  ];
+  
+  const lowerCats = [
     { id: 'chance', label: "Chance" },
     { id: 'three-kind', label: "3 of a kind" },
     { id: 'four-kind', label: "4 of a kind" },
@@ -159,8 +162,8 @@ function renderScorecard() {
   });
   html += `</div>`;
   
-  cats.forEach(c => {
-    html += `<div class="fd-sc-row ${c.id === 'chance' ? 'fd-sc-totals' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
+  const renderCat = (c, addSection) => {
+    html += `<div class="fd-sc-row ${addSection ? 'fd-sc-section' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
     players.forEach(p => {
       let score = state.scores[p][c.id];
       if (c.id === 'bonus') {
@@ -172,9 +175,11 @@ function renderScorecard() {
       html += `<div class="fd-sc-score" style="background-color: ${pColor};">${val}</div>`;
     });
     html += `</div>`;
-  });
+  };
   
-  html += `<div class="fd-sc-row fd-sc-totals"><div class="fd-sc-cat">Upper Tot</div>`;
+  upperCats.forEach(c => renderCat(c, false));
+  
+  html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Upper Tot</div>`;
   players.forEach(p => {
     const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
     let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
@@ -182,7 +187,9 @@ function renderScorecard() {
   });
   html += `</div>`;
   
-  html += `<div class="fd-sc-row"><div class="fd-sc-cat">Lower Tot</div>`;
+  lowerCats.forEach((c, i) => renderCat(c, i === 0));
+  
+  html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Lower Tot</div>`;
   players.forEach(p => {
     const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
     let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
@@ -190,7 +197,7 @@ function renderScorecard() {
   });
   html += `</div>`;
   
-  html += `<div class="fd-sc-row fd-sc-totals"><div class="fd-sc-cat">Total</div>`;
+  html += `<div class="fd-sc-row fd-sc-section fd-sc-grand-total"><div class="fd-sc-cat">Total</div>`;
   players.forEach(p => {
     const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
     const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
