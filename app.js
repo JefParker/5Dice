@@ -420,9 +420,13 @@ async function handleLobbySignal(sig) {
     return;
   }
 
-  if (!lobbyPeers[from]) {
+  if (!lobbyPeers[from] || !lobbyPeers[from].pc) {
     const pc = new RTCPeerConnection(rtcConfig);
-    lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null, lastInitiated: Date.now() };
+    if (!lobbyPeers[from]) {
+      lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null, lastInitiated: Date.now() };
+    } else {
+      lobbyPeers[from] = { ...lobbyPeers[from], pc, dc: null, iceQueue: [], routeVia: via || null, lastInitiated: Date.now() };
+    }
     
     pc.ondatachannel = (e) => {
       if (e.channel.label === 'lobby-channel') {
