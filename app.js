@@ -269,6 +269,48 @@ function setupLobbyPeer(targetId, pc, dc) {
       onOpenHandler();
     }
 
+    const MAX_MESSAGE_HISTORY = 100;
+    let messageHistory = [];
+
+    window.offlineMessageQueue = window.offlineMessageQueue || {};
+
+    window.sendOrQueueGameMessage = function(peerId, msg) {
+      let p = null;
+      if (typeof gamePeers !== 'undefined' && gamePeers[peerId]) {
+        p = gamePeers[peerId];
+      } else if (typeof lobbyPeers !== 'undefined' && lobbyPeers[peerId]) {
+        p = lobbyPeers[peerId];
+      }
+
+      if (p && p.dc && p.dc.readyState === 'open') {
+        try {
+          p.dc.send(JSON.stringify(msg));
+        } catch (e) {
+          if (!window.offlineMessageQueue[peerId]) window.offlineMessageQueue[peerId] = [];
+          window.offlineMessageQueue[peerId].push(msg);
+        }
+      } else {
+        if (!window.offlineMessageQueue[peerId]) window.offlineMessageQueue[peerId] = [];
+        window.offlineMessageQueue[peerId].push(msg);
+      }
+    };
+
+    window.flushOfflineMessages = function(peerId, dc) {
+      if (window.offlineMessageQueue && window.offlineMessageQueue[peerId] && dc && dc.readyState === 'open') {
+        while (window.offlineMessageQueue[peerId].length > 0) {
+          const msg = window.offlineMessageQueue[peerId].shift();
+          try {
+            dc.send(JSON.stringify(msg));
+          } catch (e) {
+            window.offlineMessageQueue[peerId].unshift(msg);
+            break;
+          }
+        }
+      }
+    };
+
+    const getPeerName = (id) => lobbyPeers[id] ? lobbyPeers[id].name : 'Unknown';
+
     dc.onclose = () => {
       if (lobbyPeers[targetId] && lobbyPeers[targetId].dc !== dc) return;
       const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Unknown';
@@ -1083,6 +1125,9 @@ function setupGamePeer(targetId, pc, dc) {
       
       if (gameHost !== null && dc.readyState === 'open') {
         dc.send(JSON.stringify({ type: 'sync', state: gameState, name: myName, color: myColor, fiveDiceState: window.fiveDiceState }));
+        if (window.flushOfflineMessages) {
+          window.flushOfflineMessages(targetId, dc);
+        }
       }
       
       pingInterval = setInterval(() => {
@@ -1367,12 +1412,8 @@ function handleMove(index) {
   const gameOver = checkWin();
   
   for (const p in gamePeers) {
-    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-      try {
-        gamePeers[p].dc.send(JSON.stringify({ type: 'move', index, player: mySymbol }));
-      } catch (err) {
-        console.error('Failed to send move:', err);
-      }
+    if (window.sendOrQueueGameMessage) {
+      window.sendOrQueueGameMessage(p, { type: 'move', index, player: mySymbol });
     }
   }
   if (!gameOver) {
@@ -1427,8 +1468,8 @@ function resetGame(firstTurn = null) {
 document.getElementById('btn-play-again').addEventListener('click', () => {
   const nextFirstTurn = gamePlayers[Math.floor(Math.random() * gamePlayers.length)];
   for (const p in gamePeers) {
-    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-      gamePeers[p].dc.send(JSON.stringify({ type: 'PLAY_AGAIN', firstTurn: nextFirstTurn }));
+    if (window.sendOrQueueGameMessage) {
+      window.sendOrQueueGameMessage(p, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn });
     }
   }
   const room = activeRooms[currentRoomId];

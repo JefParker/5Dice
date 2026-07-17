@@ -370,9 +370,8 @@ function broadcast5DiceState() {
     rollsLeft: window.fiveDiceState.rollsLeft
   };
   for (const peerId in window.gamePeers) {
-    const p = window.gamePeers[peerId];
-    if (p.dc && p.dc.readyState === 'open') {
-      p.dc.send(JSON.stringify(msg));
+    if (window.sendOrQueueGameMessage) {
+      window.sendOrQueueGameMessage(peerId, msg);
     }
   }
 }
@@ -384,9 +383,8 @@ function broadcast5DiceHold() {
     held: window.fiveDiceState.held
   };
   for (const peerId in window.gamePeers) {
-    const p = window.gamePeers[peerId];
-    if (p.dc && p.dc.readyState === 'open') {
-      p.dc.send(JSON.stringify(msg));
+    if (window.sendOrQueueGameMessage) {
+      window.sendOrQueueGameMessage(peerId, msg);
     }
   }
 }
@@ -400,9 +398,8 @@ function broadcast5DiceScore(category, score) {
     player: window.myPeerId
   };
   for (const peerId in window.gamePeers) {
-    const p = window.gamePeers[peerId];
-    if (p.dc && p.dc.readyState === 'open') {
-      p.dc.send(JSON.stringify(msg));
+    if (window.sendOrQueueGameMessage) {
+      window.sendOrQueueGameMessage(peerId, msg);
     }
   }
 }
