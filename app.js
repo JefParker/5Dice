@@ -687,7 +687,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   hideLoading();
 });
 
-function setupGameUI(gameType) {
+function setupGameUI(gameType, isRejoin = false) {
   const tttBoard = document.getElementById('tic-tac-toe-board');
   const fdContainer = document.getElementById('five-dice-container');
   if (gameType === '5 Dice') {
@@ -697,7 +697,11 @@ function setupGameUI(gameType) {
     if (!window.dice3d && typeof Dice3D !== 'undefined') {
       window.dice3d = new Dice3D();
     }
-    init5DiceGame();
+    if (!isRejoin || !window.fiveDiceState || window.fiveDiceState.isGameOver) {
+      init5DiceGame();
+    } else {
+      update5DiceUI();
+    }
   } else {
     tttBoard.classList.remove('hidden');
     fdContainer.classList.add('hidden');
@@ -712,12 +716,22 @@ window.joinRoom = function(roomId) {
   const displayGameType = room.gameType || 'Tic-Tac-Toe';
   document.getElementById('game-room-name').innerText = `🎲 ${room.name} - ${displayGameType} 🎲`;
   
+  const isReturning = room.status === 'in-progress';
+  
+  if (room.host === myPeerId) {
+    currentRoomId = roomId;
+    setupGameUI(displayGameType, isReturning);
+    updateGameBackground();
+    showScreen('screen-game');
+    return;
+  }
+  
   showLoading('Joining Room...');
   const sendJoin = () => {
     lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: myUuid }));
     currentRoomId = roomId;
     isHost = false;
-    setupGameUI(displayGameType);
+    setupGameUI(displayGameType, isReturning);
     showScreen('screen-game');
     document.getElementById('game-status').innerText = 'Joined! Waiting for host to start game mesh...';
     hideLoading();
@@ -853,6 +867,7 @@ async function handleGameStartSignal(players, resumeState = null, firstTurn = nu
   if (resumeState) {
     if (resumeState.fiveDiceState) {
       if (window.sync5DiceState) window.sync5DiceState(resumeState.fiveDiceState);
+      updateGameBackground();
     } else if (resumeState.board) {
       gameState = resumeState.board;
       myTurn = resumeState.myTurn;
