@@ -1253,8 +1253,8 @@ function updateGameBackground() {
     gameScreen.classList.add(`bg-watermark-${mySymbol.toLowerCase()}`);
   }
 
-  let opponentId = gamePlayers.find(p => p !== myPeerId);
-  let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
+  let activeOpponentId = (window.currentTurnPlayerId && window.currentTurnPlayerId !== myPeerId) ? window.currentTurnPlayerId : gamePlayers.find(p => p !== myPeerId);
+  let opponentColor = (activeOpponentId && lobbyPeers[activeOpponentId] && lobbyPeers[activeOpponentId].color) ? lobbyPeers[activeOpponentId].color : '#2a2a2a';
   
   if (myTurn) {
     gameScreen.style.backgroundColor = myColor;
