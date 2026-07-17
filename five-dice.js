@@ -605,9 +605,17 @@ window.handle5DiceGameOver = function() {
       document.getElementById('game-status').innerText = "It's a Tie!";
     } else {
       document.getElementById('game-status').innerText = "You Win!";
-      if (window.confetti) window.confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      
+      const gc = document.querySelector('.game-container');
+      if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      setTimeout(() => {
+        if (window.confetti) window.confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      }, 300); // Give it a tiny bit of time to scroll before confetti fires
     }
   } else {
+    const gc = document.querySelector('.game-container');
+    if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
     document.getElementById('game-status').innerText = `${window.lobbyPeers[winners[0]]?.name || 'Opponent'} Wins!`;
   }
   document.getElementById('btn-play-again').classList.remove('hidden');
