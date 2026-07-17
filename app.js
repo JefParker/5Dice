@@ -1425,8 +1425,7 @@ function resetGame(firstTurn = null) {
 }
 
 document.getElementById('btn-play-again').addEventListener('click', () => {
-  const otherPeerId = gamePlayers.find(p => p !== myPeerId);
-  const nextFirstTurn = Math.random() < 0.5 ? myPeerId : otherPeerId;
+  const nextFirstTurn = gamePlayers[Math.floor(Math.random() * gamePlayers.length)];
   for (const p in gamePeers) {
     if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
       gamePeers[p].dc.send(JSON.stringify({ type: 'PLAY_AGAIN', firstTurn: nextFirstTurn }));
@@ -1556,12 +1555,15 @@ const toastEl = document.getElementById('toast');
 
 let pendingUuid = null;
 
+let toastTimeoutId = null;
+
 function showToast(msg, bgColor = null) {
   if (!toastEl) return;
   toastEl.innerText = msg;
   toastEl.style.backgroundColor = bgColor || '#333';
   toastEl.classList.remove('hidden');
-  setTimeout(() => { toastEl.classList.add('hidden'); }, 3000);
+  if (toastTimeoutId) clearTimeout(toastTimeoutId);
+  toastTimeoutId = setTimeout(() => { toastEl.classList.add('hidden'); }, 3000);
 }
 
 if (settingsUuidInput) {

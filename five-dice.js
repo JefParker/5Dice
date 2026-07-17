@@ -445,6 +445,20 @@ window.handle5DiceMessage = function(msg) {
       window.fiveDiceState.scores[msg.player][msg.category] = msg.score;
     }
     
+    if (msg.player !== window.myPeerId) {
+      const pName = window.lobbyPeers && window.lobbyPeers[msg.player] ? window.lobbyPeers[msg.player].name : 'Opponent';
+      const pColor = window.lobbyPeers && window.lobbyPeers[msg.player] ? window.lobbyPeers[msg.player].color : '#333';
+      const catLabels = {
+        'ones': "one's", 'twos': "two's", 'threes': "three's", 'fours': "four's", 'fives': "five's", 'sixes': "six's",
+        'chance': "chance", 'three-kind': "3 of a kind", 'four-kind': "4 of a kind", 'full-house': "full house",
+        'sm-straight': "small straight", 'lg-straight': "large straight", 'five-dice': "5 dice"
+      };
+      const catLabel = catLabels[msg.category] || msg.category;
+      if (typeof window.showToast === 'function') {
+        window.showToast(`${pName} took ${msg.score} points on ${catLabel}.`, pColor);
+      }
+    }
+    
     update5DiceUI();
     
     if (check5DiceGameOver()) {
@@ -485,6 +499,7 @@ window.reset5DiceGame = function(firstTurnId = null) {
     };
   });
   if (firstTurnId) {
+    window.currentFirstTurn = firstTurnId;
     window.myTurn = (window.myPeerId === firstTurnId);
   } else {
     window.myTurn = window.currentFirstTurn ? (window.myPeerId === window.currentFirstTurn) : (window.myPeerId === window.gameHost);
@@ -507,21 +522,17 @@ window.sync5DiceState = function(incomingState) {
     return count;
   };
   
-  const opponentId = window.gamePlayers.find(p => p !== window.myPeerId);
-  if (!opponentId) return;
-
   let shouldUpdate = false;
 
   if (!window.fiveDiceState) {
     shouldUpdate = true;
   } else {
-    const myCountCurrent = getScoreCount(window.fiveDiceState, window.myPeerId);
-    const myCountIncoming = getScoreCount(incomingState, window.myPeerId);
-    const oppCountCurrent = getScoreCount(window.fiveDiceState, opponentId);
-    const oppCountIncoming = getScoreCount(incomingState, opponentId);
-
-    const totalCurrent = myCountCurrent + oppCountCurrent;
-    const totalIncoming = myCountIncoming + oppCountIncoming;
+    let totalCurrent = 0;
+    let totalIncoming = 0;
+    window.gamePlayers.forEach(p => {
+      totalCurrent += getScoreCount(window.fiveDiceState, p);
+      totalIncoming += getScoreCount(incomingState, p);
+    });
 
     // Always accept a state that has more recorded scores than ours
     if (totalIncoming > totalCurrent) {
@@ -548,8 +559,8 @@ window.sync5DiceState = function(incomingState) {
   const counts = window.gamePlayers.map(p => getCount(p));
   const minCount = Math.min(...counts);
   
-  // Find turn order starting from firstTurnPlayerId
-  const firstPlayer = window.firstTurnPlayerId || window.gameHost;
+  // Find turn order starting from currentFirstTurn
+  const firstPlayer = window.currentFirstTurn || window.gameHost;
   let firstIdx = window.gamePlayers.indexOf(firstPlayer);
   if (firstIdx === -1) firstIdx = 0;
   
