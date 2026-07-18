@@ -131,8 +131,8 @@ const IDGo = () => {
         g_objUserData.GameID = nGameID;
         initWebSocket();
         g_objGame.LeaderList = [];
-        setTimeout(function() {BCastRequestScores();}, 2000);
     }
+    setTimeout(function() {BCastRequestScores();}, 2000);
 
     g_objUserData.Name = g_objScore.Name = document.getElementById('PlayerName').value.trim();
     SetGameID(g_objUserData.GameID);
@@ -1347,23 +1347,32 @@ const postFileFromServer = async (url, sData, doneCallback) => {
         setTimeout(() => postFileFromServer(url, sData, doneCallback), 100);
         return;
     }
-    if (sData.startsWith("SetData=")) {
-        const jsonData = sData.substring(8);
-        const objData = JSON.parse(jsonData);
-        await window.firebaseBackend.setScore(objData.room, objData.player_id, objData.score);
-        const data = await window.firebaseBackend.getRoomData(objData.room);
-        doneCallback(data);
-    } else if (sData.startsWith("GetRoomData=")) {
-        const room = sData.substring(12);
-        const data = await window.firebaseBackend.getRoomData(room);
-        doneCallback(data);
-    } else if (sData.startsWith("ClearRoom=")) {
-        const room = sData.substring(10);
-        await window.firebaseBackend.clearRoom(room);
-        doneCallback("Successfully cleared room " + room);
-    } else if (sData.startsWith("ClearTable=")) {
-        await window.firebaseBackend.clearTable();
-        doneCallback("Successfully cleared table");
+    try {
+        if (sData.startsWith("SetData=")) {
+            const jsonData = sData.substring(8);
+            const objData = JSON.parse(jsonData);
+            await window.firebaseBackend.setScore(objData.room, objData.player_id, objData.score);
+            const data = await window.firebaseBackend.getRoomData(objData.room);
+            doneCallback(data);
+        } else if (sData.startsWith("GetRoomData=")) {
+            const room = sData.substring(12);
+            const data = await window.firebaseBackend.getRoomData(room);
+            doneCallback(data);
+        } else if (sData.startsWith("ClearRoom=")) {
+            const room = sData.substring(10);
+            await window.firebaseBackend.clearRoom(room);
+            doneCallback("[]");
+        } else if (sData.startsWith("ClearTable=")) {
+            await window.firebaseBackend.clearTable();
+            doneCallback("[]");
+        }
+    } catch (error) {
+        console.error("Firebase Error:", error);
+        if (error.code && error.code.includes('permission-denied')) {
+            ColorToast("Firebase Permission Denied! App Check is blocking access (e.g. running on file:// or localhost).", "red");
+        } else {
+            ColorToast("Firebase Error: " + error.message, "red");
+        }
     }
 }
 

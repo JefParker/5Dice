@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onDisconnect, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 
 const firebaseConfig = {
@@ -52,7 +52,6 @@ window.firebaseBackend = {
         await remove(ref(db, `rooms`));
     },
     currentUnsubscribe: null,
-
     initEvents: (room, onMessageCallback) => {
         if (!room) return;
         window.firebaseBackend.isConnected = true;
@@ -63,17 +62,24 @@ window.firebaseBackend = {
         }
 
         const eventsRef = ref(db, `rooms/${room}/events`);
-        const startTime = Date.now();
         
-        const unsubscribe = onChildAdded(eventsRef, (snapshot) => {
-            const val = snapshot.val();
-            if (val && val.timestamp > startTime - 10000) {
-                onMessageCallback(val.jsonData);
-            }
+        // Fetch server time offset to handle clock skew accurately
+        const offsetRef = ref(db, ".info/serverTimeOffset");
+        get(offsetRef).then((snap) => {
+            const offset = snap.val() || 0;
+            const serverStartTime = Date.now() + offset;
+            
+            // Only listen to the last 20 events to save bandwidth and ignore deep history
+            const q = query(eventsRef, limitToLast(20));
+            const unsubscribe = onChildAdded(q, (snapshot) => {
+                const val = snapshot.val();
+                // Ignore events older than 10 seconds before we joined the room
+                if (val && (!val.timestamp || val.timestamp > serverStartTime - 10000)) {
+                    onMessageCallback(val.jsonData);
+                }
+            });
+            window.firebaseBackend.currentUnsubscribe = unsubscribe;
         });
-        
-        // Save the unsubscribe function so we can remove the listener later
-        window.firebaseBackend.currentUnsubscribe = unsubscribe;
     },
     
     sendEvent: async (room, jsonData) => {
@@ -82,7 +88,7 @@ window.firebaseBackend = {
         const newEventRef = push(eventsRef);
         await set(newEventRef, {
             jsonData: jsonData,
-            timestamp: serverTimestamp()
+            timestamp: serverTimestamp, query, limitToLast()
         });
         
         // Optional: cleanup old events
