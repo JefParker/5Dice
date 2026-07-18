@@ -137,7 +137,7 @@ const IDGo = () => {
     g_objUserData.Name = g_objScore.Name = document.getElementById('PlayerName').value.trim();
     SetGameID(g_objUserData.GameID);
 
-    if (!g_objUserData.GameID || typeof(g_objUserData.GameID) === "number") {
+    if (!g_objUserData.GameID) {
         alert ("Please enter a room number");
         return;
     }
