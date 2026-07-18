@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onDisconnect, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEJodiD_HX1XtwmwMYFTUll60prxoe2Ic",
@@ -15,7 +15,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaEnterpriseProvider('6Lf3lVotAAAAAIGJPkWiRJEf5mr90mA_ak7O3q91'),
+  provider: new ReCaptchaV3Provider('6Lf3lVotAAAAAIGJPkWiRJEf5mr90mA_ak7O3q91'),
   isTokenAutoRefreshEnabled: true
 });
 const db = getDatabase(app);
