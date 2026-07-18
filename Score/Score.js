@@ -32,7 +32,7 @@ const GetUserData = () => {
     } else {
         g_objUserData.Name = "";
         g_objUserData.PlayerID = MakeRandomCode(10);
-        g_objUserData.GameID = getRandomInt(1, 99999);
+        g_objUserData.GameID = getRandomInt(10000, 99999);
         g_objUserData.Color = PickRandomColor();
         document.body.style.background = g_objUserData.Color;
     }
