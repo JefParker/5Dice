@@ -128,8 +128,8 @@ const colorBtn = () => {
 const IDGo = () => {
     let nGameID = document.getElementById('GameID').value.trim();
     if (g_objUserData.GameID != nGameID) {
-        CheckConnection();
         g_objUserData.GameID = nGameID;
+        initWebSocket();
         g_objGame.LeaderList = [];
         setTimeout(function() {BCastRequestScores();}, 2000);
     }
@@ -639,6 +639,12 @@ const LeaderList = (sData) => {
     }
     sLeaderList += "</div>";
 
+    let nPlayers = g_objGame.LeaderList.length;
+    let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
+    if (document.getElementById('WhosHere')) {
+        document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
+    }
+
     return sLeaderList;
 }
 
@@ -752,11 +758,27 @@ let initWebSocket = () => {
         setTimeout(initWebSocket, 100);
         return;
     }
+
+    if (!g_objGame.id) {
+        g_objGame.id = Math.floor(Math.random() * 1000000000);
+    }
+
+    setTimeout(() => {
+        let objData = {
+            Message: "PlayerEnteringGame",
+            Type: "Score",
+            GameID: parseInt(g_objUserData.GameID),
+            ID: g_objGame.id,
+            Name: g_objScore.Name ? g_objScore.Name : "Score"
+        };
+        sendMessage(JSON.stringify(objData));
+    }, 1000);
+
     window.firebaseBackend.initEvents(g_objUserData.GameID, (evtData) => {
         if (typeof evtData === "string") {
             let objData = JSON.parse(evtData);
             if ("Score" == objData.Type) {
-                if ("BCast2Game" == objData.Message || "Msg2ID" == objData.Message) {
+                if ("BCast2Game" == objData.Message || ("Msg2ID" == objData.Message && objData.ToID == g_objGame.id)) {
                     if ("Notification" == objData.Event) {
                         showNotification(objData.Title, objData.Text, true);
                     }
@@ -788,29 +810,15 @@ let initWebSocket = () => {
                 }
             }
             if ("PlayerEnteringGame" == objData.Message || "PlayerExitingGame" == objData.Message) {
-                if ("PlayerEnteringGame" == objData.Message) {
-                    let sColor = FindColorbyName(objData);
-                    ColorToast(objData.Name + " has arrived", sColor);
-                    BCastRequestScores();
-                } else if ("PlayerExitingGame" == objData.Message) {
-                    let sColor = FindColorbyName(objData);
-                    ColorToast(objData.Name + " has left", sColor);
-                }
-                if (objData.PlayersIDHere) {
-                    let nPlayers = countCurrentUsers(objData.PlayersIDHere);
-                    let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
-                    if (document.getElementById('WhosHere')) document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
-                    if (document.getElementById('NamesHere')) document.getElementById('NamesHere').innerHTML = objData.PlayersNameList ? objData.PlayersNameList : "";
-                }
-            } else {
-                if (objData.PlayersIDHere) {
-                    let nPlayers = countCurrentUsers(objData.PlayersIDHere);
-                    let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
-                    if (document.getElementById('WhosHere'))
-                        document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
-                    g_objGame.id = objData.ID;
-                    if (document.getElementById('NamesHere'))
-                        document.getElementById('NamesHere').innerHTML = objData.PlayersNameList ? objData.PlayersNameList : "";
+                if (objData.ID !== g_objGame.id) {
+                    if ("PlayerEnteringGame" == objData.Message) {
+                        let sColor = FindColorbyName(objData);
+                        ColorToast(objData.Name + " has arrived", sColor);
+                        BCastRequestScores();
+                    } else if ("PlayerExitingGame" == objData.Message) {
+                        let sColor = FindColorbyName(objData);
+                        ColorToast(objData.Name + " has left", sColor);
+                    }
                 }
             }
         }

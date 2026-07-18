@@ -51,28 +51,29 @@ window.firebaseBackend = {
     clearTable: async () => {
         await remove(ref(db, `rooms`));
     },
-    
+    currentUnsubscribe: null,
+
     initEvents: (room, onMessageCallback) => {
         if (!room) return;
         window.firebaseBackend.isConnected = true;
         
-        // Listen for new events in the room
+        if (window.firebaseBackend.currentUnsubscribe) {
+            window.firebaseBackend.currentUnsubscribe();
+            window.firebaseBackend.currentUnsubscribe = null;
+        }
+
         const eventsRef = ref(db, `rooms/${room}/events`);
-        
-        // We only want to listen to new events from now on, not old ones
-        // But RTDB onChildAdded triggers for existing children. 
-        // We can ignore events older than a few seconds.
         const startTime = Date.now();
         
-        onChildAdded(eventsRef, (snapshot) => {
+        const unsubscribe = onChildAdded(eventsRef, (snapshot) => {
             const val = snapshot.val();
             if (val && val.timestamp > startTime - 10000) {
                 onMessageCallback(val.jsonData);
             }
         });
-
-        // Periodically clean up old events so the DB doesn't grow infinitely
-        // We'll just have the client delete their own old messages occasionally
+        
+        // Save the unsubscribe function so we can remove the listener later
+        window.firebaseBackend.currentUnsubscribe = unsubscribe;
     },
     
     sendEvent: async (room, jsonData) => {
