@@ -1,0 +1,72 @@
+
+{
+  "short_name": "Score",
+  "name": "5 Dice Score Sheet",
+  "description": "5 Dice Score Sheet",
+  "lang": "en-US",
+  "id": "https://5dice.app/Score/",
+  "start_url": "index.html",
+  "scope": "/Score/",
+  "theme_color": "#191970",
+  "background_color": "#191970",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+
+  "icons": [
+    {
+      "src": "img/Score64.png",
+      "type": "image/png",
+      "sizes": "64x64"
+    },
+    {
+      "src": "img/Score128.png",
+      "type": "image/png",
+      "sizes": "128x128"
+    },
+    {
+      "src": "img/Score192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "img/Score.ico",
+      "type": "image/ico",
+      "sizes": "231x231"
+    },
+    {
+      "src": "img/Score512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Score",
+      "short_name": "Score",
+      "description": "5 Dice Score Sheet",
+      "url": "Score/",
+      "icons": [
+        {
+          "src": "img/Score192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "img/Score-SS01.png",
+      "type": "image/png",
+      "sizes": "1080x1970",
+      "form_factor": "narrow",
+      "label": "Score"
+    },
+    {
+      "src": "img/Score-SS02.png",
+      "type": "image/png",
+      "sizes": "1080x1970",
+      "form_factor": "wide",
+      "label": "Score"
+    }
+  ]
+}
