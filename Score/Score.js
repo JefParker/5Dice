@@ -747,146 +747,84 @@ const CloseDlg = (sCat) => {
 
 
 /* Start WebSocket Code */
-var wsUri = "ws://5dice.app:58007";
-if (window.location.protocol === 'https:') {
-    wsUri = "wss://5dice.app:57007/wss";
-}
-var wSocket = null;
-
 let initWebSocket = () => {
-    try {
-        if (typeof MozWebSocket == 'function')
-            WebSocket = MozWebSocket;
-        if (wSocket && wSocket.readyState == 1) // Open
-            wSocket.close();
-        wSocket = new WebSocket(wsUri);
-        wSocket.onopen = function (evt) {
-            SendMyID();
-            console.log("Connection established.");
-            SetGameID(g_objUserData.GameID);
-        };
-        wSocket.onclose = function (evt) {
-            //document.getElementById('WhosHere').innerHTML = "<span onclick='CheckConnection()'>Tap to connect</span>";
-            setTimeout(function() {CheckConnection();}, 15000);
-            console.log("Connection closed");
-        };
-        wSocket.onmessage = function (evt) {
-            if ("string" === typeof evt.data) {
-                let objData = JSON.parse(evt.data);
-                //g_objGame.id = objData.ID;
-                if ("Score" == objData.Type) {
-                    if ("BCast2Game" == objData.Message || "Msg2ID" == objData.Message) {
-                        if ("Notification" == objData.Event) {
-                            showNotification(objData.Title, objData.Text, true);
+    if (!window.firebaseBackend) {
+        setTimeout(initWebSocket, 100);
+        return;
+    }
+    window.firebaseBackend.initEvents(g_objUserData.GameID, (evtData) => {
+        if (typeof evtData === "string") {
+            let objData = JSON.parse(evtData);
+            if ("Score" == objData.Type) {
+                if ("BCast2Game" == objData.Message || "Msg2ID" == objData.Message) {
+                    if ("Notification" == objData.Event) {
+                        showNotification(objData.Title, objData.Text, true);
+                    }
+                    else if ("Toast" == objData.Event) {
+                        ColorToast(objData.Text, objData.Color);
+                    }
+                    else if ("UpdateScore" == objData.Event) {
+                        if (document.getElementById("LeaderBoardEntries"))
+                            document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(objData.Player);
+                        let objPlayer = JSON.parse(objData.Player);
+                        if (objPlayer.PlayerID == g_objGame.ScoreSheetShowing) {
+                            DisplayScore(objPlayer);
                         }
-                        else if ("Toast" == objData.Event) {
-                            ColorToast(objData.Text, objData.Color);
-                        }
-                        else if ("UpdateScore" == objData.Event) {
+                    }
+                    else if ("RequestScore" == objData.Event) {
+                        SendScore2ID(objData.ID, JSON.stringify(g_objScore));
+                    }
+                    else if ('RequestLeaderBoard' == objData.Event) {
+                        SendLeaderBoard2ID(objData.ID, JSON.stringify(g_objGame.LeaderList));
+                    }
+                    else if ('UpdateLeaderBoard' == objData.Event) {
+                        let objLeaderBoard = JSON.parse(objData.LeaderBoard);
+                        for (let x=0; x<objLeaderBoard.length; x++) {
+                            let jsonPlayer = JSON.stringify(objLeaderBoard[x]);
                             if (document.getElementById("LeaderBoardEntries"))
-                                document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(objData.Player);
-
-                            // Live update if looking at another score sheet
-                            let objPlayer = JSON.parse(objData.Player);
-                            if (objPlayer.PlayerID == g_objGame.ScoreSheetShowing) {
-                                DisplayScore(objPlayer);
-                            }
-                        }
-                        else if ("RequestScore" == objData.Event) {
-                            //BCastScore(JSON.stringify(g_objScore));
-                            SendScore2ID(objData.ID, JSON.stringify(g_objScore));
-                            console.log("SendScore2ID: " + objData.ID);
-                        }
-                        else if ('RequestLeaderBoard' == objData.Event) {
-                            SendLeaderBoard2ID(objData.ID, JSON.stringify(g_objGame.LeaderList));
-                        }
-                        else if ('UpdateLeaderBoard' == objData.Event) {
-                            let objLeaderBoard = JSON.parse(objData.LeaderBoard);
-                            for (let x=0; x<objLeaderBoard.length; x++) {
-                                let jsonPlayer = JSON.stringify(objLeaderBoard[x]);
-                                if (document.getElementById("LeaderBoardEntries"))
                                 document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
-                            }
-                            console.log("Leader board refreshed");
-                            // ColorToast("Leaders refreshed", "#800000");
                         }
-                    }
-                }
-
-                if ("PlayerEnteringGame" == objData.Message || "PlayerExitingGame" == objData.Message) {
-                    if ("PlayerEnteringGame" == objData.Message) {
-                        console.log("Player Entering ID: " + objData.ID);
-                        let sColor = FindColorbyName(objData);
-                        ColorToast(objData.Name + " has arrived", sColor);
-                        // setTimeout(BCastRequestScores, 4000);
-                        BCastRequestScores();
-                    } else if ("PlayerExitingGame" == objData.Message) {
-                        console.log("Player Exiting ID: " + objData.ID);
-                        let sColor = FindColorbyName(objData);
-                        ColorToast(objData.Name + " has left", sColor);
-                    }
-                    if (objData.PlayersIDHere) {
-                        let nPlayers = countCurrentUsers(objData.PlayersIDHere);
-                        let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
-                        document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
-
-                        document.getElementById('NamesHere').innerHTML = objData.PlayersNameList ? objData.PlayersNameList : "";
-                    }
-
-                }
-                else {  // "AssociateID" and other WhoAmI requests
-                    if (objData.PlayersIDHere) {
-                        let nPlayers = countCurrentUsers(objData.PlayersIDHere);
-                        let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
-                        if (document.getElementById('WhosHere'))
-                            document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
-                        g_objGame.id = objData.ID;
-
-                        if (document.getElementById('NamesHere'))
-                            document.getElementById('NamesHere').innerHTML = objData.PlayersNameList ? objData.PlayersNameList : "";
-                        //console.log(objData);
                     }
                 }
             }
-        };
-        wSocket.onerror = function (evt) {
-            console.log('ERROR: ' + evt.data);
-            setTimeout(function() {CheckConnection();}, 15000);
-        };
-    } catch (exception) {
-        console.log('ERROR: ' + exception);
-    }
+            if ("PlayerEnteringGame" == objData.Message || "PlayerExitingGame" == objData.Message) {
+                if ("PlayerEnteringGame" == objData.Message) {
+                    let sColor = FindColorbyName(objData);
+                    ColorToast(objData.Name + " has arrived", sColor);
+                    BCastRequestScores();
+                } else if ("PlayerExitingGame" == objData.Message) {
+                    let sColor = FindColorbyName(objData);
+                    ColorToast(objData.Name + " has left", sColor);
+                }
+                if (objData.PlayersIDHere) {
+                    let nPlayers = countCurrentUsers(objData.PlayersIDHere);
+                    let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
+                    if (document.getElementById('WhosHere')) document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
+                    if (document.getElementById('NamesHere')) document.getElementById('NamesHere').innerHTML = objData.PlayersNameList ? objData.PlayersNameList : "";
+                }
+            } else {
+                if (objData.PlayersIDHere) {
+                    let nPlayers = countCurrentUsers(objData.PlayersIDHere);
+                    let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
+                    if (document.getElementById('WhosHere'))
+                        document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
+                    g_objGame.id = objData.ID;
+                    if (document.getElementById('NamesHere'))
+                        document.getElementById('NamesHere').innerHTML = objData.PlayersNameList ? objData.PlayersNameList : "";
+                }
+            }
+        }
+    });
 }
-
-let stopWebSocket = () => {
-    if (wSocket)
-        wSocket.close(1000, "Deliberate disconnection");
-}
-
-let close_socket = () => {
-    if (wSocket.readyState === WebSocket.OPEN)
-        wSocket.close(1000, "Deliberate disconnection");
-}
-
-let CheckConnection = () => {
-    if (!wSocket)
-        initWebSocket();
-    else if (wSocket.readyState == 3) { // Closed
-        wSocket = null;
-        initWebSocket();
-    }
-}
-
+let stopWebSocket = () => {}
+let close_socket = () => {}
+let CheckConnection = () => { if (!window.firebaseBackend || !window.firebaseBackend.isConnected) initWebSocket(); }
 let sendMessage = (jsonData) => {
-    if (wSocket != null && 1 == wSocket.readyState) {
-        wSocket.send(jsonData);
+    if (!window.firebaseBackend) {
+        setTimeout(() => sendMessage(jsonData), 500);
+        return;
     }
-    else {
-        CheckConnection();
-        console.log("ws error: " + jsonData);
-        g_objGame.Data = jsonData;
-        setTimeout(function(){wSocket.send(g_objGame.Data);}, 1500);
-    }
+    window.firebaseBackend.sendEvent(g_objUserData.GameID, jsonData);
 }
 
 let countCurrentUsers = (sIDs) => {
@@ -1396,17 +1334,28 @@ const showNotification = (title, text, bOnlyIfHidden) => {
 
 }
 
-const postFileFromServer = (url, sData, doneCallback) => {
-    var xhr;
-    xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = handleStateChange;
-    xhr.open("POST", url, true);
-    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-    xhr.send(sData);
-    function handleStateChange() {
-        if (xhr.readyState === 4) {
-            doneCallback(xhr.status == 200 ? xhr.responseText : null);
-        }
+const postFileFromServer = async (url, sData, doneCallback) => {
+    if (!window.firebaseBackend) {
+        setTimeout(() => postFileFromServer(url, sData, doneCallback), 100);
+        return;
+    }
+    if (sData.startsWith("SetData=")) {
+        const jsonData = sData.substring(8);
+        const objData = JSON.parse(jsonData);
+        await window.firebaseBackend.setScore(objData.room, objData.player_id, objData.score);
+        const data = await window.firebaseBackend.getRoomData(objData.room);
+        doneCallback(data);
+    } else if (sData.startsWith("GetRoomData=")) {
+        const room = sData.substring(12);
+        const data = await window.firebaseBackend.getRoomData(room);
+        doneCallback(data);
+    } else if (sData.startsWith("ClearRoom=")) {
+        const room = sData.substring(10);
+        await window.firebaseBackend.clearRoom(room);
+        doneCallback("Successfully cleared room " + room);
+    } else if (sData.startsWith("ClearTable=")) {
+        await window.firebaseBackend.clearTable();
+        doneCallback("Successfully cleared table");
     }
 }
 
