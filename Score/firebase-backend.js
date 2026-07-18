@@ -88,7 +88,7 @@ window.firebaseBackend = {
         const newEventRef = push(eventsRef);
         await set(newEventRef, {
             jsonData: jsonData,
-            timestamp: serverTimestamp, query, limitToLast()
+            timestamp: serverTimestamp()
         });
         
         // Optional: cleanup old events
