@@ -126,7 +126,12 @@ const colorBtn = () => {
 
 
 const IDGo = () => {
-    let nGameID = document.getElementById('GameID').value.trim();
+    let nGameID = parseInt(document.getElementById('GameID').value.trim());
+    if (isNaN(nGameID) || nGameID <= 0) {
+        alert("Please enter a valid room number");
+        return;
+    }
+    nGameID = nGameID.toString();
     if (g_objUserData.GameID != nGameID) {
         g_objUserData.GameID = nGameID;
         initWebSocket();
