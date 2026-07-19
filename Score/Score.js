@@ -543,11 +543,7 @@ const ClearRoomInServerDB = () => {
 
     postFileFromServer("api", "ClearRoom=" + g_objUserData.GameID, clearRoomCallback);
     function clearRoomCallback(data) {
-        if (data) {
-            g_objGame.LeaderList = [];
-            DisplayScore(g_objScore);
-            alert(data);
-        }
+        // Firebase UpdateLeaderBoard will handle clearing the local UI
     }
 }
 
@@ -556,11 +552,7 @@ const ClearAllRoomsInServerDB = () => {
         return false;
     postFileFromServer("api", "ClearTable=" + true, clearAllRoomsCallback);
     function clearAllRoomsCallback(data) {
-        if (data) {
-            g_objGame.LeaderList = [];
-            DisplayScore(g_objScore);
-            alert(data);
-        }
+        // Firebase UpdateLeaderBoard will handle clearing the local UI
     }
 }
 
@@ -820,10 +812,23 @@ let initWebSocket = () => {
                     else if ('UpdateLeaderBoard' == objData.Event) {
                         let objLeaderBoard = JSON.parse(objData.LeaderBoard);
                         g_objGame.LeaderList = [];
-                        for (let x=0; x<objLeaderBoard.length; x++) {
-                            let jsonPlayer = objLeaderBoard[x].score;
+                        if (objLeaderBoard.length === 0) {
                             if (document.getElementById("LeaderBoardEntries"))
-                                document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
+                                document.getElementById("LeaderBoardEntries").innerHTML = "";
+                            if (document.getElementById('WhosHere')) 
+                                document.getElementById('WhosHere').innerHTML = "<span onclick='CheckConnection()'>0 users</span>";
+                            if (document.getElementById('NamesHere')) 
+                                document.getElementById('NamesHere').innerHTML = "";
+                                
+                            g_objScore.Score = [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+                            localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
+                            DisplayScore(g_objScore);
+                        } else {
+                            for (let x=0; x<objLeaderBoard.length; x++) {
+                                let jsonPlayer = objLeaderBoard[x].score;
+                                if (document.getElementById("LeaderBoardEntries"))
+                                    document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
+                            }
                         }
                     }
                 }
