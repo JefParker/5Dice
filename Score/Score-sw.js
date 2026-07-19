@@ -1,6 +1,6 @@
  
- const staticCache = 'static-v260718a';
- const dynamicCache = 'dynamic-v260718a';
+ const staticCache = 'static-v260718b';
+ const dynamicCache = 'dynamic-v260718b';
  const assets = ['index.html', 'Score.js', 'firebase-backend.js',
     'Score.css', 'Score.json',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',

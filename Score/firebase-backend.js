@@ -59,56 +59,48 @@ window.firebaseBackend = {
 
         const eventsRef = ref(db, `rooms/${room}/events`);
         const scoresRef = ref(db, `rooms/${room}/scores`);
+
+        const serverStartTime = Date.now();
         
-        let unsubEvents = null;
-        let unsubScores = null;
-        
-        // Fetch server time offset to handle clock skew accurately
-        const offsetRef = ref(db, ".info/serverTimeOffset");
-        get(offsetRef).then((snap) => {
-            const offset = snap.val() || 0;
-            const serverStartTime = Date.now() + offset;
-            
-            // Only listen to the last 20 events to save bandwidth and ignore deep history
-            const q = query(eventsRef, limitToLast(20));
-            unsubEvents = onChildAdded(q, (snapshot) => {
-                const val = snapshot.val();
-                // Ignore events older than 10 seconds before we joined the room
-                if (val && (!val.timestamp || val.timestamp > serverStartTime - 10000)) {
-                    onMessageCallback(val.jsonData);
-                }
-            });
-            
-            unsubScores = onValue(scoresRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    const arr = Object.values(data);
-                    
-                    let evt = {
-                        Type: "Score",
-                        Message: "BCast2Game",
-                        Event: "UpdateLeaderBoard",
-                        GameID: room,
-                        LeaderBoard: JSON.stringify(arr)
-                    };
-                    onMessageCallback(JSON.stringify(evt));
-                } else {
-                    let evt = {
-                        Type: "Score",
-                        Message: "BCast2Game",
-                        Event: "UpdateLeaderBoard",
-                        GameID: room,
-                        LeaderBoard: "[]"
-                    };
-                    onMessageCallback(JSON.stringify(evt));
-                }
-            });
-            
-            window.firebaseBackend.currentUnsubscribe = () => {
-                if (unsubEvents) unsubEvents();
-                if (unsubScores) unsubScores();
-            };
+        // Only listen to the last 20 events to save bandwidth and ignore deep history
+        const q = query(eventsRef, limitToLast(20));
+        let unsubEvents = onChildAdded(q, (snapshot) => {
+            const val = snapshot.val();
+            // Ignore events older than 10 seconds before we joined the room
+            if (val && (!val.timestamp || val.timestamp > serverStartTime - 10000)) {
+                onMessageCallback(val.jsonData);
+            }
         });
+        
+        let unsubScores = onValue(scoresRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const arr = Object.values(data);
+                
+                let evt = {
+                    Type: "Score",
+                    Message: "BCast2Game",
+                    Event: "UpdateLeaderBoard",
+                    GameID: room,
+                    LeaderBoard: JSON.stringify(arr)
+                };
+                onMessageCallback(JSON.stringify(evt));
+            } else {
+                let evt = {
+                    Type: "Score",
+                    Message: "BCast2Game",
+                    Event: "UpdateLeaderBoard",
+                    GameID: room,
+                    LeaderBoard: "[]"
+                };
+                onMessageCallback(JSON.stringify(evt));
+            }
+        });
+        
+        window.firebaseBackend.currentUnsubscribe = () => {
+            if (unsubEvents) unsubEvents();
+            if (unsubScores) unsubScores();
+        };
     },
     
     sendEvent: async (room, jsonData) => {
