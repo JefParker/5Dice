@@ -651,6 +651,15 @@ const LeaderList = (sData) => {
     if (document.getElementById('WhosHere')) {
         document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
     }
+    
+    let names = [];
+    for (let i = 0; i < g_objGame.LeaderList.length; i++) {
+        names.push(g_objGame.LeaderList[i].Name);
+    }
+    g_objGame.NamesHere = names.join(", ");
+    if (document.getElementById('NamesHere')) {
+        document.getElementById('NamesHere').innerHTML = g_objGame.NamesHere;
+    }
 
     return sLeaderList;
 }
