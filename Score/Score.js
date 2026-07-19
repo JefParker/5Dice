@@ -808,7 +808,7 @@ let initWebSocket = () => {
                         let objLeaderBoard = JSON.parse(objData.LeaderBoard);
                         g_objGame.LeaderList = [];
                         for (let x=0; x<objLeaderBoard.length; x++) {
-                            let jsonPlayer = JSON.stringify(objLeaderBoard[x]);
+                            let jsonPlayer = objLeaderBoard[x].score;
                             if (document.getElementById("LeaderBoardEntries"))
                                 document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
                         }
