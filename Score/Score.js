@@ -21,6 +21,7 @@ onload = () => {
         CheckConnection();
         ShowScoreMain();
         askForNotificationApproval();
+        SendScoreToServerDB();
     }
 }
 
@@ -141,6 +142,7 @@ const IDGo = () => {
 
     g_objUserData.Name = g_objScore.Name = document.getElementById('PlayerName').value.trim();
     SetGameID(g_objUserData.GameID);
+    SendScoreToServerDB();
 
     if (!g_objUserData.GameID) {
         alert ("Please enter a room number");
