@@ -88,6 +88,7 @@ window.firebaseBackend = {
                         Type: "Score",
                         Message: "BCast2Game",
                         Event: "UpdateLeaderBoard",
+                        GameID: room,
                         LeaderBoard: JSON.stringify(arr)
                     };
                     onMessageCallback(JSON.stringify(evt));
@@ -96,6 +97,7 @@ window.firebaseBackend = {
                         Type: "Score",
                         Message: "BCast2Game",
                         Event: "UpdateLeaderBoard",
+                        GameID: room,
                         LeaderBoard: "[]"
                     };
                     onMessageCallback(JSON.stringify(evt));
