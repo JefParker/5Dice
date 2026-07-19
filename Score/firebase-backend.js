@@ -2,16 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDEJodiD_HX1XtwmwMYFTUll60prxoe2Ic",
-  authDomain: "dice-score.firebaseapp.com",
-  databaseURL: "https://dice-score-default-rtdb.firebaseio.com",
-  projectId: "dice-score",
-  storageBucket: "dice-score.firebasestorage.app",
-  messagingSenderId: "291526558646",
-  appId: "1:291526558646:web:2f9cd5755f4fae1c503717",
-  measurementId: "G-08RNMPNBHY"
-};
+import { firebaseConfig } from "../firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
