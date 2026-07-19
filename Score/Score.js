@@ -790,7 +790,9 @@ let initWebSocket = () => {
                         showNotification(objData.Title, objData.Text, true);
                     }
                     else if ("Toast" == objData.Event) {
-                        ColorToast(objData.Text, objData.Color);
+                        if (objData.ID != g_objGame.id) {
+                            ColorToast(objData.Text, objData.Color);
+                        }
                     }
                     else if ("UpdateScore" == objData.Event) {
                         if (document.getElementById("LeaderBoardEntries"))
