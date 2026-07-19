@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, orderByChild, endAt, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 
 import { firebaseConfig } from "../firebase-config.js";
@@ -17,6 +17,7 @@ window.firebaseBackend = {
             score: scoreJson,
             lastdataset: Date.now()
         });
+        set(ref(db, `rooms/${room}/lastEntered`), serverTimestamp());
     },
     
     getRoomData: async (room) => {
@@ -39,9 +40,57 @@ window.firebaseBackend = {
         await remove(ref(db, `rooms`));
     },
     currentUnsubscribe: null,
+    
+    cleanupOldRooms: async () => {
+        // 48 hours in milliseconds
+        const cutoff = Date.now() - (48 * 60 * 60 * 1000);
+        const roomsRef = ref(db, 'rooms');
+        const oldRoomsQuery = query(roomsRef, orderByChild('lastEntered'), endAt(cutoff));
+        try {
+            const snapshot = await get(oldRoomsQuery);
+            if (snapshot.exists()) {
+                const updates = {};
+                snapshot.forEach((childSnapshot) => {
+                    const val = childSnapshot.val();
+                    let shouldDelete = false;
+                    if (val && val.lastEntered && val.lastEntered < cutoff) {
+                        shouldDelete = true;
+                    } else if (val && !val.lastEntered) {
+                        // For legacy rooms without lastEntered, check if they are old based on scores
+                        let isOld = true;
+                        if (val.scores) {
+                            for (let pid in val.scores) {
+                                if (val.scores[pid].lastdataset > cutoff) {
+                                    isOld = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (isOld) shouldDelete = true;
+                    }
+                    if (shouldDelete) {
+                        updates[childSnapshot.key] = null;
+                    }
+                });
+                if (Object.keys(updates).length > 0) {
+                    await update(ref(db, 'rooms'), updates);
+                    console.log("Cleaned up old rooms:", Object.keys(updates));
+                }
+            }
+        } catch (e) {
+            console.error("Failed to cleanup old rooms:", e);
+        }
+    },
+
     initEvents: (room, onMessageCallback) => {
         if (!room) return;
         window.firebaseBackend.isConnected = true;
+        
+        set(ref(db, `rooms/${room}/lastEntered`), serverTimestamp());
+        
+        if (Math.random() < 0.1) {
+            window.firebaseBackend.cleanupOldRooms();
+        }
         
         if (window.firebaseBackend.currentUnsubscribe) {
             window.firebaseBackend.currentUnsubscribe();
