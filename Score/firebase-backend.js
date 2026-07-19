@@ -91,6 +91,14 @@ window.firebaseBackend = {
                         LeaderBoard: JSON.stringify(arr)
                     };
                     onMessageCallback(JSON.stringify(evt));
+                } else {
+                    let evt = {
+                        Type: "Score",
+                        Message: "BCast2Game",
+                        Event: "UpdateLeaderBoard",
+                        LeaderBoard: "[]"
+                    };
+                    onMessageCallback(JSON.stringify(evt));
                 }
             });
             
