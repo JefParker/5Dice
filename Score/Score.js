@@ -806,6 +806,7 @@ let initWebSocket = () => {
                     }
                     else if ('UpdateLeaderBoard' == objData.Event) {
                         let objLeaderBoard = JSON.parse(objData.LeaderBoard);
+                        g_objGame.LeaderList = [];
                         for (let x=0; x<objLeaderBoard.length; x++) {
                             let jsonPlayer = JSON.stringify(objLeaderBoard[x]);
                             if (document.getElementById("LeaderBoardEntries"))

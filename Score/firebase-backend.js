@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onDisconnect, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 
 const firebaseConfig = {
@@ -58,6 +58,10 @@ window.firebaseBackend = {
         }
 
         const eventsRef = ref(db, `rooms/${room}/events`);
+        const scoresRef = ref(db, `rooms/${room}/scores`);
+        
+        let unsubEvents = null;
+        let unsubScores = null;
         
         // Fetch server time offset to handle clock skew accurately
         const offsetRef = ref(db, ".info/serverTimeOffset");
@@ -67,14 +71,33 @@ window.firebaseBackend = {
             
             // Only listen to the last 20 events to save bandwidth and ignore deep history
             const q = query(eventsRef, limitToLast(20));
-            const unsubscribe = onChildAdded(q, (snapshot) => {
+            unsubEvents = onChildAdded(q, (snapshot) => {
                 const val = snapshot.val();
                 // Ignore events older than 10 seconds before we joined the room
                 if (val && (!val.timestamp || val.timestamp > serverStartTime - 10000)) {
                     onMessageCallback(val.jsonData);
                 }
             });
-            window.firebaseBackend.currentUnsubscribe = unsubscribe;
+            
+            unsubScores = onValue(scoresRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    const arr = Object.values(data);
+                    
+                    let evt = {
+                        Type: "Score",
+                        Message: "BCast2Game",
+                        Event: "UpdateLeaderBoard",
+                        LeaderBoard: JSON.stringify(arr)
+                    };
+                    onMessageCallback(JSON.stringify(evt));
+                }
+            });
+            
+            window.firebaseBackend.currentUnsubscribe = () => {
+                if (unsubEvents) unsubEvents();
+                if (unsubScores) unsubScores();
+            };
         });
     },
     
