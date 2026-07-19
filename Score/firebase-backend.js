@@ -9,7 +9,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
-signInAnonymously(auth).catch((error) => {
+const authPromise = signInAnonymously(auth).catch((error) => {
     console.error("Anonymous auth failed:", error);
 });
 
@@ -17,6 +17,7 @@ window.firebaseBackend = {
     isConnected: false,
     
     setScore: async (room, player_id, scoreJson) => {
+        await authPromise;
         await set(ref(db, `rooms/${room}/scores/${player_id}`), {
             room: room,
             player_id: player_id,
@@ -27,6 +28,7 @@ window.firebaseBackend = {
     },
     
     getRoomData: async (room) => {
+        await authPromise;
         const snapshot = await get(ref(db, `rooms/${room}/scores`));
         const arr = [];
         if (snapshot.exists()) {
@@ -39,15 +41,18 @@ window.firebaseBackend = {
     },
     
     clearRoom: async (room) => {
+        await authPromise;
         await remove(ref(db, `rooms/${room}/scores`));
     },
     
     clearTable: async () => {
+        await authPromise;
         await remove(ref(db, `rooms`));
     },
     currentUnsubscribe: null,
     
     cleanupOldRooms: async () => {
+        await authPromise;
         // 48 hours in milliseconds
         const cutoff = Date.now() - (48 * 60 * 60 * 1000);
         const roomsRef = ref(db, 'rooms');
@@ -88,7 +93,8 @@ window.firebaseBackend = {
         }
     },
 
-    initEvents: (room, onMessageCallback) => {
+    initEvents: async (room, onMessageCallback) => {
+        await authPromise;
         if (!room) return;
         window.firebaseBackend.isConnected = true;
         
@@ -150,6 +156,7 @@ window.firebaseBackend = {
     },
     
     sendEvent: async (room, jsonData) => {
+        await authPromise;
         if (!room) return;
         const eventsRef = ref(db, `rooms/${room}/events`);
         const newEventRef = push(eventsRef);
