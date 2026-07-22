@@ -600,8 +600,39 @@ window.sync5DiceState = function(incomingState) {
     }
     return count;
   };
-  
-  window.fiveDiceState = incomingState;
+
+  let totalCurrentScores = 0;
+  let totalIncomingScores = 0;
+  if (window.fiveDiceState && window.fiveDiceState.scores) {
+    window.gamePlayers.forEach(p => {
+      totalCurrentScores += getScoreCount(window.fiveDiceState, p);
+      totalIncomingScores += getScoreCount(incomingState, p);
+    });
+  }
+
+  // Determine if incoming state should update our local state
+  let shouldUpdateState = false;
+
+  if (!window.fiveDiceState) {
+    shouldUpdateState = true;
+  } else if (totalIncomingScores > totalCurrentScores) {
+    // New score recorded! Always accept
+    shouldUpdateState = true;
+  } else if (totalIncomingScores === totalCurrentScores) {
+    if (!window.myTurn) {
+      // Not my turn: accept opponent's state updates
+      shouldUpdateState = true;
+    } else {
+      // My turn: protect local active roll from being overwritten by stale initial Firebase snapshots
+      if (incomingState.rollsLeft <= window.fiveDiceState.rollsLeft && incomingState.rollsLeft < 3) {
+        shouldUpdateState = true;
+      }
+    }
+  }
+
+  if (shouldUpdateState) {
+    window.fiveDiceState = incomingState;
+  }
 
   // Recalculate turn order robustly
   const getCount = p => getScoreCount(window.fiveDiceState, p);
