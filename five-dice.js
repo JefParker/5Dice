@@ -19,7 +19,30 @@ function getPeerColor(pId) {
   if (typeof window.getOpponentColor === 'function') {
     return window.getOpponentColor();
   }
-  return '#333';
+function calculateUpperPar(scoresObj) {
+  if (!scoresObj) return { par: 0, text: ' (on par)' };
+  const upperBenchmarks = {
+    ones: 3,
+    twos: 6,
+    threes: 9,
+    fours: 12,
+    fives: 15,
+    sixes: 18
+  };
+  let par = 0;
+  let scoredCount = 0;
+  for (const cat in upperBenchmarks) {
+    const val = scoresObj[cat];
+    if (typeof val === 'number') {
+      par += (val - upperBenchmarks[cat]);
+      scoredCount++;
+    }
+  }
+  if (scoredCount === 0 || par === 0) {
+    return { par: 0, text: ' (on par)' };
+  }
+  const parText = par > 0 ? ` (+${par})` : ` (${par})`;
+  return { par, text: parText };
 }
 
 window.fiveDiceState = {
@@ -142,32 +165,6 @@ function update5DiceUI() {
     }
   });
   
-function calculateUpperPar(scoresObj) {
-  if (!scoresObj) return { par: 0, text: ' (on par)' };
-  const upperBenchmarks = {
-    ones: 3,
-    twos: 6,
-    threes: 9,
-    fours: 12,
-    fives: 15,
-    sixes: 18
-  };
-  let par = 0;
-  let scoredCount = 0;
-  for (const cat in upperBenchmarks) {
-    const val = scoresObj[cat];
-    if (typeof val === 'number') {
-      par += (val - upperBenchmarks[cat]);
-      scoredCount++;
-    }
-  }
-  if (scoredCount === 0 || par === 0) {
-    return { par: 0, text: ' (on par)' };
-  }
-  const parText = par > 0 ? ` (+${par})` : ` (${par})`;
-  return { par, text: parText };
-}
-
   document.getElementById('fd-upper-total').innerText = upperTotal;
   document.getElementById('fd-lower-total').innerText = lowerTotal;
   
