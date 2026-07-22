@@ -634,14 +634,8 @@ window.sendGameAction = async function(msgObj) {
 
   if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
     updates.fiveDiceState = window.fiveDiceState;
-    if (msgObj.type === '5DICE_SCORE' && !msgObj.category.includes('bonus')) {
-      // Rotate turn to next player in list
-      const currentIndex = gamePlayers.indexOf(myPeerId);
-      const nextIndex = (currentIndex + 1) % Math.max(1, gamePlayers.length);
-      const nextTurnPlayer = gamePlayers[nextIndex] || myPeerId;
-      updates.currentTurnPlayerId = nextTurnPlayer;
-      window.currentTurnPlayerId = nextTurnPlayer;
-      myTurn = (myPeerId === nextTurnPlayer);
+    if (window.currentTurnPlayerId) {
+      updates.currentTurnPlayerId = window.currentTurnPlayerId;
     }
   }
 

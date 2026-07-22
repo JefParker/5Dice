@@ -336,8 +336,6 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
         }
       }
       
-      broadcast5DiceScore(cat, score);
-
       window.fiveDiceState.rollsLeft = 3;
       window.fiveDiceState.held = [false, false, false, false, false];
       window.fiveDiceState.dice = [1, 1, 1, 1, 1];
@@ -349,9 +347,10 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
         if (window.sync5DiceState) {
           window.sync5DiceState(window.fiveDiceState);
         }
-        if (window.merge5DiceState) window.merge5DiceState(window.fiveDiceState);
         if (window.updateGameBackground) window.updateGameBackground();
       }
+
+      broadcast5DiceScore(cat, score);
     };
   });
 });
