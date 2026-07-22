@@ -233,6 +233,12 @@ window.getOpponentName = function() {
   return otherPlayer ? otherPlayer.name : 'Opponent';
 };
 
+window.getOpponentColor = function() {
+  if (!roomPlayerDetails || !Array.isArray(roomPlayerDetails)) return '#333';
+  const otherPlayer = roomPlayerDetails.find(p => p.peerId !== myPeerId);
+  return (otherPlayer && otherPlayer.color) ? otherPlayer.color : '#333';
+};
+
 btnChatSend.addEventListener('click', () => {
   const text = chatInput.value.trim();
   if (!text) return;

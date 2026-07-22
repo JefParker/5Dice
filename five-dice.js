@@ -1,7 +1,7 @@
 function getPeerName(pId) {
   if (pId === window.myPeerId) return window.myName;
   if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
-    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
+    const found = window.roomPlayerDetails.find(p => p.peerId === pId || p.uuid === pId);
     if (found && found.name) return found.name;
   }
   if (typeof window.getOpponentName === 'function') {
@@ -13,8 +13,11 @@ function getPeerName(pId) {
 function getPeerColor(pId) {
   if (pId === window.myPeerId) return window.myColor;
   if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
-    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
+    const found = window.roomPlayerDetails.find(p => p.peerId === pId || p.uuid === pId);
     if (found && found.color) return found.color;
+  }
+  if (typeof window.getOpponentColor === 'function') {
+    return window.getOpponentColor();
   }
   return '#333';
 }
