@@ -1,9 +1,13 @@
-const CACHE_NAME = '5dice-cache-v58';
+const CACHE_NAME = '5dice-cache-v59';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './five-dice.js',
+  './dice3d.js',
+  './firebase-game-backend.js',
+  './firebase-config.js',
   './manifest.json',
   './images/icon-192x192.png',
   './images/icon-512x512.png',
@@ -26,12 +30,18 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, networkResponse.clone());
-          return networkResponse;
-        });
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
       })
-      .catch(() => caches.match(event.request, { ignoreSearch: true }))
+      .catch(async () => {
+        const cached = await caches.match(event.request, { ignoreSearch: true });
+        return cached || Response.error();
+      })
   );
 });
 
