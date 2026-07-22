@@ -282,7 +282,10 @@ function renderScorecard() {
 document.querySelectorAll('.fd-die').forEach(die => {
   die.addEventListener('click', (e) => {
     if (!window.myTurn) return; // Only hold on your turn
-    const idx = parseInt(e.target.getAttribute('data-index'));
+    const dieEl = e.target.closest('.fd-die');
+    if (!dieEl) return;
+    const idx = parseInt(dieEl.getAttribute('data-index'));
+    if (isNaN(idx)) return;
     if (window.fiveDiceState.rollsLeft < 3) {
       window.fiveDiceState.held[idx] = !window.fiveDiceState.held[idx];
       update5DiceUI();
@@ -623,10 +626,9 @@ window.sync5DiceState = function(incomingState) {
       // Not my turn: accept opponent's state updates
       shouldUpdateState = true;
     } else {
-      // My turn: protect local active roll from being overwritten by stale initial Firebase snapshots
-      if (incomingState.rollsLeft <= window.fiveDiceState.rollsLeft && incomingState.rollsLeft < 3) {
-        shouldUpdateState = true;
-      }
+      // My turn: local player is authoritative for active turn (rolls, held dice).
+      // Do not allow Firebase state echoes to overwrite local held/dice state.
+      shouldUpdateState = false;
     }
   }
 
