@@ -748,15 +748,26 @@ function resetGame(firstTurn = null) {
 document.getElementById('btn-play-again').addEventListener('click', async () => {
   const nextFirstTurn = gamePlayers[Math.floor(Math.random() * gamePlayers.length)] || myPeerId;
   
-  if (window.firebaseGameBackend && currentRoomId) {
-    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
-  }
-
   const room = activeRooms[currentRoomId];
   if (room && room.gameType === '5 Dice') {
     if (window.reset5DiceGame) window.reset5DiceGame(nextFirstTurn);
   } else {
     resetGame(nextFirstTurn);
+  }
+
+  if (window.firebaseGameBackend && currentRoomId) {
+    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
+    
+    const updates = {
+      currentTurnPlayerId: nextFirstTurn,
+      lastUpdated: Date.now()
+    };
+    if (room && room.gameType === '5 Dice') {
+      updates.fiveDiceState = window.fiveDiceState;
+    } else {
+      updates.gameState = ['', '', '', '', '', '', '', '', ''];
+    }
+    await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
   }
 });
 

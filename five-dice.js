@@ -565,28 +565,41 @@ window.cleanup5DiceGame = function() {
 };
 
 window.reset5DiceGame = function(firstTurnId = null) {
+  const selectedFirstTurn = firstTurnId || window.gameHost;
+  window.currentFirstTurn = selectedFirstTurn;
+  window.currentTurnPlayerId = selectedFirstTurn;
+  window.myTurn = (window.myPeerId === selectedFirstTurn);
+
   window.fiveDiceState = {
     dice: [1, 1, 1, 1, 1],
     held: [false, false, false, false, false],
     rollsLeft: 3,
     turnsLeft: 13,
+    isGameOver: false,
     scores: {}
   };
-  window.gamePlayers.forEach(p => {
+
+  const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : [window.myPeerId];
+  players.forEach(p => {
     window.fiveDiceState.scores[p] = {
       'ones': null, 'twos': null, 'threes': null, 'fours': null, 'fives': null, 'sixes': null,
       'chance': null, 'sm-straight': null, 'lg-straight': null, 'three-kind': null, 'four-kind': null,
       'five-dice': null, 'full-house': null, 'bonus-5s': null
     };
   });
-  if (firstTurnId) {
-    window.currentFirstTurn = firstTurnId;
-    window.myTurn = (window.myPeerId === firstTurnId);
-  } else {
-    window.myTurn = window.currentFirstTurn ? (window.myPeerId === window.currentFirstTurn) : (window.myPeerId === window.gameHost);
+
+  const btnPlayAgain = document.getElementById('btn-play-again');
+  if (btnPlayAgain) btnPlayAgain.classList.add('hidden');
+  
+  const elStatus = document.getElementById('game-status');
+  if (elStatus) {
+    elStatus.innerText = window.myTurn ? 'Your turn!' : `${getPeerName(selectedFirstTurn)}'s turn`;
   }
-  document.getElementById('btn-play-again').classList.add('hidden');
+
   update5DiceUI();
+  if (typeof window.updateGameBackground === 'function') {
+    window.updateGameBackground();
+  }
 };
 
 window.sync5DiceState = function(incomingState) {
