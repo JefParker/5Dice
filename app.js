@@ -172,6 +172,8 @@ function updateDiagnostics() {
       gameDot.className = 'status-dot connecting';
       gameTxt.innerText = `GAME: CONNECTING...`;
     }
+  }
+}
 window.updateDiagnostics = updateDiagnostics;
 
 function startLobbyFirebase() {
