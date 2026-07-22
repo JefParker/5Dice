@@ -626,18 +626,24 @@ window.sync5DiceState = function(incomingState) {
     });
   }
 
+  const isIncomingComplete = incomingState.isGameOver || (window.gamePlayers.length > 0 && window.gamePlayers.every(p => getScoreCount(incomingState, p) >= 13));
+  const isLocalFresh = window.fiveDiceState && !window.fiveDiceState.isGameOver && totalCurrentScores === 0;
+
   // Determine if incoming state should update our local state
   let shouldUpdateState = false;
 
   if (!window.fiveDiceState) {
     shouldUpdateState = true;
+  } else if (isLocalFresh && isIncomingComplete) {
+    // Ignore stale completed game snapshots arriving right after a game reset!
+    shouldUpdateState = false;
   } else if (totalIncomingScores > totalCurrentScores) {
     // New score recorded! Always accept
     shouldUpdateState = true;
   } else if (totalIncomingScores === totalCurrentScores) {
     if (!window.myTurn) {
-      // Not my turn: accept opponent's state updates
-      shouldUpdateState = true;
+      // Not my turn: accept opponent's state updates (unless stale completed game)
+      shouldUpdateState = !isIncomingComplete;
     } else {
       // My turn: local player is authoritative for active turn (rolls, held dice).
       // Do not allow Firebase state echoes to overwrite local held/dice state.

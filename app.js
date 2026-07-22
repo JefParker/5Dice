@@ -756,8 +756,6 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
   }
 
   if (window.firebaseGameBackend && currentRoomId) {
-    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
-    
     const updates = {
       currentTurnPlayerId: nextFirstTurn,
       lastUpdated: Date.now()
@@ -768,6 +766,7 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
       updates.gameState = ['', '', '', '', '', '', '', '', ''];
     }
     await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
+    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
   }
 });
 
