@@ -19,6 +19,9 @@ function getPeerColor(pId) {
   if (typeof window.getOpponentColor === 'function') {
     return window.getOpponentColor();
   }
+  return '#333';
+}
+
 function calculateUpperPar(scoresObj) {
   if (!scoresObj) return { par: 0, text: ' (on par)' };
   const upperBenchmarks = {
