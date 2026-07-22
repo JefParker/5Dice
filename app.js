@@ -1,6 +1,3 @@
-
-
-
 // --- GLOBALS ---
 let myPeerId = localStorage.getItem('myPeerId');
 if (!myPeerId) {
@@ -8,11 +5,9 @@ if (!myPeerId) {
   localStorage.setItem('myPeerId', myPeerId);
 }
 window.myPeerId = myPeerId;
-const isDesktop = !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-const myWeight = (isDesktop ? 100 : 50) + Math.floor(Math.random() * 10);
 
 function generateDarkColor() {
-  const colors = ["#235880", "#3F1F74", "#6F4F1F", "#2E2B53", "#264C1C", "#533A51", "#220066", "MidnightBlue", "#4d004d", "RebeccaPurple", "Sienna", "#181B59", "#006652", "#006666", "#404040", "#404040"];
+  const colors = ["#235880", "#3F1F74", "#6F4F1F", "#2E2B53", "#264C1C", "#533A51", "#220066", "MidnightBlue", "#4d004d", "RebeccaPurple", "Sienna", "#181B59", "#006652", "#006666", "#404040"];
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
@@ -21,57 +16,47 @@ if (!myColor) {
   myColor = generateDarkColor();
   localStorage.setItem('playerColor', myColor);
 }
-let lobbyPeers = {}; // { [id]: { pc, dc, name } }
-window.lobbyPeers = lobbyPeers;
-let gamePeers = {};  // { [id]: { pc, dc } }
-let reconnectTimers = {}; // { [id]: timeoutId }
+
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+let myUuid = localStorage.getItem('timeline_user_id');
+if (!myUuid) {
+  myUuid = generateUUID();
+  localStorage.setItem('timeline_user_id', myUuid);
+}
 
 let myName = localStorage.getItem('playerName') || '';
 let currentRoomId = null; 
-let activeRooms = {}; // { roomId: { id, name, host } }
+let activeRooms = {}; // { roomId: { id, name, host, ... } }
 let isHost = false;
-let mqttClient = null;
 let recentChats = []; // { id, author, text, timestamp }
 
-// --- AUDIO GLOBALS ---
+// --- GAME STATE GLOBALS ---
+let gameState = ['', '', '', '', '', '', '', '', ''];
+let myTurn = false;
+let gamePlayers = [];
+let gameHost = null;
+let roomPlayerDetails = [];
+
+Object.defineProperty(window, 'myTurn', { get: () => myTurn, set: (v) => { myTurn = v; } });
+Object.defineProperty(window, 'gamePlayers', { get: () => gamePlayers, set: (v) => { gamePlayers = v; } });
+Object.defineProperty(window, 'gameHost', { get: () => gameHost, set: (v) => { gameHost = v; } });
+Object.defineProperty(window, 'myPeerId', { get: () => myPeerId });
+Object.defineProperty(window, 'myName', { get: () => myName });
+Object.defineProperty(window, 'myColor', { get: () => myColor });
+
+// Audio state stub
 let localAudioStream = null;
-let micEnabled = localStorage.getItem('micEnabled') === 'true';
-let speakerEnabled = localStorage.getItem('speakerEnabled') === 'true';
-let remoteAudioStates = {};
+let micEnabled = false;
+let speakerEnabled = false;
 
-function broadcastAudioState() {
-  const msgStr = JSON.stringify({
-    type: 'AUDIO_STATE',
-    peerId: myPeerId,
-    micEnabled: micEnabled,
-    speakerEnabled: speakerEnabled
-  });
-  for (const p in gamePeers) {
-    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-      gamePeers[p].dc.send(msgStr);
-    }
-  }
-}
-
-function updateAudioStateOutline() {
-  const anyMicOn = Object.values(remoteAudioStates).some(state => state.micEnabled);
-  const anySpeakerOn = Object.values(remoteAudioStates).some(state => state.speakerEnabled);
-  
-  const micBtn = document.getElementById('btn-toggle-mic');
-  const speakerBtn = document.getElementById('btn-toggle-speaker');
-  
-  if (micBtn) {
-    if (anyMicOn) micBtn.classList.add('outline-red');
-    else micBtn.classList.remove('outline-red');
-  }
-  if (speakerBtn) {
-    if (anySpeakerOn) speakerBtn.classList.add('outline-red');
-    else speakerBtn.classList.remove('outline-red');
-  }
-}
-
+// --- WAKE LOCK LOGIC ---
 let wakeLock = null;
-
 async function requestWakeLock() {
   if ('wakeLock' in navigator) {
     try {
@@ -94,13 +79,6 @@ document.addEventListener('visibilitychange', async () => {
     await requestWakeLock();
   }
 });
-
-const rtcConfig = { 
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-  ] 
-};
 
 // UI Elements
 const chatInput = document.getElementById('chat-input');
@@ -162,385 +140,57 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// --- TIER 1: LOBBY MESH ---
+// --- FIREBASE LOBBY & DIAGNOSTICS ---
 
-function startLobbyMesh() {
-  if (mqttClient) return;
+function updateDiagnostics() {
+  const isConnected = window.firebaseGameBackend && window.firebaseGameBackend.isConnected;
+  
+  const dot = document.getElementById('network-dot');
+  const txt = document.getElementById('status-text');
+  
+  if (dot && txt) {
+    if (isConnected) {
+      dot.className = 'status-dot connected';
+      txt.innerText = `LOBBY: ONLINE (FIREBASE)`;
+    } else {
+      dot.className = 'status-dot connecting';
+      txt.innerText = `LOBBY: CONNECTING...`;
+    }
+  }
 
-  mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+  const gameDot = document.getElementById('game-network-dot');
+  const gameTxt = document.getElementById('game-status-text');
+  const gamePlayerCount = document.getElementById('game-player-count');
 
-  mqttClient.on('connect', () => {
-    console.log('Connected to public MQTT signaling server');
-    mqttClient.subscribe('5dice/lobby/announce');
-    mqttClient.subscribe(`5dice/lobby/signal/${myPeerId}`);
+  if (gameDot && gameTxt && gamePlayerCount) {
+    const pCount = gamePlayers.length > 0 ? gamePlayers.length : 1;
+    gamePlayerCount.innerText = `Players: ${pCount}`;
+    if (isConnected) {
+      gameDot.className = 'status-dot connected';
+      gameTxt.innerText = `GAME: ONLINE (FIREBASE)`;
+    } else {
+      gameDot.className = 'status-dot connecting';
+      gameTxt.innerText = `GAME: CONNECTING...`;
+    }
+  }
+}
 
-    // Announce presence
-    mqttClient.publish('5dice/lobby/announce', JSON.stringify({ peerId: myPeerId }));
+function startLobbyFirebase() {
+  if (!window.firebaseGameBackend) return;
+
+  window.firebaseGameBackend.init((connected) => {
     updateDiagnostics();
-    retryGameConnections();
   });
 
-  mqttClient.on('message', async (topic, message) => {
-    try {
-      const payload = JSON.parse(message.toString());
-
-      if (topic === '5dice/lobby/announce') {
-        const p = payload.peerId;
-        if (p !== myPeerId) {
-          // Tell the new peer we exist so they can initiate if their ID > ours
-          mqttClient.publish(`5dice/lobby/signal/${p}`, JSON.stringify({ from: myPeerId, type: 'announce_reply' }));
-          
-          if (myPeerId > p) {
-            await initiateLobbyConnection(p, null);
-          }
-          if (gameHost !== null && typeof gamePlayers !== 'undefined' && gamePlayers.includes(p)) {
-            retryGameConnections();
-          }
-        }
-      } else if (topic === `5dice/lobby/signal/${myPeerId}`) {
-        await handleLobbySignal(payload);
-      }
-    } catch (err) {
-      console.error('MQTT message error:', err);
-    }
+  window.firebaseGameBackend.listenRooms((rooms) => {
+    activeRooms = rooms || {};
+    renderRooms();
+    updateDiagnostics();
   });
-}
 
-async function sendSignal(targetId, signalPayload) {
-  const route = lobbyPeers[targetId] ? lobbyPeers[targetId].routeVia : null;
-  
-  if (route && lobbyPeers[route] && lobbyPeers[route].dc && lobbyPeers[route].dc.readyState === 'open') {
-    // Relay over WebRTC Mesh
-    lobbyPeers[route].dc.send(JSON.stringify({
-      type: 'relay', to: targetId, from: myPeerId, signal: signalPayload
-    }));
-  } else if (mqttClient && mqttClient.connected) {
-    // MQTT WebSocket Fallback
-    mqttClient.publish(`5dice/lobby/signal/${targetId}`, JSON.stringify({ from: myPeerId, ...signalPayload }));
-  }
-}
-
-async function initiateLobbyConnection(targetId, routeVia = null) {
-  if (lobbyPeers[targetId]) {
-    // If it was initiated very recently, let it finish. Otherwise, we assume it's broken and recreate it.
-    if (Date.now() - lobbyPeers[targetId].lastInitiated < 5000) return;
-    if (lobbyPeers[targetId].pc) {
-      lobbyPeers[targetId].pc.onconnectionstatechange = null;
-      if (lobbyPeers[targetId].dc) lobbyPeers[targetId].dc.onclose = null;
-      lobbyPeers[targetId].pc.close();
-    }
-  }
-  
-  const pc = new RTCPeerConnection(rtcConfig);
-  const dc = pc.createDataChannel('lobby-channel');
-  
-  if (lobbyPeers[targetId]) {
-    lobbyPeers[targetId] = { ...lobbyPeers[targetId], pc, dc, iceQueue: [], routeVia, lastInitiated: Date.now() };
-  } else {
-    lobbyPeers[targetId] = { pc, dc, name: 'Unknown', iceQueue: [], routeVia, lastInitiated: Date.now() };
-  }
-  
-  setupLobbyPeer(targetId, pc, dc);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  
-  await sendSignal(targetId, { type: 'offer', sdp: offer });
-}
-
-function setupLobbyPeer(targetId, pc, dc) {
-  pc.onicecandidate = async (e) => {
-    if (e.candidate) {
-      await sendSignal(targetId, { type: 'ice', candidate: e.candidate });
-    }
-  };
-
-  if (dc) {
-    const onOpenHandler = () => {
-      console.log(`Lobby channel open with ${targetId}`);
-      const myRooms = Object.values(activeRooms).filter(r => r.host === myPeerId);
-      const shareableChats = recentChats.filter(c => c.author !== 'System');
-      dc.send(JSON.stringify({ type: 'handshake', name: myName, color: myColor, knownPeers: Object.keys(lobbyPeers), rooms: myRooms, chats: shareableChats }));
-      updateDiagnostics();
-    };
-
-    dc.onopen = onOpenHandler;
-    if (dc.readyState === 'open') {
-      onOpenHandler();
-    }
-
-    const MAX_MESSAGE_HISTORY = 100;
-    let messageHistory = [];
-
-    window.offlineMessageQueue = window.offlineMessageQueue || {};
-
-    window.sendOrQueueGameMessage = function(peerId, msg) {
-      let p = null;
-      if (typeof gamePeers !== 'undefined' && gamePeers[peerId]) {
-        p = gamePeers[peerId];
-      } else if (typeof lobbyPeers !== 'undefined' && lobbyPeers[peerId]) {
-        p = lobbyPeers[peerId];
-      }
-
-      if (p && p.dc && p.dc.readyState === 'open') {
-        try {
-          p.dc.send(JSON.stringify(msg));
-        } catch (e) {
-          if (!window.offlineMessageQueue[peerId]) window.offlineMessageQueue[peerId] = [];
-          window.offlineMessageQueue[peerId].push(msg);
-        }
-      } else {
-        if (!window.offlineMessageQueue[peerId]) window.offlineMessageQueue[peerId] = [];
-        window.offlineMessageQueue[peerId].push(msg);
-      }
-    };
-
-    window.flushOfflineMessages = function(peerId, dc) {
-      if (window.offlineMessageQueue && window.offlineMessageQueue[peerId] && dc && dc.readyState === 'open') {
-        while (window.offlineMessageQueue[peerId].length > 0) {
-          const msg = window.offlineMessageQueue[peerId].shift();
-          try {
-            dc.send(JSON.stringify(msg));
-          } catch (e) {
-            window.offlineMessageQueue[peerId].unshift(msg);
-            break;
-          }
-        }
-      }
-    };
-
-    const getPeerName = (id) => lobbyPeers[id] ? lobbyPeers[id].name : 'Unknown';
-
-    dc.onclose = () => {
-      if (lobbyPeers[targetId] && lobbyPeers[targetId].dc !== dc) return;
-      const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Unknown';
-      if (name !== 'Unknown') {
-        appendChatMessage('System', `${name} has left.`, null, null, '#555');
-      }
-      if (lobbyPeers[targetId]) {
-        lobbyPeers[targetId].pc = null;
-        lobbyPeers[targetId].dc = null;
-      }
-      updateDiagnostics();
-    };
-
-    dc.onmessage = async (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'relay') {
-        if (msg.to === myPeerId) {
-          handleLobbySignal({ from: msg.from, via: targetId, ...msg.signal });
-        } else if (lobbyPeers[msg.to] && lobbyPeers[msg.to].dc && lobbyPeers[msg.to].dc.readyState === 'open') {
-          lobbyPeers[msg.to].dc.send(JSON.stringify(msg)); // Forward to target
-        }
-      } else if (msg.type === 'handshake') {
-        lobbyPeers[targetId].name = msg.name;
-        if (msg.color) lobbyPeers[targetId].color = msg.color;
-        if (msg.knownPeers) {
-          for (const p of msg.knownPeers) {
-            if (p !== myPeerId && !lobbyPeers[p] && myPeerId > p) {
-              await initiateLobbyConnection(p, targetId);
-            }
-          }
-        }
-        if (msg.rooms) {
-          msg.rooms.forEach(r => activeRooms[r.id] = r);
-          renderRooms();
-        }
-        if (msg.chats) {
-          msg.chats.forEach(c => appendChatMessage(c.author, c.text, c.id, c.timestamp, c.color));
-        }
-        appendChatMessage('System', `${msg.name} connected.`, null, null, '#555');
-        
-        if (currentRoomId && typeof gamePlayers !== 'undefined' && gamePlayers.includes(targetId)) {
-          updateGameBackground();
-          checkGameMeshReady();
-        }
-      } else if (msg.type === 'ROOM_CREATED' || msg.type === 'ROOM_UPDATED') {
-        activeRooms[msg.room.id] = msg.room;
-        renderRooms();
-      } else if (msg.type === 'ROOM_CLOSED') {
-        delete activeRooms[msg.roomId];
-        renderRooms();
-      } else if (msg.type === 'PROFILE_UPDATE') {
-        if (lobbyPeers[msg.from]) {
-          lobbyPeers[msg.from] = { ...lobbyPeers[msg.from], name: msg.name, color: msg.color, uuid: msg.uuid };
-          renderRooms();
-          if (currentRoomId && gamePlayers.includes(msg.from)) {
-            updateGameBackground();
-          }
-        }
-      } else if (msg.type === 'JOIN_ROOM_REQUEST') {
-        const room = activeRooms[msg.roomId];
-        if (room && room.host === myPeerId) {
-          const isRejoin = room.status === 'in-progress' && room.players.includes(msg.guestUuid);
-          const isNew = room.status === 'open';
-          
-          if (!room.peerIds) room.peerIds = [myPeerId];
-          if (!room.peerIds.includes(msg.guest)) room.peerIds.push(msg.guest);
-          
-          if (isNew || isRejoin) {
-            if (isNew) {
-              room.players.push(msg.guestUuid);
-              if (room.players.length >= room.maxPlayers) {
-                room.status = 'in-progress';
-                broadcastToLobby({ type: 'ROOM_UPDATED', room });
-                
-                const gamePlayers = [...room.peerIds].sort();
-                const randomFirstPlayer = gamePlayers[Math.floor(Math.random() * gamePlayers.length)];
-                
-                for (const p of room.peerIds) {
-                  if (p !== myPeerId && lobbyPeers[p] && lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open') {
-                    lobbyPeers[p].dc.send(JSON.stringify({ 
-                      type: 'START_GAME_SIGNAL', 
-                      players: gamePlayers,
-                      resumeState: null,
-                      firstTurn: randomFirstPlayer
-                    }));
-                  }
-                }
-                handleGameStartSignal(gamePlayers, null, randomFirstPlayer);
-              } else {
-                broadcastToLobby({ type: 'ROOM_UPDATED', room });
-              }
-            } else {
-              // Always pass resume state for any player joining an in-progress game
-              if (!isRejoin && room.players.length < room.maxPlayers) {
-                room.players.push(msg.guestUuid);
-                broadcastToLobby({ type: 'ROOM_UPDATED', room });
-              }
-              const gamePlayers = [...room.peerIds].sort();
-              let resumeState = null;
-              if (room.gameType === '5 Dice') {
-                resumeState = { fiveDiceState: window.fiveDiceState };
-              } else {
-                resumeState = { board: gameState, myTurn: !myTurn };
-              }
-              
-              for (const p of room.peerIds) {
-                if (p !== myPeerId && lobbyPeers[p] && lobbyPeers[p].dc && lobbyPeers[p].dc.readyState === 'open') {
-                  lobbyPeers[p].dc.send(JSON.stringify({ 
-                    type: 'START_GAME_SIGNAL', 
-                    players: gamePlayers,
-                    resumeState: resumeState,
-                    firstTurn: window.currentFirstTurn || myPeerId
-                  }));
-                }
-              }
-              handleGameStartSignal(gamePlayers, resumeState, window.currentFirstTurn || myPeerId);
-            }
-          }
-        }
-      } else if (msg.type === 'chat') {
-        appendChatMessage(msg.name, msg.text, msg.id, msg.timestamp, msg.color);
-      } else if (msg.type === 'START_GAME_SIGNAL') {
-        handleGameStartSignal(msg.players, msg.resumeState, msg.firstTurn);
-      } else if (msg.type === 'game-offer' || msg.type === 'game-answer' || msg.type === 'game-ice') {
-        handleGameSignal(msg);
-      }
-      updateDiagnostics();
-    };
-  }
-  
-  pc.onconnectionstatechange = () => {
-    if (lobbyPeers[targetId] && lobbyPeers[targetId].pc !== pc) return;
-    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-      handleConnectionFailure(targetId);
-    }
-  };
-}
-
-async function handleLobbySignal(sig) {
-  const { from, type, via } = sig;
-
-  if (type === 'announce_reply') {
-    if (myPeerId > from) {
-      await initiateLobbyConnection(from, null);
-    }
-    if (gameHost !== null && gamePlayers.includes(from)) {
-      retryGameConnections();
-    }
-    return;
-  }
-
-  if (type === 'game-offer' || type === 'game-answer' || type === 'game-ice') {
-    handleGameSignal(sig);
-    return;
-  }
-
-  if (!lobbyPeers[from] || !lobbyPeers[from].pc) {
-    const pc = new RTCPeerConnection(rtcConfig);
-    if (!lobbyPeers[from]) {
-      lobbyPeers[from] = { pc, dc: null, name: 'Unknown', iceQueue: [], routeVia: via || null, lastInitiated: Date.now() };
-    } else {
-      lobbyPeers[from] = { ...lobbyPeers[from], pc, dc: null, iceQueue: [], routeVia: via || null, lastInitiated: Date.now() };
-    }
-    
-    pc.ondatachannel = (e) => {
-      if (e.channel.label === 'lobby-channel') {
-        lobbyPeers[from].dc = e.channel;
-        setupLobbyPeer(from, pc, e.channel);
-      }
-    };
-    setupLobbyPeer(from, pc, null);
-  }
-
-  if (type === 'offer') {
-    if (lobbyPeers[from] && lobbyPeers[from].pc) {
-       const isOld = Date.now() - lobbyPeers[from].lastInitiated > 5000;
-       const hasGlare = lobbyPeers[from].pc.signalingState !== 'stable';
-       
-       // If it's an old connection, or if we have glare (both sides initiated simultaneously)
-       if (isOld || hasGlare) {
-          if (hasGlare && !isOld && myPeerId > from) {
-             // We are the designated initiator and this is a recent glare. Ignore their offer.
-             return;
-          }
-          // Yield to their offer by closing our PC and recreating it
-          lobbyPeers[from].pc.onconnectionstatechange = null;
-          if (lobbyPeers[from].dc) lobbyPeers[from].dc.onclose = null;
-          lobbyPeers[from].pc.close();
-          const newPc = new RTCPeerConnection(rtcConfig);
-          lobbyPeers[from] = { ...lobbyPeers[from], pc: newPc, dc: null, iceQueue: [], lastInitiated: Date.now() };
-          
-          newPc.ondatachannel = (e) => {
-            if (e.channel.label === 'lobby-channel') {
-              lobbyPeers[from].dc = e.channel;
-              setupLobbyPeer(from, newPc, e.channel);
-            }
-          };
-          setupLobbyPeer(from, newPc, null);
-       }
-    }
-  }
-
-  const pc = lobbyPeers[from].pc;
-  
-  if (type === 'offer') {
-    await pc.setRemoteDescription(sig.sdp);
-    if (lobbyPeers[from].iceQueue) {
-      for (const cand of lobbyPeers[from].iceQueue) {
-        await pc.addIceCandidate(cand).catch(e => console.error(e));
-      }
-      lobbyPeers[from].iceQueue = [];
-    }
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await sendSignal(from, { type: 'answer', sdp: answer });
-  } else if (type === 'answer') {
-    await pc.setRemoteDescription(sig.sdp);
-    if (lobbyPeers[from].iceQueue) {
-      for (const cand of lobbyPeers[from].iceQueue) {
-        await pc.addIceCandidate(cand).catch(e => console.error(e));
-      }
-      lobbyPeers[from].iceQueue = [];
-    }
-  } else if (type === 'ice') {
-    if (pc.remoteDescription) {
-      await pc.addIceCandidate(sig.candidate).catch(e => console.error(e));
-    } else {
-      lobbyPeers[from].iceQueue.push(sig.candidate);
-    }
-  }
+  window.firebaseGameBackend.listenLobbyChat((msg) => {
+    appendChatMessage(msg.author, msg.text, msg.id, msg.timestamp, msg.color);
+  });
 }
 
 // --- GLOBAL CHAT ---
@@ -565,7 +215,7 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
 
   const div = document.createElement('div');
   div.className = 'chat-msg';
-  div.style.backgroundColor = color;
+  div.style.backgroundColor = color || '#333';
   div.innerHTML = `<strong>${author}:</strong> ${text}`;
   chatHistory.appendChild(div);
   chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -573,18 +223,9 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
 }
 
 window.getOpponentName = function() {
-  const otherPeerId = gamePlayers.find(p => p !== myPeerId);
-  return (otherPeerId && lobbyPeers[otherPeerId]) ? lobbyPeers[otherPeerId].name : 'Opponent';
+  const otherPlayer = roomPlayerDetails.find(p => p.peerId !== myPeerId);
+  return otherPlayer ? otherPlayer.name : 'Opponent';
 };
-
-function broadcastToLobby(msgObj) {
-  const payload = JSON.stringify(msgObj);
-  for (const peerId in lobbyPeers) {
-    if (lobbyPeers[peerId].dc && lobbyPeers[peerId].dc.readyState === 'open') {
-      lobbyPeers[peerId].dc.send(payload);
-    }
-  }
-}
 
 btnChatSend.addEventListener('click', () => {
   const text = chatInput.value.trim();
@@ -593,8 +234,11 @@ btnChatSend.addEventListener('click', () => {
   
   const chatId = Math.random().toString(36).substring(2);
   const timestamp = Date.now();
-  appendChatMessage(myName, text, chatId, timestamp, myColor);
-  broadcastToLobby({ type: 'chat', name: myName, text, id: chatId, timestamp, color: myColor });
+  const msgObj = { id: chatId, author: myName, text, timestamp, color: myColor };
+
+  if (window.firebaseGameBackend) {
+    window.firebaseGameBackend.sendLobbyChat(msgObj);
+  }
 });
 
 chatInput.addEventListener('keydown', (e) => {
@@ -603,6 +247,7 @@ chatInput.addEventListener('keydown', (e) => {
     btnChatSend.click();
   }
 });
+
 document.getElementById('chat-sidebar').addEventListener('click', () => {
   if (window.innerWidth <= 768) {
     document.getElementById('chat-sidebar').classList.add('mobile-expanded');
@@ -618,7 +263,7 @@ document.querySelector('.main-content').addEventListener('click', () => {
   }
 });
 
-// --- ROOM LOGIC ---
+// --- SETTINGS UI ---
 
 document.getElementById('btn-settings').addEventListener('click', () => {
   document.getElementById('global-player-name').value = myName;
@@ -651,30 +296,13 @@ document.getElementById('global-player-name').addEventListener('input', (e) => {
   }
 });
 
-function broadcastProfileUpdate() {
-  const profileMsg = { type: 'PROFILE_UPDATE', from: myPeerId, name: myName, color: myColor, uuid: myUuid };
-  if (mqttClient && mqttClient.connected) {
-    mqttClient.publish('5dice/lobby/announce', JSON.stringify({ peerId: myPeerId, name: myName, color: myColor, uuid: myUuid }));
-  }
-  Object.values(lobbyPeers).forEach(p => {
-    if (p.dc && p.dc.readyState === 'open') {
-      p.dc.send(JSON.stringify(profileMsg));
-    }
-  });
-}
-
 document.getElementById('btn-save-settings').addEventListener('click', () => {
   const newName = document.getElementById('global-player-name').value.trim();
   if (newName) {
     myName = newName;
     localStorage.setItem('playerName', myName);
     showScreen('screen-lobby');
-    if (!mqttClient) {
-      startLobbyMesh();
-      startRoomPolling();
-    } else {
-      broadcastProfileUpdate();
-    }
+    startLobbyFirebase();
   } else {
     alert("Please enter a display name to continue.");
   }
@@ -687,6 +315,8 @@ if (colorPickerEl) {
     localStorage.setItem('playerColor', myColor);
   });
 }
+
+// --- ROOM CREATION & LOBBY RENDER ---
 
 document.getElementById('btn-create-new').addEventListener('click', () => {
   showScreen('screen-setup');
@@ -733,19 +363,151 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   showLoading('Creating Room...');
   
   const roomId = Math.random().toString(36).substr(2, 9);
-  const room = { id: roomId, name: roomName, gameType: gameType, host: myPeerId, status: 'open', players: [myUuid], maxPlayers: maxPlayers };
-  activeRooms[roomId] = room;
-  isHost = true;
-  currentRoomId = roomId;
-  document.getElementById('game-room-name').innerText = `🎲 ${roomName} - ${gameType} 🎲`;
+  const playerObj = { peerId: myPeerId, uuid: myUuid, name: myName, color: myColor };
   
-  broadcastToLobby({ type: 'ROOM_CREATED', room });
+  const room = {
+    id: roomId,
+    name: roomName,
+    gameType: gameType,
+    host: myPeerId,
+    hostUuid: myUuid,
+    hostName: myName,
+    hostColor: myColor,
+    status: 'open',
+    players: [playerObj],
+    maxPlayers: maxPlayers,
+    lastActive: Date.now()
+  };
+
+  const initialScores = {};
+  initialScores[myPeerId] = {
+    ones: null, twos: null, threes: null, fours: null, fives: null, sixes: null,
+    chance: null, 'three-kind': null, 'four-kind': null, 'full-house': null,
+    'sm-straight': null, 'lg-straight': null, 'five-dice': null, 'bonus-5s': null
+  };
+
+  const initialGameData = {
+    roomId: roomId,
+    gameType: gameType,
+    host: myPeerId,
+    status: 'open',
+    players: [playerObj],
+    currentTurnPlayerId: myPeerId,
+    gameState: ['', '', '', '', '', '', '', '', ''],
+    fiveDiceState: {
+      dice: [1, 1, 1, 1, 1],
+      held: [false, false, false, false, false],
+      rollsLeft: 3,
+      scores: initialScores,
+      turnsLeft: 13,
+      isGameOver: false
+    }
+  };
+
+  currentRoomId = roomId;
+  isHost = true;
+
+  await window.firebaseGameBackend.createRoom(room);
+  await window.firebaseGameBackend.initGameSession(roomId, initialGameData);
+
+  document.getElementById('game-room-name').innerText = `🎲 ${roomName} - ${gameType} 🎲`;
   
   setupGameUI(gameType);
   showScreen('screen-game');
-  document.getElementById('game-status').innerText = 'Waiting for opponent to join...';
+  document.getElementById('game-status').innerText = 'Waiting for players to join...';
+  
+  startListeningToGameSession(roomId);
   hideLoading();
 });
+
+function renderRooms() {
+  const list = document.getElementById('room-list');
+  const rooms = Object.values(activeRooms);
+  list.innerHTML = '';
+  
+  let validRoomCount = 0;
+
+  rooms.forEach(r => {
+    if (!r || !r.id) return;
+    const playerList = r.players || [];
+    const isPlayer = playerList.some(p => p.uuid === myUuid || p.peerId === myPeerId);
+
+    if (r.status === 'in-progress' && !isPlayer) {
+      return; // Hide in-progress games if not a player
+    }
+    
+    validRoomCount++;
+    const isReturning = r.status === 'in-progress' && isPlayer;
+    
+    const div = document.createElement('div');
+    div.className = 'room-card';
+    
+    const hostColor = r.hostColor || '#28a745';
+    div.style.backgroundColor = hostColor;
+
+    const displayGameType = r.gameType || 'Tic-Tac-Toe';
+    let seatText = '';
+    let isFull = false;
+    if (r.maxPlayers && r.status === 'open') {
+      const currentCount = playerList.length;
+      const emptySeats = Math.max(0, r.maxPlayers - currentCount);
+      isFull = emptySeats === 0;
+      seatText = `<p style="font-size: 0.85rem; margin-top: 4px; font-weight: bold; color: ${isFull ? '#ff4444' : '#44ff44'};">` + 
+                 (isFull ? 'Game Full' : `${emptySeats} Seat${emptySeats === 1 ? '' : 's'} Remaining`) + 
+                 `</p>`;
+    }
+    
+    div.innerHTML = `
+      <h3>${r.name} - ${displayGameType}</h3>
+      <p>Host: ${r.hostName || 'Host'}</p>
+      ${seatText}
+      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isFull && !isReturning ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
+    `;
+    list.appendChild(div);
+  });
+  
+  document.getElementById('game-count').innerText = `Games Found: ${validRoomCount}`;
+}
+
+window.joinRoom = async function(roomId) {
+  const room = activeRooms[roomId];
+  if (!room) return alert('Room no longer exists.');
+  
+  const displayGameType = room.gameType || 'Tic-Tac-Toe';
+  document.getElementById('game-room-name').innerText = `🎲 ${room.name} - ${displayGameType} 🎲`;
+  
+  showLoading('Joining Room...');
+  currentRoomId = roomId;
+  isHost = (room.host === myPeerId);
+
+  let players = room.players || [];
+  const existingPlayerIndex = players.findIndex(p => p.uuid === myUuid || p.peerId === myPeerId);
+  
+  if (existingPlayerIndex < 0) {
+    players.push({ peerId: myPeerId, uuid: myUuid, name: myName, color: myColor });
+  } else {
+    players[existingPlayerIndex] = { peerId: myPeerId, uuid: myUuid, name: myName, color: myColor };
+  }
+
+  const isFullNow = players.length >= (room.maxPlayers || 2);
+  const updatedStatus = isFullNow ? 'in-progress' : room.status;
+
+  await window.firebaseGameBackend.updateRoom(roomId, {
+    players: players,
+    status: updatedStatus
+  });
+
+  await window.firebaseGameBackend.updateGameState(roomId, {
+    players: players,
+    status: updatedStatus
+  });
+
+  setupGameUI(displayGameType, updatedStatus === 'in-progress');
+  showScreen('screen-game');
+  
+  startListeningToGameSession(roomId);
+  hideLoading();
+};
 
 function setupGameUI(gameType, isRejoin = false) {
   const tttBoard = document.getElementById('tic-tac-toe-board');
@@ -769,560 +531,120 @@ function setupGameUI(gameType, isRejoin = false) {
   }
 }
 
-window.joinRoom = function(roomId) {
-  const room = activeRooms[roomId];
-  if (!room) return alert('Room no longer exists.');
-  
-  const displayGameType = room.gameType || 'Tic-Tac-Toe';
-  document.getElementById('game-room-name').innerText = `🎲 ${room.name} - ${displayGameType} 🎲`;
-  
-  const isReturning = room.status === 'in-progress';
-  
-  if (room.host === myPeerId) {
-    currentRoomId = roomId;
-    setupGameUI(displayGameType, isReturning);
-    updateGameBackground();
-    showScreen('screen-game');
-    return;
-  }
-  
-  showLoading('Joining Room...');
-  const sendJoin = () => {
-    lobbyPeers[room.host].dc.send(JSON.stringify({ type: 'JOIN_ROOM_REQUEST', roomId, guest: myPeerId, guestUuid: myUuid }));
-    currentRoomId = roomId;
-    isHost = false;
-    setupGameUI(displayGameType, isReturning);
-    showScreen('screen-game');
-    document.getElementById('game-status').innerText = 'Joined! Waiting for host to start game mesh...';
-    hideLoading();
-  };
+// --- GAME SESSION FIREBASE SYNC & ACTIONS ---
 
-  if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
-    sendJoin();
+function startListeningToGameSession(roomId) {
+  if (!window.firebaseGameBackend) return;
+
+  window.firebaseGameBackend.listenGameState(roomId, (gameData) => {
+    if (!gameData) return;
+    handleGameStateUpdate(gameData);
+  });
+
+  window.firebaseGameBackend.listenGameEvents(roomId, (eventObj) => {
+    if (!eventObj) return;
+    handleGameEvent(eventObj);
+  });
+}
+
+function handleGameStateUpdate(gameData) {
+  roomPlayerDetails = gameData.players || [];
+  gamePlayers = roomPlayerDetails.map(p => p.peerId);
+  gameHost = gameData.host || (gamePlayers.length > 0 ? gamePlayers[0] : null);
+
+  const turnPlayerId = gameData.currentTurnPlayerId || gameHost;
+  window.currentTurnPlayerId = turnPlayerId;
+  myTurn = (myPeerId === turnPlayerId);
+
+  const room = activeRooms[currentRoomId] || gameData;
+  const is5Dice = (room && room.gameType === '5 Dice');
+
+  if (is5Dice) {
+    if (gameData.fiveDiceState) {
+      // Ensure all players are initialized in scores structure
+      const scores = gameData.fiveDiceState.scores || {};
+      for (const p of gamePlayers) {
+        if (!scores[p]) {
+          scores[p] = {
+            ones: null, twos: null, threes: null, fours: null, fives: null, sixes: null,
+            chance: null, 'three-kind': null, 'four-kind': null, 'full-house': null,
+            'sm-straight': null, 'lg-straight': null, 'five-dice': null, 'bonus-5s': null
+          };
+        }
+      }
+      gameData.fiveDiceState.scores = scores;
+
+      if (window.sync5DiceState) {
+        window.sync5DiceState(gameData.fiveDiceState);
+      }
+    }
+    document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
   } else {
-    initiateLobbyConnection(room.host, null);
-    let attempts = 0;
-    const interval = setInterval(() => {
-      if (lobbyPeers[room.host] && lobbyPeers[room.host].dc && lobbyPeers[room.host].dc.readyState === 'open') {
-        clearInterval(interval);
-        sendJoin();
-      } else if (++attempts > 20) { // 5 seconds timeout
-        clearInterval(interval);
-        hideLoading();
-        alert('Failed to connect to the host. They might be offline.');
-      }
-    }, 250);
-  }
-};
-
-function renderRooms() {
-  const list = document.getElementById('room-list');
-  const rooms = Object.values(activeRooms);
-  list.innerHTML = '';
-  
-  let validRoomCount = 0;
-
-  rooms.forEach(r => {
-    const isZombie = (r.host !== myPeerId && !lobbyPeers[r.host]);
-    
-    if (isZombie) {
-      if (!r.zombieSince) {
-        r.zombieSince = Date.now();
-        setTimeout(() => {
-          if (activeRooms[r.id] && !lobbyPeers[r.host]) {
-             delete activeRooms[r.id];
-             renderRooms();
-          }
-        }, 1000);
-      }
-      if (Date.now() - r.zombieSince >= 1000) {
-        delete activeRooms[r.id];
-        return; // Hide
-      }
-    } else {
-      if (r.zombieSince) delete r.zombieSince;
-    }
-
-    if (r.status === 'in-progress' && !(r.players && r.players.includes(myUuid))) {
-      return; // Hide in-progress games if not a player
-    }
-    
-    validRoomCount++;
-    const isReturning = r.status === 'in-progress';
-    
-    const div = document.createElement('div');
-    div.className = 'room-card';
-    
-    const hostColor = (r.host === myPeerId) ? myColor : ((lobbyPeers[r.host] && lobbyPeers[r.host].color) ? lobbyPeers[r.host].color : '');
-    if (hostColor && !isZombie) {
-      div.style.backgroundColor = hostColor;
-    } else if (isZombie) {
-      div.style.backgroundColor = '#555555';
-      div.style.opacity = '0.5';
-      div.style.filter = 'grayscale(100%)';
-    }
-
-    const displayGameType = r.gameType || 'Tic-Tac-Toe';
-    let seatText = '';
-    let isFull = false;
-    if (r.maxPlayers && r.players && r.status === 'open') {
-      const emptySeats = Math.max(0, r.maxPlayers - r.players.length);
-      isFull = emptySeats === 0;
-      seatText = `<p style="font-size: 0.85rem; margin-top: 4px; font-weight: bold; color: ${isFull ? '#ff4444' : '#44ff44'};">` + 
-                 (isFull ? 'Game Full' : `${emptySeats} Seat${emptySeats === 1 ? '' : 's'} Remaining`) + 
-                 `</p>`;
-    }
-    
-    div.innerHTML = `
-      <h3>${r.name} - ${displayGameType}</h3>
-      <p>Host: ${lobbyPeers[r.host] ? lobbyPeers[r.host].name : (isZombie ? 'Disconnected' : r.host)}</p>
-      ${seatText}
-      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isZombie || (isFull && !isReturning) ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
-    `;
-    list.appendChild(div);
-  });
-  
-  document.getElementById('game-count').innerText = `Games Found: ${validRoomCount}`;
-}
-
-function startRoomPolling() {
-  renderRooms();
-}
-
-// --- TIER 2: GAME MESH (ZERO-SERVER) ---
-let gameState = ['', '', '', '', '', '', '', '', ''];
-
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-let myUuid = localStorage.getItem('timeline_user_id');
-if (!myUuid) {
-  myUuid = generateUUID();
-  localStorage.setItem('timeline_user_id', myUuid);
-}
-
-let myTurn = false;
-Object.defineProperty(window, 'myTurn', { get: () => myTurn, set: (v) => { myTurn = v; } });
-let gamePlayers = [];
-Object.defineProperty(window, 'gamePlayers', { get: () => gamePlayers, set: (v) => { gamePlayers = v; } });
-let gameHost = null;
-Object.defineProperty(window, 'gameHost', { get: () => gameHost, set: (v) => { gameHost = v; } });
-Object.defineProperty(window, 'myPeerId', { get: () => myPeerId });
-Object.defineProperty(window, 'myName', { get: () => myName });
-Object.defineProperty(window, 'myColor', { get: () => myColor });
-Object.defineProperty(window, 'gamePeers', { get: () => gamePeers, set: (v) => { gamePeers = v; } });
-
-async function handleGameStartSignal(players, resumeState = null, firstTurn = null) {
-  gamePlayers = players;
-  gameHost = gamePlayers[0]; // Alphabetical sort means [0] is consistent host
-  for (const p in gamePeers) {
-    if (gamePeers[p].pc) gamePeers[p].pc.close();
-  }
-  gamePeers = {};
-  
-  if (resumeState) {
-    if (resumeState.fiveDiceState) {
-      if (window.sync5DiceState) window.sync5DiceState(resumeState.fiveDiceState);
-      updateGameBackground();
-    } else if (resumeState.board) {
-      gameState = resumeState.board;
-      myTurn = resumeState.myTurn;
+    if (gameData.gameState) {
+      gameState = gameData.gameState;
       updateBoard();
       const isOver = checkWin();
-      if (isOver) {
+      if (!isOver) {
+        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+        document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+      } else {
         document.getElementById('btn-play-again').classList.remove('hidden');
       }
     }
-    const otherPeerId = gamePlayers.find(p => p !== myPeerId);
-    if (otherPeerId) {
-      const otherName = lobbyPeers[otherPeerId] ? lobbyPeers[otherPeerId].name : 'A player';
-      const otherColor = lobbyPeers[otherPeerId] ? lobbyPeers[otherPeerId].color : '#333';
-      showToast(`${otherName} is here`, otherColor);
-    }
-  } else {
-    gameState = ['', '', '', '', '', '', '', '', ''];
-    window.currentFirstTurn = firstTurn || gameHost;
-    if (firstTurn) {
-      myTurn = (myPeerId === firstTurn);
-    } else {
-      myTurn = (myPeerId === gameHost);
-    }
-    
-    if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
-      if (window.reset5DiceGame) window.reset5DiceGame(firstTurn);
-    } else {
-      updateBoard();
-    }
   }
-  document.getElementById('game-status').innerText = `Game Mesh: Syncing...`;
 
-  for (const p of gamePlayers) {
-    if (p !== myPeerId) {
-      if (myPeerId > p) {
-        await initiateGameConnection(p);
-      }
-    }
-  }
-  
-  if (window.gameMeshRetryInterval) clearInterval(window.gameMeshRetryInterval);
-  window.gameMeshRetryInterval = setInterval(() => {
-    if (gamePlayers.length > 1) {
-      const readyCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
-      if (readyCount < gamePlayers.length - 1) {
-        retryGameConnections();
-      }
-      for (const p of gamePlayers) {
-        if (p !== myPeerId) {
-          const lPeer = lobbyPeers[p];
-          const lNotReady = !lPeer || !lPeer.dc || lPeer.dc.readyState !== 'open';
-          if (lNotReady) {
-            const isConnecting = lPeer && lPeer.pc && (lPeer.pc.connectionState === 'connecting' || lPeer.pc.connectionState === 'new');
-            const isStuck = lPeer && lPeer.lastInitiated && (Date.now() - lPeer.lastInitiated > 6000);
-            if ((!isConnecting || isStuck) && myPeerId > p) {
-              // initiateLobbyConnection will safely close the old pc and preserve name/color
-              initiateLobbyConnection(p, null);
-            }
-          }
-        }
-      }
-    }
-  }, 3000);
-  
+  updateGameBackground();
   updateDiagnostics();
 }
 
-async function initiateGameConnection(targetId) {
-  const pc = new RTCPeerConnection(rtcConfig);
-  const dc = pc.createDataChannel('game-channel');
-  if (!gamePeers[targetId]) gamePeers[targetId] = {};
-  gamePeers[targetId].pc = pc;
-  gamePeers[targetId].dc = dc;
-  gamePeers[targetId].lastInitiated = Date.now();
-  if (!gamePeers[targetId].iceQueue) gamePeers[targetId].iceQueue = [];
-  setupGamePeer(targetId, pc, dc);
+function handleGameEvent(evt) {
+  if (evt.sender === myPeerId) return; // Skip echo of our own events
 
-  if (localAudioStream && micEnabled) {
-    localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
-  }
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  
-  sendSignal(targetId, { type: 'game-offer', sdp: offer });
-}
-
-function handleConnectionFailure(targetId) {
-  if (!gamePeers[targetId]) return;
-  
-  if (reconnectTimers[targetId]) return;
-  
-  document.getElementById('reconnecting-overlay').classList.remove('hidden');
-  
-  reconnectTimers[targetId] = setTimeout(() => {
-    document.getElementById('reconnecting-overlay').classList.add('hidden');
-    delete reconnectTimers[targetId];
-    handlePeerDisconnect(targetId);
-  }, 30000);
-  
-  if (gamePeers[targetId].pc) gamePeers[targetId].pc.close();
-  
-  if (myPeerId < targetId) {
-    setTimeout(() => {
-      initiateGameConnection(targetId);
-    }, 1000);
-  }
-}
-
-function retryGameConnections() {
-  if (gameHost !== null) {
-    for (const targetId of gamePlayers) {
-      if (targetId !== myPeerId) {
-        const peer = gamePeers[targetId];
-        const isNotReady = !peer || !peer.dc || peer.dc.readyState !== 'open';
-        
-        if (isNotReady) {
-          const isConnecting = peer && peer.pc && (peer.pc.connectionState === 'connecting' || peer.pc.connectionState === 'new');
-          const isStuck = peer && peer.lastInitiated && (Date.now() - peer.lastInitiated > 6000);
-          
-          if ((!isConnecting || isStuck) && myPeerId < targetId) {
-            initiateGameConnection(targetId);
-          }
-        }
-      }
-    }
-  }
-}
-
-function handlePeerDisconnect(targetId) {
-  if (!gamePeers[targetId]) return;
-  const name = lobbyPeers[targetId] ? lobbyPeers[targetId].name : 'Opponent';
-  const color = lobbyPeers[targetId] ? lobbyPeers[targetId].color : null;
-  showToast(`${name} has left`, color);
-
-  if (gamePeers[targetId].pc) gamePeers[targetId].pc.close();
-  delete gamePeers[targetId];
-  delete remoteAudioStates[targetId];
-  updateAudioStateOutline();
-
-  if (currentRoomId && activeRooms[currentRoomId] && activeRooms[currentRoomId].host === targetId) {
-    const remainingPlayers = [...gamePlayers].sort();
-    if (remainingPlayers.length > 0 && remainingPlayers[0] === myPeerId) {
-       isHost = true;
-       activeRooms[currentRoomId].host = myPeerId;
-       broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
-       showToast(`You are now hosting`);
-       
-       for (const p in gamePeers) {
-         if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-           gamePeers[p].dc.send(JSON.stringify({ type: 'HOST_HANDOFF', newHostId: myPeerId }));
-         }
-       }
-    }
-  }
-  
-  checkGameMeshReady();
-}
-
-function setupGamePeer(targetId, pc, dc) {
-  pc.ontrack = (event) => {
-    const remoteAudio = document.getElementById('remote-audio');
-    if (remoteAudio && remoteAudio.srcObject !== event.streams[0]) {
-      remoteAudio.srcObject = event.streams[0];
-    }
-  };
-
-  pc.onconnectionstatechange = () => {
-    if (gamePeers[targetId] && gamePeers[targetId].pc !== pc) return;
-    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-      handleConnectionFailure(targetId);
-    }
-  };
-
-  pc.onicecandidate = (e) => {
-    if (e.candidate) {
-      sendSignal(targetId, { type: 'game-ice', candidate: e.candidate });
-    }
-  };
-
-  if (dc) {
-    let pingInterval;
-    let timeoutTimer;
-    
-    const resetTimeout = () => {
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      timeoutTimer = setTimeout(() => {
-        if (pc.connectionState !== 'closed') {
-          handleConnectionFailure(targetId);
-        }
-      }, 5000); // 5 seconds timeout
-    };
-
-    const onOpenHandler = () => {
-      if (reconnectTimers[targetId]) {
-        clearTimeout(reconnectTimers[targetId]);
-        delete reconnectTimers[targetId];
-        if (Object.keys(reconnectTimers).length === 0) {
-          document.getElementById('reconnecting-overlay').classList.add('hidden');
-        }
-      }
-      checkGameMeshReady();
-      broadcastAudioState();
-      
-      if (gameHost !== null && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'sync', state: gameState, name: myName, color: myColor, fiveDiceState: window.fiveDiceState }));
-        if (window.flushOfflineMessages) {
-          window.flushOfflineMessages(targetId, dc);
-        }
-      }
-      
-      pingInterval = setInterval(() => {
-        if (dc.readyState === 'open') {
-          try {
-            dc.send(JSON.stringify({ type: 'ping' }));
-          } catch (e) {}
-        }
-      }, 2000);
-      resetTimeout();
-    };
-    dc.onopen = onOpenHandler;
-    if (dc.readyState === 'open') {
-      onOpenHandler();
-    }
-    
-    dc.onclose = () => {
-      if (pingInterval) clearInterval(pingInterval);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-    };
-
-    dc.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'ping') {
-        resetTimeout();
-        return;
-      }
-      
-      if (msg.type === 'move') {
-        gameState[msg.index] = msg.player;
-        updateBoard();
-        const gameOver = checkWin();
-        if (!gameOver) {
-          myTurn = true; 
-          document.getElementById('game-status').innerText = 'Your turn!';
-          updateGameBackground();
-        } else {
-          document.getElementById('btn-play-again').classList.remove('hidden');
-        }
-      } else if (msg.type === 'PLAY_AGAIN') {
-        const room = activeRooms[currentRoomId];
-        if (room && room.gameType === '5 Dice') {
-          if (window.reset5DiceGame) window.reset5DiceGame(msg.firstTurn);
-        } else {
-          resetGame(msg.firstTurn);
-        }
-      } else if (msg.type === 'sync') {
-        if (msg.name) {
-          if (!lobbyPeers[targetId]) lobbyPeers[targetId] = { name: 'Unknown', iceQueue: [] };
-          lobbyPeers[targetId].name = msg.name;
-          if (msg.color) lobbyPeers[targetId].color = msg.color;
-        }
-        const room = activeRooms[currentRoomId];
-        if (room && room.gameType !== '5 Dice') {
-          let updated = false;
-          for (let i = 0; i < 9; i++) {
-            if (gameState[i] === '' && msg.state[i] !== '') {
-              gameState[i] = msg.state[i];
-              updated = true;
-            }
-          }
-          if (updated) {
-            updateBoard();
-            const gameOver = checkWin();
-            if (!gameOver) {
-               const xCount = gameState.filter(s => s === 'X').length;
-               const oCount = gameState.filter(s => s === 'O').length;
-               const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
-               const myCount = mySymbol === 'X' ? xCount : oCount;
-               const oppCount = mySymbol === 'X' ? oCount : xCount;
-               
-               const firstPlayer = window.currentFirstTurn || gameHost;
-               if (myPeerId === firstPlayer) {
-                 myTurn = (myCount === oppCount);
-               } else {
-                 myTurn = (oppCount > myCount);
-               }
-               
-               document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
-               updateGameBackground();
-            } else {
-               document.getElementById('btn-play-again').classList.remove('hidden');
-            }
-          } else {
-            document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
-            updateGameBackground();
-          }
-        } else if (room && room.gameType === '5 Dice') {
-          if (msg.fiveDiceState && window.sync5DiceState) {
-            window.sync5DiceState(msg.fiveDiceState);
-          }
-        }
-      } else if (msg.type === 'HOST_HANDOFF') {
-        const newHostId = msg.newHostId;
-        if (activeRooms[currentRoomId]) {
-          activeRooms[currentRoomId].host = newHostId;
-        }
-        if (myPeerId === newHostId) {
-          isHost = true;
-          if (activeRooms[currentRoomId]) {
-            broadcastToLobby({ type: 'ROOM_UPDATED', room: activeRooms[currentRoomId] });
-          }
-        }
-        const newHostName = (newHostId === myPeerId) ? 'You' : (lobbyPeers[newHostId] ? lobbyPeers[newHostId].name : 'A player');
-        showToast(`${newHostName} ${newHostId === myPeerId ? 'are' : 'is'} now hosting`);
-      } else if (msg.type === 'AUDIO_STATE') {
-        remoteAudioStates[msg.peerId] = { micEnabled: msg.micEnabled, speakerEnabled: msg.speakerEnabled };
-        updateAudioStateOutline();
-      } else if (msg.type === 'PLAYER_LEFT') {
-        gamePlayers = gamePlayers.filter(p => p !== msg.peerId);
-        handlePeerDisconnect(msg.peerId);
-      } else if (msg.type.startsWith('5DICE_')) {
-        if (typeof window.handle5DiceMessage === 'function') {
-          window.handle5DiceMessage(msg);
-        }
-      }
-    };
-  }
-}
-
-async function handleGameSignal(msg) {
-  const { type, from, sdp, candidate } = msg;
-  
-  if (type === 'game-offer') {
-    let pc;
-    if (gamePeers[from] && gamePeers[from].pc && gamePeers[from].pc.signalingState !== 'closed') {
-      pc = gamePeers[from].pc;
+  if (evt.type === 'PLAY_AGAIN') {
+    const room = activeRooms[currentRoomId];
+    if (room && room.gameType === '5 Dice') {
+      if (window.reset5DiceGame) window.reset5DiceGame(evt.firstTurn);
     } else {
-      if (gamePeers[from] && gamePeers[from].pc) {
-        gamePeers[from].pc.onconnectionstatechange = null;
-        gamePeers[from].pc.close();
-      }
-      pc = new RTCPeerConnection(rtcConfig);
-      if (!gamePeers[from]) gamePeers[from] = {};
-      gamePeers[from].pc = pc;
-      gamePeers[from].dc = null;
-      if (!gamePeers[from].iceQueue) gamePeers[from].iceQueue = [];
-      
-      if (localAudioStream && micEnabled) {
-        localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
-      }
-      
-      pc.ondatachannel = (e) => {
-        if (e.channel.label === 'game-channel') {
-          gamePeers[from].dc = e.channel;
-          setupGamePeer(from, pc, e.channel);
-          checkGameMeshReady();
-        }
-      };
-      setupGamePeer(from, pc, null);
+      resetGame(evt.firstTurn);
     }
-    
-    await pc.setRemoteDescription(sdp);
-    
-    if (gamePeers[from].iceQueue) {
-      for (const cand of gamePeers[from].iceQueue) {
-        await pc.addIceCandidate(cand).catch(e => console.error(e));
-      }
-      gamePeers[from].iceQueue = [];
-    }
-    
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    
-    sendSignal(from, { type: 'game-answer', sdp: answer });
-  } else if (type === 'game-answer') {
-    await gamePeers[from].pc.setRemoteDescription(sdp);
-    if (gamePeers[from].iceQueue) {
-      for (const cand of gamePeers[from].iceQueue) {
-        await gamePeers[from].pc.addIceCandidate(cand).catch(e => console.error(e));
-      }
-      gamePeers[from].iceQueue = [];
-    }
-  } else if (type === 'game-ice') {
-    if (gamePeers[from] && gamePeers[from].pc && gamePeers[from].pc.remoteDescription) {
-      await gamePeers[from].pc.addIceCandidate(candidate).catch(e => console.error(e));
-    } else {
-      if (!gamePeers[from]) gamePeers[from] = {};
-      if (!gamePeers[from].iceQueue) gamePeers[from].iceQueue = [];
-      gamePeers[from].iceQueue.push(candidate);
+  } else if (evt.type && evt.type.startsWith('5DICE_')) {
+    if (typeof window.handle5DiceMessage === 'function') {
+      window.handle5DiceMessage(evt);
     }
   }
 }
+
+window.sendGameAction = async function(msgObj) {
+  if (!currentRoomId || !window.firebaseGameBackend) return;
+
+  const eventPayload = {
+    ...msgObj,
+    sender: myPeerId
+  };
+  await window.firebaseGameBackend.sendGameEvent(currentRoomId, eventPayload);
+
+  // Synchronize overall state in Firebase
+  const updates = { lastUpdated: Date.now() };
+
+  if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
+    updates.fiveDiceState = window.fiveDiceState;
+    if (msgObj.type === '5DICE_SCORE' && !msgObj.category.includes('bonus')) {
+      // Rotate turn to next player in list
+      const currentIndex = gamePlayers.indexOf(myPeerId);
+      const nextIndex = (currentIndex + 1) % Math.max(1, gamePlayers.length);
+      const nextTurnPlayer = gamePlayers[nextIndex] || myPeerId;
+      updates.currentTurnPlayerId = nextTurnPlayer;
+      window.currentTurnPlayerId = nextTurnPlayer;
+      myTurn = (myPeerId === nextTurnPlayer);
+    }
+  }
+
+  await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
+};
 
 function updateGameBackground() {
   const gameScreen = document.getElementById('screen-game');
+  if (!gameScreen) return;
   gameScreen.classList.remove('tie-background', 'bg-watermark-x', 'bg-watermark-o');
   
   const room = activeRooms[currentRoomId];
@@ -1331,8 +653,8 @@ function updateGameBackground() {
     gameScreen.classList.add(`bg-watermark-${mySymbol.toLowerCase()}`);
   }
 
-  let activeOpponentId = (window.currentTurnPlayerId && window.currentTurnPlayerId !== myPeerId) ? window.currentTurnPlayerId : gamePlayers.find(p => p !== myPeerId);
-  let opponentColor = (activeOpponentId && lobbyPeers[activeOpponentId] && lobbyPeers[activeOpponentId].color) ? lobbyPeers[activeOpponentId].color : '#2a2a2a';
+  let activeOpponent = roomPlayerDetails.find(p => p.peerId !== myPeerId);
+  let opponentColor = activeOpponent ? activeOpponent.color : '#2a2a2a';
   
   if (myTurn) {
     gameScreen.style.backgroundColor = myColor;
@@ -1341,68 +663,10 @@ function updateGameBackground() {
   }
 }
 
-function checkGameMeshReady() {
-  if (typeof gamePlayers === 'undefined' || gamePlayers.length === 0) return;
-  const ready = Object.values(gamePeers).every(p => p.dc && p.dc.readyState === 'open');
-  if (ready && Object.keys(gamePeers).length === gamePlayers.length - 1) {
-    if (!checkWin()) {
-      if (activeRooms[currentRoomId] && activeRooms[currentRoomId].gameType === '5 Dice') {
-        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
-        updateGameBackground();
-        if (window.update5DiceUI) window.update5DiceUI();
-      } else {
-        document.getElementById('game-status').innerText = `Your turn!`;
-        if (!myTurn) document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
-        document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-        updateGameBackground();
-      }
-    }
-  } else {
-    if (!activeRooms[currentRoomId] || activeRooms[currentRoomId].gameType !== '5 Dice') {
-      const board = document.getElementById('tic-tac-toe-board');
-      if (board) board.classList.add('disabled');
-      document.getElementById('game-status').innerText = 'Waiting for opponent to reconnect...';
-    }
-  }
-  updateDiagnostics();
-}
-
-function updateDiagnostics() {
-  const lobbyCount = Object.values(lobbyPeers).filter(p => p.dc && p.dc.readyState === 'open').length;
-  const gameCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
-  
-  const dot = document.getElementById('network-dot');
-  const txt = document.getElementById('status-text');
-  
-  if (dot && txt) {
-    if (lobbyCount > 0) {
-      dot.className = 'status-dot connected';
-      txt.innerText = `LOBBY MESH: ${lobbyCount} PEER(S)`;
-    } else {
-      dot.className = 'status-dot connecting';
-      txt.innerText = `LOBBY MESH: SEEKING...`;
-    }
-  }
-
-  const gameDot = document.getElementById('game-network-dot');
-  const gameTxt = document.getElementById('game-status-text');
-  const gamePlayerCount = document.getElementById('game-player-count');
-
-  if (gameDot && gameTxt && gamePlayerCount) {
-    gamePlayerCount.innerText = `Players: ${gameCount + 1}`;
-    if (gameCount > 0) {
-      gameDot.className = 'status-dot connected';
-      gameTxt.innerText = `GAME MESH: ${gameCount} PEER(S)`;
-    } else {
-      gameDot.className = 'status-dot connecting';
-      gameTxt.innerText = `GAME MESH: SEEKING...`;
-    }
-  }
-}
-
 // TIC TAC TOE LOGIC
 function createBoard() {
   const board = document.getElementById('tic-tac-toe-board');
+  if (!board) return;
   board.innerHTML = '';
   for (let i=0; i<9; i++) {
     const cell = document.createElement('div');
@@ -1413,74 +677,66 @@ function createBoard() {
   }
 }
 
-function handleMove(index) {
+async function handleMove(index) {
   if (gameState[index] !== '' || !myTurn) return;
   const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
   gameState[index] = mySymbol;
   updateBoard();
-  const gameOver = checkWin();
   
-  for (const p in gamePeers) {
-    if (window.sendOrQueueGameMessage) {
-      window.sendOrQueueGameMessage(p, { type: 'move', index, player: mySymbol });
-    }
-  }
+  const gameOver = checkWin();
+  const otherPlayer = gamePlayers.find(p => p !== myPeerId) || myPeerId;
+  const nextTurnPlayer = gameOver ? myPeerId : otherPlayer;
+
+  myTurn = (myPeerId === nextTurnPlayer);
+
   if (!gameOver) {
-    myTurn = false;
     document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
-    updateGameBackground();
   } else {
     document.getElementById('btn-play-again').classList.remove('hidden');
+  }
+  updateGameBackground();
+
+  if (window.firebaseGameBackend && currentRoomId) {
+    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'move', index, player: mySymbol, sender: myPeerId });
+    await window.firebaseGameBackend.updateGameState(currentRoomId, {
+      gameState: gameState,
+      currentTurnPlayerId: nextTurnPlayer,
+      lastUpdated: Date.now()
+    });
   }
 }
 
 function resetGame(firstTurn = null) {
-  window.currentFirstTurn = firstTurn || gameHost;
+  const selectedFirstTurn = firstTurn || gameHost;
+  window.currentTurnPlayerId = selectedFirstTurn;
+  myTurn = (myPeerId === selectedFirstTurn);
   gameState = ['', '', '', '', '', '', '', '', ''];
-  if (firstTurn) {
-    myTurn = (myPeerId === firstTurn);
-  } else {
-    myTurn = (myPeerId === gameHost);
-  }
   updateBoard();
+  
   document.getElementById('tic-tac-toe-board').classList.remove('disabled');
   document.getElementById('btn-play-again').classList.add('hidden');
-  
-  if (window.gameMeshRetryInterval) clearInterval(window.gameMeshRetryInterval);
-  window.gameMeshRetryInterval = setInterval(() => {
-    if (gamePlayers.length > 1) {
-      const readyCount = Object.values(gamePeers).filter(p => p.dc && p.dc.readyState === 'open').length;
-      if (readyCount < gamePlayers.length - 1) {
-        retryGameConnections();
-      }
-      for (const p of gamePlayers) {
-        if (p !== myPeerId) {
-          const lPeer = lobbyPeers[p];
-          const lNotReady = !lPeer || !lPeer.dc || lPeer.dc.readyState !== 'open';
-          if (lNotReady) {
-            const isConnecting = lPeer && lPeer.pc && (lPeer.pc.connectionState === 'connecting' || lPeer.pc.connectionState === 'new');
-            const isStuck = lPeer && lPeer.lastInitiated && (Date.now() - lPeer.lastInitiated > 6000);
-            if ((!isConnecting || isStuck) && myPeerId > p) {
-              initiateLobbyConnection(p, null);
-            }
-          }
-        }
-      }
-    }
-  }, 3000);
-
   document.getElementById('screen-game').classList.remove('tie-background');
+  
   updateGameBackground();
-  checkGameMeshReady();
+  
+  document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+
+  if (window.firebaseGameBackend && currentRoomId) {
+    window.firebaseGameBackend.updateGameState(currentRoomId, {
+      gameState: gameState,
+      currentTurnPlayerId: selectedFirstTurn,
+      lastUpdated: Date.now()
+    });
+  }
 }
 
-document.getElementById('btn-play-again').addEventListener('click', () => {
-  const nextFirstTurn = gamePlayers[Math.floor(Math.random() * gamePlayers.length)];
-  for (const p in gamePeers) {
-    if (window.sendOrQueueGameMessage) {
-      window.sendOrQueueGameMessage(p, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn });
-    }
+document.getElementById('btn-play-again').addEventListener('click', async () => {
+  const nextFirstTurn = gamePlayers[Math.floor(Math.random() * gamePlayers.length)] || myPeerId;
+  
+  if (window.firebaseGameBackend && currentRoomId) {
+    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
   }
+
   const room = activeRooms[currentRoomId];
   if (room && room.gameType === '5 Dice') {
     if (window.reset5DiceGame) window.reset5DiceGame(nextFirstTurn);
@@ -1507,9 +763,9 @@ function checkWin() {
     if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
       const winner = gameState[a];
       const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
-      let opponentId = gamePlayers.find(p => p !== myPeerId);
-      let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
-      let opponentName = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].name) ? lobbyPeers[opponentId].name : 'Opponent';
+      let opponent = roomPlayerDetails.find(p => p.peerId !== myPeerId);
+      let opponentColor = opponent ? opponent.color : '#2a2a2a';
+      let opponentName = opponent ? opponent.name : 'Opponent';
       let winnerColor = (winner === mySymbol) ? myColor : opponentColor;
       
       document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : `${opponentName} Wins!`;
@@ -1523,8 +779,8 @@ function checkWin() {
     document.getElementById('game-status').innerText = "It's a draw!";
     myTurn = false;
     
-    let opponentId = gamePlayers.find(p => p !== myPeerId);
-    let opponentColor = (opponentId && lobbyPeers[opponentId] && lobbyPeers[opponentId].color) ? lobbyPeers[opponentId].color : '#2a2a2a';
+    let opponent = roomPlayerDetails.find(p => p.peerId !== myPeerId);
+    let opponentColor = opponent ? opponent.color : '#2a2a2a';
     
     const gameScreen = document.getElementById('screen-game');
     gameScreen.style.setProperty('--color-1', myColor);
@@ -1536,52 +792,49 @@ function checkWin() {
   return false;
 }
 
-const handleLeaveGame = () => {
+const handleLeaveGame = async () => {
   const gameScreen = document.getElementById('screen-game');
-  gameScreen.style.backgroundColor = '#2a2a2a';
-  gameScreen.classList.remove('tie-background');
-  
-  if (isHost && currentRoomId) {
-    const connectedPeers = Object.keys(gamePeers).filter(p => gamePeers[p].dc && gamePeers[p].dc.readyState === 'open');
-    if (connectedPeers.length > 0) {
-      const newHostId = connectedPeers[0];
-      for (const p in gamePeers) {
-        if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-          gamePeers[p].dc.send(JSON.stringify({ type: 'HOST_HANDOFF', newHostId }));
-        }
-      }
+  if (gameScreen) {
+    gameScreen.style.backgroundColor = '#2a2a2a';
+    gameScreen.classList.remove('tie-background');
+  }
+
+  if (window.firebaseGameBackend) {
+    window.firebaseGameBackend.stopGameListeners();
+  }
+
+  if (currentRoomId && activeRooms[currentRoomId]) {
+    let room = activeRooms[currentRoomId];
+    let players = (room.players || []).filter(p => p.peerId !== myPeerId && p.uuid !== myUuid);
+    
+    if (players.length === 0) {
+      await window.firebaseGameBackend.deleteRoom(currentRoomId);
     } else {
-      broadcastToLobby({ type: 'ROOM_CLOSED', roomId: currentRoomId });
-      delete activeRooms[currentRoomId];
+      const newHost = players[0];
+      await window.firebaseGameBackend.updateRoom(currentRoomId, {
+        players: players,
+        host: newHost.peerId,
+        hostName: newHost.name,
+        hostColor: newHost.color
+      });
+      await window.firebaseGameBackend.updateGameState(currentRoomId, {
+        players: players,
+        host: newHost.peerId
+      });
     }
   }
 
-  for (const p in gamePeers) {
-    if (gamePeers[p].dc && gamePeers[p].dc.readyState === 'open') {
-      gamePeers[p].dc.send(JSON.stringify({ type: 'PLAYER_LEFT', peerId: myPeerId }));
-    }
-    const pc = gamePeers[p].pc;
-    if (pc) {
-      setTimeout(() => pc.close(), 500);
-    }
-  }
-  gamePeers = {};
+  currentRoomId = null;
+  isHost = false;
   gamePlayers = [];
+  roomPlayerDetails = [];
   gameState = ['', '', '', '', '', '', '', '', ''];
+  
   updateBoard();
   document.getElementById('tic-tac-toe-board').classList.add('disabled');
   document.getElementById('btn-play-again').classList.add('hidden');
   
-  if (window.gameMeshRetryInterval) {
-    clearInterval(window.gameMeshRetryInterval);
-    window.gameMeshRetryInterval = null;
-  }
-  
-  isHost = false;
-  currentRoomId = null;
-  
   showScreen('screen-lobby');
-  startRoomPolling();
   updateDiagnostics();
   
   if (window.cleanup5DiceGame) {
@@ -1604,7 +857,6 @@ const newUuidDisplay = document.getElementById('new-uuid-display');
 const toastEl = document.getElementById('toast');
 
 let pendingUuid = null;
-
 let toastTimeoutId = null;
 
 function showToast(msg, bgColor = null) {
@@ -1615,6 +867,7 @@ function showToast(msg, bgColor = null) {
   if (toastTimeoutId) clearTimeout(toastTimeoutId);
   toastTimeoutId = setTimeout(() => { toastEl.classList.add('hidden'); }, 3000);
 }
+window.showToast = showToast;
 
 if (settingsUuidInput) {
   settingsUuidInput.addEventListener('input', (e) => {
@@ -1678,6 +931,7 @@ if (confirmUuidYes) {
   });
 }
 
+// APP INITIALIZATION
 createBoard();
 if (!myName) {
   document.getElementById('settings-player-id-section').style.display = 'none';
@@ -1688,108 +942,5 @@ if (!myName) {
   if (colorPicker) colorPicker.value = myColor;
   showScreen('screen-settings');
 } else {
-  startLobbyMesh();
-  startRoomPolling();
-}
-
-// --- AUDIO UI CONTROL LOGIC ---
-const btnToggleMic = document.getElementById('btn-toggle-mic');
-const btnToggleSpeaker = document.getElementById('btn-toggle-speaker');
-const iconMicOn = document.getElementById('icon-mic-on');
-const iconMicOff = document.getElementById('icon-mic-off');
-const iconSpeakerOn = document.getElementById('icon-speaker-on');
-const iconSpeakerOff = document.getElementById('icon-speaker-off');
-const remoteAudio = document.getElementById('remote-audio');
-
-async function enableMic() {
-  try {
-    if (!localAudioStream) {
-      localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    }
-    // Add track to all existing game peers if not already added
-    for (const p in gamePeers) {
-      if (gamePeers[p].pc) {
-        const senders = gamePeers[p].pc.getSenders();
-        const hasTrack = senders.find(s => s.track && s.track.kind === 'audio');
-        if (!hasTrack) {
-           localAudioStream.getTracks().forEach(track => {
-             gamePeers[p].pc.addTrack(track, localAudioStream);
-           });
-           const offer = await gamePeers[p].pc.createOffer();
-           await gamePeers[p].pc.setLocalDescription(offer);
-           sendSignal(p, { type: 'game-offer', sdp: offer });
-        }
-      }
-    }
-    localAudioStream.getTracks().forEach(t => t.enabled = true);
-    micEnabled = true;
-    localStorage.setItem('micEnabled', 'true');
-    broadcastAudioState();
-    if (btnToggleMic) {
-      btnToggleMic.classList.remove('off');
-      iconMicOn.classList.remove('hidden');
-      iconMicOff.classList.add('hidden');
-    }
-  } catch (err) {
-    console.error("Microphone access denied:", err);
-    showToast("Microphone access denied", "#dc3545");
-    micEnabled = false;
-    localStorage.setItem('micEnabled', 'false');
-  }
-}
-
-function disableMic() {
-  if (localAudioStream) {
-    localAudioStream.getTracks().forEach(t => t.enabled = false);
-  }
-  micEnabled = false;
-  localStorage.setItem('micEnabled', 'false');
-  broadcastAudioState();
-  if (btnToggleMic) {
-    btnToggleMic.classList.add('off');
-    iconMicOn.classList.add('hidden');
-    iconMicOff.classList.remove('hidden');
-  }
-}
-
-function updateSpeakerState() {
-  if (remoteAudio) {
-    remoteAudio.muted = !speakerEnabled;
-  }
-  broadcastAudioState();
-  if (btnToggleSpeaker) {
-    if (speakerEnabled) {
-      btnToggleSpeaker.classList.remove('off');
-      iconSpeakerOn.classList.remove('hidden');
-      iconSpeakerOff.classList.add('hidden');
-    } else {
-      btnToggleSpeaker.classList.add('off');
-      iconSpeakerOn.classList.add('hidden');
-      iconSpeakerOff.classList.remove('hidden');
-    }
-  }
-}
-
-if (btnToggleMic && btnToggleSpeaker) {
-  if (micEnabled) {
-    // Defer a bit so UI doesn't block immediately on load
-    setTimeout(enableMic, 500);
-  } else {
-    disableMic();
-  }
-  updateSpeakerState();
-
-  btnToggleMic.addEventListener('click', () => {
-    if (micEnabled) {
-      disableMic();
-    } else {
-      enableMic();
-    }
-  });
-
-  btnToggleSpeaker.addEventListener('click', () => {
-    speakerEnabled = !speakerEnabled;
-    localStorage.setItem('speakerEnabled', speakerEnabled.toString());
-    updateSpeakerState();
-  });
+  startLobbyFirebase();
 }

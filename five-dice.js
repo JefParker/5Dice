@@ -369,45 +369,39 @@ function calculate5DiceScore(category, dice) {
 }
 
 function broadcast5DiceState() {
-  if (!window.gamePeers) return;
   const msg = {
     type: '5DICE_ROLL',
     dice: window.fiveDiceState.dice,
     held: window.fiveDiceState.held,
-    rollsLeft: window.fiveDiceState.rollsLeft
+    rollsLeft: window.fiveDiceState.rollsLeft,
+    sender: window.myPeerId
   };
-  for (const peerId in window.gamePeers) {
-    if (window.sendOrQueueGameMessage) {
-      window.sendOrQueueGameMessage(peerId, msg);
-    }
+  if (typeof window.sendGameAction === 'function') {
+    window.sendGameAction(msg);
   }
 }
 
 function broadcast5DiceHold() {
-  if (!window.gamePeers) return;
   const msg = {
     type: '5DICE_HOLD',
-    held: window.fiveDiceState.held
+    held: window.fiveDiceState.held,
+    sender: window.myPeerId
   };
-  for (const peerId in window.gamePeers) {
-    if (window.sendOrQueueGameMessage) {
-      window.sendOrQueueGameMessage(peerId, msg);
-    }
+  if (typeof window.sendGameAction === 'function') {
+    window.sendGameAction(msg);
   }
 }
 
 function broadcast5DiceScore(category, score) {
-  if (!window.gamePeers) return;
   const msg = {
     type: '5DICE_SCORE',
     category: category,
     score: score,
-    player: window.myPeerId
+    player: window.myPeerId,
+    sender: window.myPeerId
   };
-  for (const peerId in window.gamePeers) {
-    if (window.sendOrQueueGameMessage) {
-      window.sendOrQueueGameMessage(peerId, msg);
-    }
+  if (typeof window.sendGameAction === 'function') {
+    window.sendGameAction(msg);
   }
 }
 
