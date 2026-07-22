@@ -28,6 +28,15 @@ function init5DiceGame() {
 }
 
 function update5DiceUI() {
+  if (!window.fiveDiceState) return;
+  if (!window.fiveDiceState.scores) window.fiveDiceState.scores = {};
+  if (window.myPeerId && !window.fiveDiceState.scores[window.myPeerId]) {
+    window.fiveDiceState.scores[window.myPeerId] = {
+      ones: null, twos: null, threes: null, fours: null, fives: null, sixes: null,
+      chance: null, 'three-kind': null, 'four-kind': null, 'full-house': null,
+      'sm-straight': null, 'lg-straight': null, 'five-dice': null, 'bonus-5s': null
+    };
+  }
   const state = window.fiveDiceState;
   
   if (window.myTurn && !window.fiveDiceState.isGameOver) {
@@ -295,11 +304,22 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
 document.querySelectorAll('.fd-cat').forEach(catEl => {
   catEl.addEventListener('click', () => {
     if (!window.myTurn) return;
+    if (!window.fiveDiceState) return;
     if (window.fiveDiceState.rollsLeft === 3) return; // Must roll at least once
     
     const cat = catEl.getAttribute('data-category');
     if (cat === 'bonus-5s') return; // Not a direct user input
-    if (window.fiveDiceState.scores[window.myPeerId][cat] !== null) return; // Already scored
+
+    if (!window.fiveDiceState.scores) window.fiveDiceState.scores = {};
+    if (!window.fiveDiceState.scores[window.myPeerId]) {
+      window.fiveDiceState.scores[window.myPeerId] = {
+        ones: null, twos: null, threes: null, fours: null, fives: null, sixes: null,
+        chance: null, 'three-kind': null, 'four-kind': null, 'full-house': null,
+        'sm-straight': null, 'lg-straight': null, 'five-dice': null, 'bonus-5s': null
+      };
+    }
+    
+    if (window.fiveDiceState.scores[window.myPeerId][cat] !== null && window.fiveDiceState.scores[window.myPeerId][cat] !== undefined) return; // Already scored
     
     const score = calculate5DiceScore(cat, window.fiveDiceState.dice);
     
