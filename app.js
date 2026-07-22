@@ -172,11 +172,13 @@ function updateDiagnostics() {
       gameDot.className = 'status-dot connecting';
       gameTxt.innerText = `GAME: CONNECTING...`;
     }
-  }
-}
+window.updateDiagnostics = updateDiagnostics;
 
 function startLobbyFirebase() {
-  if (!window.firebaseGameBackend) return;
+  if (!window.firebaseGameBackend) {
+    window.addEventListener('firebaseGameReady', startLobbyFirebase, { once: true });
+    return;
+  }
 
   window.firebaseGameBackend.init((connected) => {
     updateDiagnostics();
@@ -191,6 +193,8 @@ function startLobbyFirebase() {
   window.firebaseGameBackend.listenLobbyChat((msg) => {
     appendChatMessage(msg.author, msg.text, msg.id, msg.timestamp, msg.color);
   });
+
+  updateDiagnostics();
 }
 
 // --- GLOBAL CHAT ---

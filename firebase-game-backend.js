@@ -29,6 +29,9 @@ window.firebaseGameBackend = {
       if (typeof onStatusChange === 'function') {
         onStatusChange(window.firebaseGameBackend.isConnected);
       }
+      if (typeof window.updateDiagnostics === 'function') {
+        window.updateDiagnostics();
+      }
     });
   },
 
@@ -191,3 +194,4 @@ window.firebaseGameBackend = {
 };
 
 window.firebaseGameBackend.init();
+window.dispatchEvent(new CustomEvent('firebaseGameReady'));
