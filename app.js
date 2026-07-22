@@ -1,8 +1,8 @@
 // --- GLOBALS ---
-let myPeerId = localStorage.getItem('myPeerId');
+let myPeerId = sessionStorage.getItem('myPeerId');
 if (!myPeerId) {
   myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
-  localStorage.setItem('myPeerId', myPeerId);
+  sessionStorage.setItem('myPeerId', myPeerId);
 }
 window.myPeerId = myPeerId;
 
@@ -595,7 +595,9 @@ function handleGameStateUpdate(gameData) {
         window.sync5DiceState(gameData.fiveDiceState);
       }
     }
-    document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
+    if (!window.fiveDiceState || !window.fiveDiceState.isGameOver) {
+      document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
+    }
   } else {
     if (gameData.gameState) {
       gameState = gameData.gameState;
@@ -664,13 +666,15 @@ function updateGameBackground() {
     gameScreen.classList.add(`bg-watermark-${mySymbol.toLowerCase()}`);
   }
 
-  let activeOpponent = roomPlayerDetails.find(p => p.peerId !== myPeerId);
-  let opponentColor = activeOpponent ? activeOpponent.color : '#2a2a2a';
+  const activeTurnId = window.currentTurnPlayerId || gameHost;
+  const activeTurnPlayer = roomPlayerDetails.find(p => p.peerId === activeTurnId);
+  const activeOpponent = roomPlayerDetails.find(p => p.peerId !== myPeerId);
+  const turnColor = activeTurnPlayer ? activeTurnPlayer.color : (activeOpponent ? activeOpponent.color : '#2a2a2a');
   
-  if (myTurn) {
+  if (window.myTurn) {
     gameScreen.style.backgroundColor = myColor;
   } else {
-    gameScreen.style.backgroundColor = opponentColor;
+    gameScreen.style.backgroundColor = turnColor;
   }
 }
 

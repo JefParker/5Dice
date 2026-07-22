@@ -133,12 +133,13 @@ function update5DiceUI() {
   // Render rolls left
   document.getElementById('fd-rolls-left').innerText = state.rollsLeft;
   
+  const turnCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'three-kind', 'four-kind', 'full-house', 'sm-straight', 'lg-straight', 'five-dice'];
   let myScoreCount = 0;
   const pScores = state.scores[window.myPeerId] || {};
-  for (const cat in pScores) {
-    if (pScores[cat] !== null) myScoreCount++;
+  for (const cat of turnCats) {
+    if (typeof pScores[cat] === 'number') myScoreCount++;
   }
-  document.getElementById('fd-turns-count').innerText = 13 - myScoreCount;
+  document.getElementById('fd-turns-count').innerText = Math.max(0, 13 - myScoreCount);
 
   // Sync 3D dice state AFTER updating playArea visibility so it can detect if it's hidden
   if (window.dice3d && !window.dice3d.rolling) {
@@ -590,51 +591,22 @@ window.sync5DiceState = function(incomingState) {
   
   const getScoreCount = (state, peerId) => {
     let count = 0;
-    const pScores = state.scores[peerId];
+    const pScores = state && state.scores ? state.scores[peerId] : null;
     if (pScores) {
-      for (const cat in pScores) {
-        if (pScores[cat] !== null) count++;
+      const turnCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'three-kind', 'four-kind', 'full-house', 'sm-straight', 'lg-straight', 'five-dice'];
+      for (const cat of turnCats) {
+        if (typeof pScores[cat] === 'number') count++;
       }
     }
     return count;
   };
   
-  let shouldUpdate = false;
-
-  if (!window.fiveDiceState) {
-    shouldUpdate = true;
-  } else {
-    let totalCurrent = 0;
-    let totalIncoming = 0;
-    window.gamePlayers.forEach(p => {
-      totalCurrent += getScoreCount(window.fiveDiceState, p);
-      totalIncoming += getScoreCount(incomingState, p);
-    });
-
-    // Always accept a state that has more recorded scores than ours
-    if (totalIncoming > totalCurrent) {
-      shouldUpdate = true;
-    } else if (totalIncoming === totalCurrent) {
-      // If the scores are identical, accept the state if its rolls are further along
-      if (incomingState.turnsLeft < window.fiveDiceState.turnsLeft) {
-        shouldUpdate = true;
-      } else if (incomingState.turnsLeft === window.fiveDiceState.turnsLeft) {
-        if (incomingState.rollsLeft < window.fiveDiceState.rollsLeft) {
-          shouldUpdate = true;
-        }
-      }
-    }
-  }
-
-
-  if (shouldUpdate) {
-    window.fiveDiceState = incomingState;
-  }
+  window.fiveDiceState = incomingState;
 
   // Recalculate turn order robustly
   const getCount = p => getScoreCount(window.fiveDiceState, p);
   const counts = window.gamePlayers.map(p => getCount(p));
-  const minCount = Math.min(...counts);
+  const minCount = counts.length > 0 ? Math.min(...counts) : 0;
   
   // Find turn order starting from currentFirstTurn
   const firstPlayer = window.currentFirstTurn || window.gameHost;
@@ -647,7 +619,7 @@ window.sync5DiceState = function(incomingState) {
   }
   
   // The person whose turn it is, is the first person in turnOrder who has the minCount
-  let currentTurnId = turnOrder.find(p => getCount(p) === minCount);
+  let currentTurnId = turnOrder.find(p => getCount(p) === minCount) || window.gameHost;
   
   window.myTurn = (window.myPeerId === currentTurnId);
   window.currentTurnPlayerId = currentTurnId;
@@ -666,10 +638,15 @@ window.sync5DiceState = function(incomingState) {
     }
     update5DiceUI();
   }
+
+  if (typeof window.updateGameBackground === 'function') {
+    window.updateGameBackground();
+  }
 };
 
 window.check5DiceGameOver = function() {
   if (!window.fiveDiceState || !window.fiveDiceState.scores) return false;
+  if (window.fiveDiceState.isGameOver) return true;
   const roomPlayers = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : Object.keys(window.fiveDiceState.scores);
   if (roomPlayers.length === 0) return false;
   const requiredCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'sm-straight', 'lg-straight', 'three-kind', 'four-kind', 'five-dice', 'full-house'];
@@ -684,7 +661,6 @@ window.check5DiceGameOver = function() {
 };
 
 window.handle5DiceGameOver = function() {
-  if (window.fiveDiceState.isGameOver) return;
   window.fiveDiceState.isGameOver = true;
   update5DiceUI();
   const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : Object.keys(window.fiveDiceState.scores);
@@ -706,11 +682,12 @@ window.handle5DiceGameOver = function() {
     }
   });
   
+  const elStatus = document.getElementById('game-status');
   if (winners.includes(window.myPeerId)) {
     if (winners.length > 1) {
-      document.getElementById('game-status').innerText = "It's a Tie!";
+      if (elStatus) elStatus.innerText = "It's a Tie!";
     } else {
-      document.getElementById('game-status').innerText = "You Win!";
+      if (elStatus) elStatus.innerText = "You Win!";
       
       const gc = document.querySelector('.game-container');
       if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
@@ -727,7 +704,9 @@ window.handle5DiceGameOver = function() {
   } else {
     const gc = document.querySelector('.game-container');
     if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
-    document.getElementById('game-status').innerText = `${getPeerName(winners[0])} Wins!`;
+    const winnerName = getPeerName(winners[0]);
+    if (elStatus) elStatus.innerText = `${winnerName} Wins!`;
   }
-  document.getElementById('btn-play-again').classList.remove('hidden');
+  const btnPlayAgain = document.getElementById('btn-play-again');
+  if (btnPlayAgain) btnPlayAgain.classList.remove('hidden');
 };
