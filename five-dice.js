@@ -639,23 +639,24 @@ window.sync5DiceState = function(incomingState) {
 
 window.check5DiceGameOver = function() {
   if (!window.fiveDiceState || !window.fiveDiceState.scores) return false;
-  const players = Object.keys(window.fiveDiceState.scores);
-  if (players.length === 0) return false;
+  const roomPlayers = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : Object.keys(window.fiveDiceState.scores);
+  if (roomPlayers.length === 0) return false;
   const requiredCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'sm-straight', 'lg-straight', 'three-kind', 'four-kind', 'five-dice', 'full-house'];
-  for (const p of players) {
+  for (const p of roomPlayers) {
     const pScores = window.fiveDiceState.scores[p];
     if (!pScores) return false;
     for (const cat of requiredCats) {
-      if (pScores[cat] === null) return false;
+      if (pScores[cat] === null || pScores[cat] === undefined) return false;
     }
   }
   return true;
 };
 
 window.handle5DiceGameOver = function() {
+  if (window.fiveDiceState.isGameOver) return;
   window.fiveDiceState.isGameOver = true;
   update5DiceUI();
-  const players = Object.keys(window.fiveDiceState.scores);
+  const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : Object.keys(window.fiveDiceState.scores);
   let maxScore = -1;
   let winners = [];
   players.forEach(p => {
