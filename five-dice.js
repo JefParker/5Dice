@@ -1,3 +1,24 @@
+function getPeerName(pId) {
+  if (pId === window.myPeerId) return window.myName;
+  if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
+    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
+    if (found && found.name) return found.name;
+  }
+  if (typeof window.getOpponentName === 'function') {
+    return window.getOpponentName();
+  }
+  return 'Opponent';
+}
+
+function getPeerColor(pId) {
+  if (pId === window.myPeerId) return window.myColor;
+  if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
+    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
+    if (found && found.color) return found.color;
+  }
+  return '#333';
+}
+
 window.fiveDiceState = {
   dice: [1, 1, 1, 1, 1],
   held: [false, false, false, false, false],
@@ -169,27 +190,6 @@ function renderScorecard() {
     { id: 'bonus-5s', label: "Bonus 5s" }
   ];
   
-function getPeerName(pId) {
-  if (pId === window.myPeerId) return window.myName;
-  if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
-    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
-    if (found && found.name) return found.name;
-  }
-  if (typeof window.getOpponentName === 'function') {
-    return window.getOpponentName();
-  }
-  return 'Opponent';
-}
-
-function getPeerColor(pId) {
-  if (pId === window.myPeerId) return window.myColor;
-  if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
-    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
-    if (found && found.color) return found.color;
-  }
-  return '#333';
-}
-
   let html = `<div class="fd-sc-row fd-sc-header"><div class="fd-sc-cat">Categories</div>`;
   players.forEach(p => {
     let pName = getPeerName(p);
