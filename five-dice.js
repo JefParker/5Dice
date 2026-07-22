@@ -142,23 +142,40 @@ function update5DiceUI() {
     }
   });
   
+function calculateUpperPar(scoresObj) {
+  if (!scoresObj) return { par: 0, text: ' (on par)' };
+  const upperBenchmarks = {
+    ones: 3,
+    twos: 6,
+    threes: 9,
+    fours: 12,
+    fives: 15,
+    sixes: 18
+  };
+  let par = 0;
+  let scoredCount = 0;
+  for (const cat in upperBenchmarks) {
+    const val = scoresObj[cat];
+    if (typeof val === 'number') {
+      par += (val - upperBenchmarks[cat]);
+      scoredCount++;
+    }
+  }
+  if (scoredCount === 0 || par === 0) {
+    return { par: 0, text: ' (on par)' };
+  }
+  const parText = par > 0 ? ` (+${par})` : ` (${par})`;
+  return { par, text: parText };
+}
+
   document.getElementById('fd-upper-total').innerText = upperTotal;
   document.getElementById('fd-lower-total').innerText = lowerTotal;
   
   const bonus = upperTotal >= 63 ? 35 : 0;
   document.getElementById('fd-bonus').innerText = bonus;
   
-  // Par calculation: each upper category should average 3 * the face value.
-  let par = 0;
-  if (myScores['ones'] !== null) par += (myScores['ones'] - 3);
-  if (myScores['twos'] !== null) par += (myScores['twos'] - 6);
-  if (myScores['threes'] !== null) par += (myScores['threes'] - 9);
-  if (myScores['fours'] !== null) par += (myScores['fours'] - 12);
-  if (myScores['fives'] !== null) par += (myScores['fives'] - 15);
-  if (myScores['sixes'] !== null) par += (myScores['sixes'] - 18);
-  
-  const parText = par === 0 ? ' (on par)' : (par > 0 ? ` (+${par})` : ` (${par})`);
-  document.getElementById('fd-total-par').innerText = `${upperTotal}${parText}`;
+  const parInfo = calculateUpperPar(myScores);
+  document.getElementById('fd-total-par').innerText = `${upperTotal}${parInfo.text}`;
   
   // Final total UI
   const total = upperTotal + lowerTotal + bonus;
@@ -229,9 +246,11 @@ function renderScorecard() {
   
   html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Upper Tot</div>`;
   players.forEach(p => {
-    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
+    const pScores = (state.scores && state.scores[p]) ? state.scores[p] : {};
+    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (typeof pScores[k] === 'number' ? pScores[k] : 0), 0);
+    const parInfo = calculateUpperPar(pScores);
     let pColor = getPeerColor(p);
-    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u}</div>`;
+    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u}${parInfo.text}</div>`;
   });
   html += `</div>`;
   
