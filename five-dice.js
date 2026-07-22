@@ -72,6 +72,15 @@ function update5DiceUI() {
     document.getElementById('fd-roll-btn').style.pointerEvents = 'none';
     renderScorecard();
   }
+
+  const btnPlayAgain = document.getElementById('btn-play-again');
+  if (btnPlayAgain) {
+    if (window.fiveDiceState.isGameOver) {
+      btnPlayAgain.classList.remove('hidden');
+    } else {
+      btnPlayAgain.classList.add('hidden');
+    }
+  }
   
   
   // Render dice
@@ -646,7 +655,7 @@ window.check5DiceGameOver = function() {
     const pScores = window.fiveDiceState.scores[p];
     if (!pScores) return false;
     for (const cat of requiredCats) {
-      if (pScores[cat] === null || pScores[cat] === undefined) return false;
+      if (typeof pScores[cat] !== 'number') return false;
     }
   }
   return true;
