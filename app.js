@@ -447,6 +447,9 @@ function renderRooms() {
     
     const div = document.createElement('div');
     div.className = 'room-card';
+    if (isReturning) {
+      div.style.border = '2px solid #00ffcc';
+    }
     
     const hostColor = r.hostColor || '#28a745';
     div.style.backgroundColor = hostColor;
@@ -454,7 +457,9 @@ function renderRooms() {
     const displayGameType = r.gameType || 'Tic-Tac-Toe';
     let seatText = '';
     let isFull = false;
-    if (r.maxPlayers && r.status === 'open') {
+    if (isReturning) {
+      seatText = `<p style="font-size: 0.85rem; margin-top: 4px; font-weight: bold; color: #00ffcc;">🎮 Game In Progress (You are playing)</p>`;
+    } else if (r.maxPlayers && r.status === 'open') {
       const currentCount = playerList.length;
       const emptySeats = Math.max(0, r.maxPlayers - currentCount);
       isFull = emptySeats === 0;
@@ -467,7 +472,7 @@ function renderRooms() {
       <h3>${r.name} - ${displayGameType}</h3>
       <p>Host: ${r.hostName || 'Host'}</p>
       ${seatText}
-      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isFull && !isReturning ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
+      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isFull && !isReturning ? 'disabled' : ''} style="${isReturning ? 'background-color: #0088cc; font-weight: bold;' : ''}">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
     list.appendChild(div);
   });
@@ -805,22 +810,29 @@ const handleLeaveGame = async () => {
 
   if (currentRoomId && activeRooms[currentRoomId]) {
     let room = activeRooms[currentRoomId];
-    let players = (room.players || []).filter(p => p.peerId !== myPeerId && p.uuid !== myUuid);
-    
-    if (players.length === 0) {
-      await window.firebaseGameBackend.deleteRoom(currentRoomId);
-    } else {
-      const newHost = players[0];
-      await window.firebaseGameBackend.updateRoom(currentRoomId, {
-        players: players,
-        host: newHost.peerId,
-        hostName: newHost.name,
-        hostColor: newHost.color
-      });
-      await window.firebaseGameBackend.updateGameState(currentRoomId, {
-        players: players,
-        host: newHost.peerId
-      });
+    const isFiveDiceOver = (window.fiveDiceState && window.fiveDiceState.isGameOver);
+    const isTTTOver = (gameState && checkWin());
+    const isGameOver = isFiveDiceOver || isTTTOver;
+
+    // Only remove player/delete room if the room is an unstarted lobby ('open') or the game has finished
+    if (room.status === 'open' || isGameOver) {
+      let players = (room.players || []).filter(p => p.peerId !== myPeerId && p.uuid !== myUuid);
+      
+      if (players.length === 0) {
+        await window.firebaseGameBackend.deleteRoom(currentRoomId);
+      } else {
+        const newHost = players[0];
+        await window.firebaseGameBackend.updateRoom(currentRoomId, {
+          players: players,
+          host: newHost.peerId,
+          hostName: newHost.name,
+          hostColor: newHost.color
+        });
+        await window.firebaseGameBackend.updateGameState(currentRoomId, {
+          players: players,
+          host: newHost.peerId
+        });
+      }
     }
   }
 
