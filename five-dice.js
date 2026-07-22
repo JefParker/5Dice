@@ -160,10 +160,31 @@ function renderScorecard() {
     { id: 'bonus-5s', label: "Bonus 5s" }
   ];
   
+function getPeerName(pId) {
+  if (pId === window.myPeerId) return window.myName;
+  if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
+    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
+    if (found && found.name) return found.name;
+  }
+  if (typeof window.getOpponentName === 'function') {
+    return window.getOpponentName();
+  }
+  return 'Opponent';
+}
+
+function getPeerColor(pId) {
+  if (pId === window.myPeerId) return window.myColor;
+  if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
+    const found = window.roomPlayerDetails.find(p => p.peerId === pId);
+    if (found && found.color) return found.color;
+  }
+  return '#333';
+}
+
   let html = `<div class="fd-sc-row fd-sc-header"><div class="fd-sc-cat">Categories</div>`;
   players.forEach(p => {
-    let pName = p === window.myPeerId ? window.myName : (window.lobbyPeers[p] ? window.lobbyPeers[p].name : 'P');
-    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    let pName = getPeerName(p);
+    let pColor = getPeerColor(p);
     html += `<div class="fd-sc-score" style="background-color: ${pColor};">${pName}</div>`;
   });
   html += `</div>`;
@@ -171,13 +192,13 @@ function renderScorecard() {
   const renderCat = (c, addSection) => {
     html += `<div class="fd-sc-row ${addSection ? 'fd-sc-section' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
     players.forEach(p => {
-      let score = state.scores[p][c.id];
+      let score = state.scores && state.scores[p] ? state.scores[p][c.id] : null;
       if (c.id === 'bonus') {
-        const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+        const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
         score = u >= 63 ? 35 : 0;
       }
       let val = (score === null || score === undefined) ? '-' : score;
-      let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+      let pColor = getPeerColor(p);
       html += `<div class="fd-sc-score" style="background-color: ${pColor};">${val}</div>`;
     });
     html += `</div>`;
@@ -187,8 +208,8 @@ function renderScorecard() {
   
   html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Upper Tot</div>`;
   players.forEach(p => {
-    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
-    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
+    let pColor = getPeerColor(p);
     html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u}</div>`;
   });
   html += `</div>`;
@@ -197,18 +218,18 @@ function renderScorecard() {
   
   html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Lower Tot</div>`;
   players.forEach(p => {
-    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
-    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
+    let pColor = getPeerColor(p);
     html += `<div class="fd-sc-score" style="background-color: ${pColor};">${l}</div>`;
   });
   html += `</div>`;
   
   html += `<div class="fd-sc-row fd-sc-section fd-sc-grand-total"><div class="fd-sc-cat">Total</div>`;
   players.forEach(p => {
-    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
-    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
+    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
+    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
     const bonus = u >= 63 ? 35 : 0;
-    let pColor = p === window.myPeerId ? window.myColor : (window.lobbyPeers[p] ? window.lobbyPeers[p].color : '#333');
+    let pColor = getPeerColor(p);
     html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u + l + bonus}</div>`;
   });
   html += `</div>`;
@@ -451,8 +472,8 @@ window.handle5DiceMessage = function(msg) {
     }
     
     if (msg.player !== window.myPeerId) {
-      const pName = window.lobbyPeers && window.lobbyPeers[msg.player] ? window.lobbyPeers[msg.player].name : 'Opponent';
-      const pColor = window.lobbyPeers && window.lobbyPeers[msg.player] ? window.lobbyPeers[msg.player].color : '#333';
+      const pName = getPeerName(msg.player);
+      const pColor = getPeerColor(msg.player);
       const catLabels = {
         'ones': "one's", 'twos': "two's", 'threes': "three's", 'fours': "four's", 'fives': "five's", 'sixes': "six's",
         'chance': "chance", 'three-kind': "3 of a kind", 'four-kind': "4 of a kind", 'full-house': "full house",
@@ -589,7 +610,7 @@ window.sync5DiceState = function(incomingState) {
       if (window.myTurn) {
         elStatus.innerText = 'Your turn!';
       } else {
-        const turnName = (lobbyPeers[currentTurnId] && lobbyPeers[currentTurnId].name) ? lobbyPeers[currentTurnId].name : 'Opponent';
+        const turnName = getPeerName(currentTurnId);
         elStatus.innerText = `${turnName}'s turn`;
       }
     }
@@ -655,7 +676,7 @@ window.handle5DiceGameOver = function() {
   } else {
     const gc = document.querySelector('.game-container');
     if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
-    document.getElementById('game-status').innerText = `${window.lobbyPeers[winners[0]]?.name || 'Opponent'} Wins!`;
+    document.getElementById('game-status').innerText = `${getPeerName(winners[0])} Wins!`;
   }
   document.getElementById('btn-play-again').classList.remove('hidden');
 };
