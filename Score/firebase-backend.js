@@ -194,10 +194,23 @@ window.firebaseBackend = {
         // Event timestamps are written with serverTimestamp() (server clock), so we must
         // filter against the SERVER's notion of "now", not the local device clock (which
         // may be skewed). Firebase exposes the client<->server offset at /.info/serverTimeOffset.
+        // NOTE: .info is a synthetic client-side path — it must be read with a listener
+        // (onValue), not a one-time get(), which rejects it as an "Invalid token in path".
         let serverTimeOffset = 0;
         try {
-            const offsetSnap = await get(ref(db, '.info/serverTimeOffset'));
-            serverTimeOffset = offsetSnap.val() || 0;
+            serverTimeOffset = await new Promise((resolve) => {
+                let settled = false;
+                const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
+                try {
+                    onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
+                        finish(snap.val() || 0);
+                    }, { onlyOnce: true });
+                } catch (e) {
+                    finish(0);
+                }
+                // Never let this hold up joining the room.
+                setTimeout(() => finish(0), 3000);
+            });
         } catch (e) {
             console.error("Failed to read serverTimeOffset, falling back to local clock:", e);
         }
