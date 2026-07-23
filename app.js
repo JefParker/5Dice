@@ -687,6 +687,14 @@ function handleGameStateUpdate(gameData) {
     myTurn = (myPeerId === turnPlayerId);
   }
 
+  // Host-only "Start now": begin before the room is full (needs at least 2 players).
+  const btnStartNow = document.getElementById('btn-start-now');
+  if (btnStartNow) {
+    const amHost = (gameHost === myPeerId);
+    const canStartEarly = amHost && !window.gameStarted && gamePlayers.length >= 2;
+    btnStartNow.classList.toggle('hidden', !canStartEarly);
+  }
+
   if (is5Dice) {
     if (gameData.fiveDiceState) {
       // Ensure all players are initialized in scores structure
@@ -943,6 +951,21 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
     await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
   }
 });
+
+// Host starts the game early with whoever is currently in the room.
+const btnStartNowEl = document.getElementById('btn-start-now');
+if (btnStartNowEl) {
+  btnStartNowEl.addEventListener('click', async () => {
+    if (!currentRoomId || !window.firebaseGameBackend) return;
+    const lockedCount = gamePlayers.length;
+    if (lockedCount < 2) { alert('You need at least 2 players to start.'); return; }
+    btnStartNowEl.classList.add('hidden');
+    // Lock the roster to the players who are here now (so nobody can join mid-game)
+    // and flip the room to in-progress, which starts the game for everyone.
+    await window.firebaseGameBackend.updateRoom(currentRoomId, { status: 'in-progress', maxPlayers: lockedCount });
+    await window.firebaseGameBackend.updateGameState(currentRoomId, { status: 'in-progress' });
+  });
+}
 
 function updateBoard() {
   gameState = parseGameState(gameState);
