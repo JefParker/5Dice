@@ -80,6 +80,46 @@
           ".validate": false
         }
       }
+    },
+
+    "lobby": {
+      "rooms": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+
+      "chats": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "$msgId": {
+          ".validate": "newData.hasChildren(['text'])",
+          "text": {
+            ".validate": "newData.isString() && newData.val().length < 2000"
+          },
+          "author": {
+            ".validate": "newData.isString() && newData.val().length < 100"
+          },
+          "color": {
+            ".validate": "newData.isString() && newData.val().length < 40"
+          },
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          },
+          "id": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+
+    "games": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
     }
   }
 }
