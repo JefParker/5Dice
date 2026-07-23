@@ -301,7 +301,11 @@ window.firebaseBackend = {
         if (!(await requireAuth())) return;
         const selfRef = ref(db, `rooms/${room}/presence/${playerId}`);
         try {
-            await onDisconnect(selfRef).cancel();
+            // Best-effort immediate removal. We intentionally do NOT cancel the armed
+            // onDisconnect() handler: if this explicit remove doesn't finish (e.g. the
+            // tab is being torn down on close), onDisconnect() still removes the node
+            // when the socket closes. Cancelling here was disarming that safety net and
+            // leaving stale presence behind.
             await remove(selfRef);
         } catch (e) {
             console.error("Failed to leave presence:", e);
