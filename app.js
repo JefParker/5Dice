@@ -814,7 +814,14 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
 function updateBoard() {
   const cells = document.querySelectorAll('.cell');
   cells.forEach((cell, i) => {
-    cell.innerText = gameState[i];
+    const val = gameState[i] || '';
+    cell.innerText = val;
+    cell.classList.remove('cell-x', 'cell-o');
+    if (val === 'X') {
+      cell.classList.add('cell-x');
+    } else if (val === 'O') {
+      cell.classList.add('cell-o');
+    }
   });
 }
 
