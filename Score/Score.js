@@ -11,11 +11,21 @@ var contextMenu = null;
 
 onload = () => {
     GetUserData();
+
+    // Check if room is encoded in the URL query string (e.g. ?room=143)
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room') || urlParams.get('roomID') || urlParams.get('GameID');
+    let isViaShareLink = false;
+    if (roomParam) {
+        g_objUserData.GameID = parseInt(roomParam) || roomParam;
+        isViaShareLink = true;
+    }
+
     SetUpData();
     SetGameData();
     ServiceWorkerReg();
 
-    if ("" == g_objUserData.Name)
+    if ("" == g_objUserData.Name || isViaShareLink)
         ShowEnterID();
     else {
         CheckConnection();
@@ -1157,6 +1167,9 @@ const MakeContextMenuHTML = (sWindowShowing) => {
     sPage += "<li class='context-link' id='GameID'>";
     sPage += "<span class='context-label'>Settings</span>";
     sPage += "</li>";
+    sPage += "<li class='context-link' id='Share'>";
+    sPage += "<span class='context-label'>Share</span>";
+    sPage += "</li>";
     sPage += "<li class='context-link' id='About'>";
     sPage += "<span class='context-label'>About</span>";
     sPage += "</li>";
@@ -1183,6 +1196,13 @@ const MakeContextMenuHTML = (sWindowShowing) => {
 const InitializeContextMenu = (sWindowShowing) => {
     contextMenu = document.querySelector(".context");
     contextMenu.style.textAlign = 'left';
+
+    const shareBtn = document.querySelector("#Share");
+    if (shareBtn) {
+        shareBtn.addEventListener("click", () => {
+            ShowShareModal();
+        });
+    }
 
     document.querySelector("#ToggleDice").addEventListener("click", () => {
 
@@ -1232,6 +1252,93 @@ const InitializeContextMenu = (sWindowShowing) => {
     });
 
     //GetRoomList = true
+
+// --- SHARE FEATURE HANDLERS ---
+const getShareUrl = () => {
+    const baseUrl = window.location.origin + window.location.pathname;
+    return `${baseUrl}?room=${g_objUserData.GameID}`;
+};
+
+const getShareText = () => {
+    return `Join my 5 Dice game room #${g_objUserData.GameID}!`;
+};
+
+window.ShowShareModal = () => {
+    const roomIdEl = document.getElementById('share-room-id');
+    const urlInputEl = document.getElementById('share-url-input');
+    const modalEl = document.getElementById('share-modal');
+
+    if (roomIdEl) roomIdEl.innerText = g_objUserData.GameID || '';
+    if (urlInputEl) urlInputEl.value = getShareUrl();
+    if (modalEl) modalEl.classList.remove('hidden');
+};
+
+window.hideShareModal = () => {
+    const modalEl = document.getElementById('share-modal');
+    if (modalEl) modalEl.classList.add('hidden');
+};
+
+window.copyShareUrl = () => {
+    const url = getShareUrl();
+    navigator.clipboard.writeText(url).then(() => {
+        if (typeof ColorToast === 'function') {
+            ColorToast('Room link copied to clipboard!', '#25d366');
+        } else {
+            alert('Room link copied to clipboard!');
+        }
+    }).catch(() => {
+        const input = document.getElementById('share-url-input');
+        if (input) {
+            input.select();
+            input.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            alert('Room link copied to clipboard!');
+        }
+    });
+};
+
+window.triggerNativeShare = () => {
+    const shareData = {
+        title: '5 Dice Score Sheet',
+        text: getShareText(),
+        url: getShareUrl()
+    };
+    if (navigator.share) {
+        navigator.share(shareData).catch(err => console.log('Share cancelled:', err));
+    } else {
+        copyShareUrl();
+    }
+};
+
+window.shareToSignal = () => {
+    const shareData = {
+        title: '5 Dice Score Sheet',
+        text: getShareText(),
+        url: getShareUrl()
+    };
+    if (navigator.share) {
+        navigator.share(shareData).catch(err => console.log('Signal share cancelled:', err));
+    } else {
+        copyShareUrl();
+        alert('Link copied! Open Signal and paste into any chat.');
+    }
+};
+
+window.shareToWhatsApp = () => {
+    const text = encodeURIComponent(`${getShareText()} ${getShareUrl()}`);
+    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+};
+
+window.shareToSMS = () => {
+    const text = encodeURIComponent(`${getShareText()} ${getShareUrl()}`);
+    window.open(`sms:?body=${text}`, '_self');
+};
+
+window.shareToEmail = () => {
+    const subject = encodeURIComponent(`Join 5 Dice Game - Room #${g_objUserData.GameID}`);
+    const body = encodeURIComponent(`${getShareText()}\n\nClick here to join:\n${getShareUrl()}`);
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
+};
 
 
     document.addEventListener("contextmenu", (ev) => {

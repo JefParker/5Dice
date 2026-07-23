@@ -37,6 +37,39 @@
 
 <body id='Body'>
 <div id='Main'></div>
+
+<!-- Share Modal -->
+<div id="share-modal" class="share-overlay hidden">
+  <div class="share-modal-content">
+    <h3 style="margin-top: 0; margin-bottom: 8px; color: #ffffff;">Share Game Room</h3>
+    <p style="margin-bottom: 14px; font-size: 0.95rem; color: #dddddd;">Invite players to join Room <strong id="share-room-id" style="color: #00ffcc;"></strong>:</p>
+    
+    <div class="share-url-box">
+      <input type="text" id="share-url-input" readonly />
+      <button id="btn-copy-share-url" onclick="copyShareUrl()">Copy</button>
+    </div>
+    
+    <div class="share-options-grid">
+      <button class="share-action-btn btn-native-share" onclick="triggerNativeShare()">
+        <span class="share-btn-icon">📲</span> Share...
+      </button>
+      <button class="share-action-btn btn-signal" onclick="shareToSignal()">
+        <span class="share-btn-icon">💬</span> Signal
+      </button>
+      <button class="share-action-btn btn-whatsapp" onclick="shareToWhatsApp()">
+        <span class="share-btn-icon">🟢</span> WhatsApp
+      </button>
+      <button class="share-action-btn btn-sms" onclick="shareToSMS()">
+        <span class="share-btn-icon">✉️</span> Messages
+      </button>
+      <button class="share-action-btn btn-email" onclick="shareToEmail()">
+        <span class="share-btn-icon">📧</span> Email
+      </button>
+    </div>
+    
+    <button class="share-close-btn" onclick="hideShareModal()">Close</button>
+  </div>
+</div>
 </body>
 
 </html>

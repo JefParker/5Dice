@@ -653,3 +653,118 @@ only screen and (max-device-width: 280px) {
 only screen and (max-device-height: 320px) {
 
 }
+
+/* Share Modal Styles */
+.hidden {
+    display: none !important;
+}
+
+.share-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.share-modal-content {
+    background: #1a1a2e;
+    color: #ffffff;
+    border: 2px solid #30345b;
+    border-radius: 18px;
+    padding: 22px;
+    width: 90%;
+    max-width: 380px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.share-url-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.share-url-box input {
+    flex: 1;
+    background: #0f0f1b;
+    border: 1px solid #30345b;
+    border-radius: 8px;
+    color: #00ffcc;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    font-family: monospace;
+}
+
+.share-url-box button {
+    background: #00ffcc;
+    color: #0f0f1b;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.share-url-box button:hover {
+    background: #00cca3;
+}
+
+.share-options-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.share-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.share-action-btn:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.btn-native-share { background: #4a4e69; }
+.btn-signal { background: #3a76f0; }
+.btn-whatsapp { background: #25d366; }
+.btn-sms { background: #00b4d8; }
+.btn-email { background: #7209b7; }
+
+.share-close-btn {
+    background: transparent;
+    border: 1px solid #555577;
+    color: #cccccc;
+    padding: 8px 24px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.share-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
