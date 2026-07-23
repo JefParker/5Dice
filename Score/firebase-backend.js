@@ -39,6 +39,36 @@ window.firebaseBackend = {
         }
         return JSON.stringify(arr);
     },
+
+    getAllRooms: async () => {
+        await authPromise;
+        const snapshot = await get(ref(db, 'rooms'));
+        const roomList = [];
+        if (snapshot.exists()) {
+            const rooms = snapshot.val();
+            for (let roomId in rooms) {
+                const roomData = rooms[roomId];
+                let playerNames = [];
+                if (roomData && roomData.scores) {
+                    for (let pid in roomData.scores) {
+                        const p = roomData.scores[pid];
+                        if (p.score) {
+                            try {
+                                const parsedScore = typeof p.score === 'string' ? JSON.parse(p.score) : p.score;
+                                if (parsedScore.Name) playerNames.push(parsedScore.Name);
+                            } catch(e) {}
+                        }
+                    }
+                }
+                roomList.push({
+                    id: roomId,
+                    players: playerNames,
+                    lastEntered: roomData.lastEntered || 0
+                });
+            }
+        }
+        return roomList;
+    },
     
     clearRoom: async (room) => {
         await authPromise;

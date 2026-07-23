@@ -1291,6 +1291,68 @@ window.shareToEmail = () => {
     window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
 };
 
+// --- ROOM LIST MODAL HANDLERS ---
+window.ShowRoomListModal = async () => {
+    const modalEl = document.getElementById('room-list-modal');
+    const containerEl = document.getElementById('room-list-container');
+    if (!modalEl || !containerEl) return;
+
+    containerEl.innerHTML = `<p style="color: #aaaaaa; text-align: center;">Loading active rooms...</p>`;
+    modalEl.classList.remove('hidden');
+    modalEl.style.display = 'flex';
+
+    try {
+        let rooms = [];
+        if (window.firebaseBackend && typeof window.firebaseBackend.getAllRooms === 'function') {
+            rooms = await window.firebaseBackend.getAllRooms();
+        }
+
+        if (!rooms || rooms.length === 0) {
+            containerEl.innerHTML = `
+                <div style="text-align: center; padding: 15px 0;">
+                    <p style="color: #dddddd; margin-bottom: 12px;">No active game rooms found.</p>
+                    <button style="background: #00ffcc; color: #0f0f1b; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer;" onclick="hideRoomListModal(); ShowEnterID();">Set Up New Room</button>
+                </div>
+            `;
+            return;
+        }
+
+        // Sort rooms by lastEntered descending or numerically
+        rooms.sort((a, b) => (b.lastEntered || 0) - (a.lastEntered || 0));
+
+        let html = '';
+        rooms.forEach(r => {
+            const playerStr = (r.players && r.players.length > 0) ? r.players.join(', ') : 'Waiting...';
+            html += `
+                <div class="room-list-item" onclick="joinRoomFromList('${r.id}')">
+                    <div>
+                        <span class="room-link">Room #${r.id}</span>
+                    </div>
+                    <span class="room-players">👥 ${playerStr}</span>
+                </div>
+            `;
+        });
+        containerEl.innerHTML = html;
+    } catch (err) {
+        console.error("Error fetching rooms:", err);
+        containerEl.innerHTML = `<p style="color: #ff5555; text-align: center;">Failed to load rooms.</p>`;
+    }
+};
+
+window.hideRoomListModal = () => {
+    const modalEl = document.getElementById('room-list-modal');
+    if (modalEl) {
+        modalEl.classList.add('hidden');
+        modalEl.style.display = 'none';
+    }
+};
+
+window.joinRoomFromList = (roomId) => {
+    hideRoomListModal();
+    g_objUserData.GameID = roomId;
+    ShowEnterID();
+};
+
 const InitializeContextMenu = (sWindowShowing) => {
     contextMenu = document.querySelector(".context");
     if (!contextMenu) return;
@@ -1355,13 +1417,10 @@ const InitializeContextMenu = (sWindowShowing) => {
 
     const getRoomListBtn = document.querySelector("#GetRoomList");
     if (getRoomListBtn) {
-        getRoomListBtn.addEventListener("click", () => {
-            postFileFromServer("Score.php", "GetRoomList=" + true, getRoomListCallback);
-            function getRoomListCallback(data) {
-                if (data) {
-                    alert(data);
-                }
-            }
+        getRoomListBtn.addEventListener("click", (ev) => {
+            if (ev) ev.stopPropagation();
+            if (contextMenu) contextMenu.style.visibility = null;
+            ShowRoomListModal();
         });
     }
 

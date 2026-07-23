@@ -70,6 +70,19 @@
     <button class="share-close-btn" onclick="hideShareModal()">Close</button>
   </div>
 </div>
+
+<!-- Room List Modal -->
+<div id="room-list-modal" class="share-overlay hidden" style="display: none;">
+  <div class="share-modal-content" style="max-width: 420px; text-align: left;">
+    <h3 style="margin-top: 0; margin-bottom: 12px; color: #ffffff; text-align: center;">Active Game Rooms</h3>
+    <div id="room-list-container" style="max-height: 260px; overflow-y: auto; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <p style="color: #aaaaaa; text-align: center;">Loading rooms...</p>
+    </div>
+    <div style="text-align: center;">
+      <button class="share-close-btn" onclick="hideRoomListModal()">Close</button>
+    </div>
+  </div>
+</div>
 </body>
 
 </html>
