@@ -28,6 +28,7 @@ class Dice3D {
 
     this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1); // sharp on HiDPI/retina
     this.container.appendChild(this.renderer.domElement);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -119,9 +120,12 @@ class Dice3D {
     this.rollData = null;
     
     document.body.classList.add('dice3d-active');
-    
-    window.addEventListener('resize', this.onWindowResize.bind(this));
-    
+
+    // Store the bound handler so destroy() can actually remove it (a fresh .bind()
+    // can never be removed, which leaked a listener + the whole instance per re-init).
+    this._onResize = this.onWindowResize.bind(this);
+    window.addEventListener('resize', this._onResize);
+
     this.animate();
   }
   
@@ -171,9 +175,11 @@ class Dice3D {
   }
   
   onWindowResize() {
+    if (this.destroyed) return;
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
   }
   
   get3DTarget(x, y, targetSize) {
@@ -200,6 +206,7 @@ class Dice3D {
       case 5: rot.set(Math.PI/2, 0, 0); break;
       case 3: rot.set(0, 0, Math.PI/2); break;
       case 4: rot.set(0, 0, -Math.PI/2); break;
+      default: console.warn('getTargetRotation: unexpected die value', value); break;
     }
     return new THREE.Quaternion().setFromEuler(rot);
   }
@@ -215,7 +222,12 @@ class Dice3D {
       targets: [],
       onComplete,
       startLerpQuats: [],
-      startLerpPos: []
+      startLerpPos: [],
+      // Persist these so the roll-completion path can build a valid snapData.
+      // Previously they were omitted, so snapData.targetElements was undefined and
+      // _applySnap() threw a TypeError every frame after a roll, freezing the canvas.
+      targetElements,
+      heldState: [0, 1, 2, 3, 4].map(i => !unheldIndices.includes(i))
     };
     
     for (let i = 0; i < 5; i++) {
@@ -241,8 +253,8 @@ class Dice3D {
       this.diceMeshes[i].scale.setScalar(targetSize);
       
       // Update physics shape to match visual scale
-      this.diceBodies[i].shapes[0] = new CANNON.Box(new CANNON.Vec3(targetSize/2, targetSize/2, targetSize/2));
-      
+      this._resizeBodyShape(this.diceBodies[i], targetSize);
+
       const targetRot = this.getTargetRotation(finalValues[i]);
       this.rollData.targets.push({ pos: targetPos, rot: targetRot });
       
@@ -324,8 +336,8 @@ class Dice3D {
       const targetSize = rect.width / pixelsPerUnit;
       
       this.diceMeshes[i].scale.setScalar(targetSize);
-      this.diceBodies[i].shapes[0] = new CANNON.Box(new CANNON.Vec3(targetSize/2, targetSize/2, targetSize/2));
-      
+      this._resizeBodyShape(this.diceBodies[i], targetSize);
+
       const targetPos = this.get3DTarget(centerX, centerY, targetSize);
       const targetRot = this.getTargetRotation(finalValues[i]);
       
@@ -348,8 +360,43 @@ class Dice3D {
       this.diceMeshes[i].quaternion.copy(targetRot);
     }
   }
+  // Swap a body's box shape to a new size WITHOUT leaving Cannon's cached
+  // bounding radius / inertia stale (which could cause missed collisions).
+  _resizeBodyShape(body, targetSize) {
+    body.shapes[0] = new CANNON.Box(new CANNON.Vec3(targetSize/2, targetSize/2, targetSize/2));
+    if (typeof body.updateBoundingRadius === 'function') body.updateBoundingRadius();
+    if (typeof body.updateMassProperties === 'function') body.updateMassProperties();
+    if (typeof body.computeAABB === 'function') body.computeAABB();
+  }
+
   destroy() {
     this.destroyed = true;
+
+    // Remove the resize listener (using the stored bound reference).
+    if (this._onResize) {
+      window.removeEventListener('resize', this._onResize);
+      this._onResize = null;
+    }
+
+    // Dispose GPU resources so WebGL contexts / buffers don't leak across re-inits.
+    try {
+      (this.diceMeshes || []).forEach(mesh => {
+        if (mesh.geometry) mesh.geometry.dispose();
+      });
+      [this.normalMaterials, this.heldMaterials].forEach(set => {
+        (set || []).forEach(mat => {
+          if (mat.map) mat.map.dispose();
+          mat.dispose();
+        });
+      });
+      if (this.renderer) {
+        this.renderer.dispose();
+        if (this.renderer.forceContextLoss) this.renderer.forceContextLoss();
+      }
+    } catch (e) {
+      console.warn('Dice3D destroy cleanup error:', e);
+    }
+
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }

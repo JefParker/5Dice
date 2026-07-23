@@ -92,8 +92,11 @@ function update5DiceUI() {
   if (window.myTurn && !window.fiveDiceState.isGameOver) {
     document.getElementById('fd-board').classList.remove('hidden');
     document.getElementById('fd-scorecard').classList.add('hidden');
-    document.getElementById('fd-roll-btn').style.opacity = '1';
-    document.getElementById('fd-roll-btn').style.pointerEvents = 'auto';
+    // Also dim/disable the roll button once out of rolls (previously only the
+    // handler guard stopped it, so it still looked clickable at 0 rolls).
+    const outOfRolls = state.rollsLeft <= 0;
+    document.getElementById('fd-roll-btn').style.opacity = outOfRolls ? '0.3' : '1';
+    document.getElementById('fd-roll-btn').style.pointerEvents = outOfRolls ? 'none' : 'auto';
   } else {
     document.getElementById('fd-board').classList.add('hidden');
     document.getElementById('fd-scorecard').classList.remove('hidden');
@@ -284,7 +287,7 @@ document.querySelectorAll('.fd-die').forEach(die => {
     if (!window.myTurn) return; // Only hold on your turn
     const dieEl = e.target.closest('.fd-die');
     if (!dieEl) return;
-    const idx = parseInt(dieEl.getAttribute('data-index'));
+    const idx = parseInt(dieEl.getAttribute('data-index'), 10);
     if (isNaN(idx)) return;
     if (window.fiveDiceState.rollsLeft < 3) {
       window.fiveDiceState.held[idx] = !window.fiveDiceState.held[idx];
@@ -358,7 +361,11 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     
     const score = calculate5DiceScore(cat, window.fiveDiceState.dice);
     
-    // Show commit dialog
+    // Show commit dialog. Remove any existing overlay first so we never have two
+    // overlays sharing the same element IDs (which wired handlers to the wrong
+    // buttons and could commit the wrong category).
+    document.querySelectorAll('.fd-commit-overlay').forEach(el => el.remove());
+
     const commitDiv = document.createElement('div');
     commitDiv.className = 'fd-commit-overlay';
     commitDiv.innerHTML = `
@@ -369,12 +376,14 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       </div>
     `;
     document.getElementById('five-dice-container').appendChild(commitDiv);
-    
-    document.getElementById('btn-fd-undo').onclick = () => {
+
+    // Bind against THIS overlay's buttons (not getElementById, which returns the
+    // first match in the document).
+    commitDiv.querySelector('#btn-fd-undo').onclick = () => {
       commitDiv.remove();
     };
-    
-    document.getElementById('btn-fd-commit').onclick = () => {
+
+    commitDiv.querySelector('#btn-fd-commit').onclick = () => {
       window.fiveDiceState.scores[window.myPeerId][cat] = score;
       commitDiv.remove();
       

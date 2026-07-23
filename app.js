@@ -1,10 +1,23 @@
 // --- GLOBALS ---
-let myPeerId = sessionStorage.getItem('myPeerId');
+// Persist peerId across sessions (was sessionStorage). Turn, host, and score state
+// are all keyed by peerId; when it changed on reconnect (new tab/session), nobody
+// matched the active turn and the game froze. A stable per-device peerId fixes that.
+let myPeerId = localStorage.getItem('myPeerId') || sessionStorage.getItem('myPeerId');
 if (!myPeerId) {
   myPeerId = 'peer-' + Math.random().toString(36).substr(2, 9);
-  sessionStorage.setItem('myPeerId', myPeerId);
 }
+localStorage.setItem('myPeerId', myPeerId);
 window.myPeerId = myPeerId;
+
+// Escape user-controlled text before inserting into innerHTML (chat, room/host names).
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function generateDarkColor() {
   const colors = ["#235880", "#3F1F74", "#6F4F1F", "#2E2B53", "#264C1C", "#533A51", "#220066", "MidnightBlue", "#4d004d", "RebeccaPurple", "Sienna", "#181B59", "#006652", "#006666", "#404040"];
@@ -276,7 +289,7 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
   const div = document.createElement('div');
   div.className = 'chat-msg';
   div.style.backgroundColor = color || '#333';
-  div.innerHTML = `<strong>${author}:</strong> ${text}`;
+  div.innerHTML = `<strong>${escapeHtml(author)}:</strong> ${escapeHtml(text)}`;
   chatHistory.appendChild(div);
   chatHistory.scrollTop = chatHistory.scrollHeight;
   setTimeout(() => { if (div.parentNode) div.remove(); }, timeRemaining);
@@ -285,6 +298,13 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
 window.getOpponentName = function() {
   const otherPlayer = roomPlayerDetails.find(p => p.peerId !== myPeerId);
   return otherPlayer ? otherPlayer.name : 'Opponent';
+};
+
+// Name of the player whose turn it actually is (correct for 3+ players, unlike
+// getOpponentName which just returns the first other player).
+window.getPlayerNameById = function(peerId) {
+  const p = (roomPlayerDetails || []).find(pp => pp.peerId === peerId);
+  return p && p.name ? p.name : 'Opponent';
 };
 
 window.getOpponentColor = function() {
@@ -422,7 +442,7 @@ document.getElementById('room-name-input').addEventListener('keydown', (e) => {
 document.getElementById('btn-create-room').addEventListener('click', async () => {
   const roomName = document.getElementById('room-name-input').value || 'New Game';
   const gameType = document.getElementById('game-type-select') ? document.getElementById('game-type-select').value : 'Tic-Tac-Toe';
-  const maxPlayers = document.getElementById('player-count') ? parseInt(document.getElementById('player-count').value) : 2;
+  const maxPlayers = document.getElementById('player-count') ? parseInt(document.getElementById('player-count').value, 10) : 2;
   
   showLoading('Creating Room...');
   
@@ -533,8 +553,8 @@ function renderRooms() {
     
     div.innerHTML = `
       ${deleteBtnHtml}
-      <h3>${r.name} - ${displayGameType}</h3>
-      <p>Host: ${r.hostName || 'Host'}</p>
+      <h3>${escapeHtml(r.name)} - ${escapeHtml(displayGameType)}</h3>
+      <p>Host: ${escapeHtml(r.hostName || 'Host')}</p>
       ${seatText}
       <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isFull && !isReturning ? 'disabled' : ''} style="${isReturning ? 'background-color: #0088cc; font-weight: bold;' : ''}">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
@@ -555,22 +575,39 @@ window.joinRoom = async function(roomId) {
   currentRoomId = roomId;
   isHost = (room.host === myPeerId);
 
-  let players = room.players || [];
-  const existingPlayerIndex = players.findIndex(p => p.uuid === myUuid || p.peerId === myPeerId);
-  
-  if (existingPlayerIndex < 0) {
-    players.push({ peerId: myPeerId, uuid: myUuid, name: myName, color: myColor });
+  const me = { peerId: myPeerId, uuid: myUuid, name: myName, color: myColor };
+  const maxPlayers = room.maxPlayers || 2;
+
+  let players;
+  let updatedStatus;
+
+  // Preferred: atomic transaction join (avoids two joiners clobbering each other).
+  const res = window.firebaseGameBackend.addPlayerToRoom
+    ? await window.firebaseGameBackend.addPlayerToRoom(roomId, me, maxPlayers)
+    : { ok: false, reason: 'error' };
+
+  if (res.ok) {
+    players = res.players;
+    updatedStatus = res.status;
+  } else if (res.reason === 'full') {
+    hideLoading();
+    return alert('This game room is full.');
+  } else if (res.reason === 'gone') {
+    hideLoading();
+    return alert('Room no longer exists.');
   } else {
-    players[existingPlayerIndex] = { peerId: myPeerId, uuid: myUuid, name: myName, color: myColor };
+    // Fallback (transient/transaction error): the previous read-modify-write path.
+    players = room.players || [];
+    const existingPlayerIndex = players.findIndex(p => p.uuid === myUuid || p.peerId === myPeerId);
+    if (existingPlayerIndex < 0) players.push(me);
+    else players[existingPlayerIndex] = me;
+    const isFullNow = players.length >= maxPlayers;
+    updatedStatus = isFullNow ? 'in-progress' : room.status;
+    await window.firebaseGameBackend.updateRoom(roomId, {
+      players: players,
+      status: updatedStatus
+    });
   }
-
-  const isFullNow = players.length >= (room.maxPlayers || 2);
-  const updatedStatus = isFullNow ? 'in-progress' : room.status;
-
-  await window.firebaseGameBackend.updateRoom(roomId, {
-    players: players,
-    status: updatedStatus
-  });
 
   await window.firebaseGameBackend.updateGameState(roomId, {
     players: players,
@@ -661,7 +698,7 @@ function handleGameStateUpdate(gameData) {
       }
     }
     if (!window.fiveDiceState || !window.fiveDiceState.isGameOver) {
-      document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
+      document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getPlayerNameById(turnPlayerId)}'s turn...`;
     }
   } else {
     // Skip overwriting local state if we have pending moves being written to Firebase
@@ -670,7 +707,7 @@ function handleGameStateUpdate(gameData) {
       updateBoard();
       const isOver = checkWin();
       if (!isOver) {
-        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getPlayerNameById(turnPlayerId)}'s turn`;
         document.getElementById('tic-tac-toe-board').classList.remove('disabled');
       } else {
         document.getElementById('btn-play-again').classList.remove('hidden');
@@ -971,7 +1008,9 @@ const handleLeaveGame = async () => {
   if (currentRoomId && activeRooms[currentRoomId]) {
     let room = activeRooms[currentRoomId];
     const isFiveDiceOver = (window.fiveDiceState && window.fiveDiceState.isGameOver);
-    const isTTTOver = (gameState && checkWin());
+    // Use the side-effect-free check here; checkWin() mutates the DOM/turn state,
+    // which corrupted the UI while leaving the room.
+    const isTTTOver = checkWinSilent();
     const isGameOver = isFiveDiceOver || isTTTOver;
 
     // Only remove player/delete room if the room is an unstarted lobby ('open') or the game has finished

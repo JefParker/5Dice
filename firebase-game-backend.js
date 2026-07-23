@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -8,9 +8,34 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
-const authPromise = signInAnonymously(auth).catch((error) => {
-  console.error("Anonymous auth failed:", error);
-});
+// Anonymous auth with failure tracking. A failed sign-in used to be swallowed
+// into a resolved promise, so every method proceeded unauthenticated and then
+// failed (often silently) on permission errors. Now we record the failure and
+// let callers retry / bail.
+let authError = null;
+
+async function ensureAuth() {
+  try {
+    await signInAnonymously(auth);
+    authError = null;
+  } catch (err) {
+    authError = err;
+    console.error("Anonymous auth failed:", err);
+  }
+}
+
+let authPromise = ensureAuth();
+
+// Await auth and retry once if it failed. Returns true when authenticated.
+async function requireAuth() {
+  await authPromise;
+  if (authError) {
+    authPromise = ensureAuth();
+    await authPromise;
+  }
+  if (window.firebaseGameBackend) window.firebaseGameBackend.authError = authError;
+  return !authError;
+}
 
 let roomsUnsubscribe = null;
 let chatUnsubscribe = null;
@@ -22,7 +47,7 @@ window.firebaseGameBackend = {
   authPromise: authPromise,
 
   init: async (onStatusChange) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     const connectedRef = ref(db, ".info/connected");
     onValue(connectedRef, (snap) => {
       window.firebaseGameBackend.isConnected = snap.val() === true;
@@ -37,7 +62,7 @@ window.firebaseGameBackend = {
 
   // --- LOBBY ROOMS ---
   listenRooms: async (onRoomsCallback) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (roomsUnsubscribe) roomsUnsubscribe();
     const roomsRef = ref(db, "lobby/rooms");
     roomsUnsubscribe = onValue(roomsRef, (snapshot) => {
@@ -48,7 +73,7 @@ window.firebaseGameBackend = {
   },
 
   createRoom: async (room) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (!room || !room.id) return;
     const roomRef = ref(db, `lobby/rooms/${room.id}`);
     await set(roomRef, {
@@ -56,12 +81,13 @@ window.firebaseGameBackend = {
       lastActive: Date.now()
     });
 
-    // Cleanup old rooms after 24h idle when creating rooms
-    window.firebaseGameBackend.cleanupOldRooms();
+    // Cleanup old rooms (>48h idle). Awaited so a rejection can't become an
+    // unhandled promise rejection; runs after the fresh lastActive write above.
+    await window.firebaseGameBackend.cleanupOldRooms();
   },
 
   updateRoom: async (roomId, updates) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (!roomId) return;
     const roomRef = ref(db, `lobby/rooms/${roomId}`);
     await update(roomRef, {
@@ -71,14 +97,52 @@ window.firebaseGameBackend = {
   },
 
   deleteRoom: async (roomId) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (!roomId) return;
     await remove(ref(db, `lobby/rooms/${roomId}`));
     await remove(ref(db, `games/${roomId}`));
   },
 
+  // Atomically add/refresh a player in a room. Uses a transaction so two people
+  // joining the same room at once can't clobber each other (the old read-modify-write
+  // of a cached array was last-writer-wins). Returns a result object describing the
+  // outcome so the caller can distinguish full/gone/error from success.
+  addPlayerToRoom: async (roomId, player, maxPlayers) => {
+    if (!(await requireAuth())) return { ok: false, reason: 'auth' };
+    if (!roomId || !player) return { ok: false, reason: 'error' };
+    const roomRef = ref(db, `lobby/rooms/${roomId}`);
+    try {
+      let reason = null;
+      const result = await runTransaction(roomRef, (room) => {
+        if (!room) { reason = 'gone'; return room; }
+        reason = null;
+        const players = Array.isArray(room.players) ? room.players.slice() : [];
+        const idx = players.findIndex(p => p && (p.uuid === player.uuid || p.peerId === player.peerId));
+        if (idx >= 0) {
+          players[idx] = player; // reconnect: refresh this player's entry
+        } else {
+          if (maxPlayers && players.length >= maxPlayers) { reason = 'full'; return; }
+          players.push(player);
+        }
+        room.players = players;
+        room.lastActive = Date.now();
+        if (maxPlayers && players.length >= maxPlayers) room.status = 'in-progress';
+        else if (!room.status) room.status = 'open';
+        return room;
+      });
+      if (result && result.committed && result.snapshot && result.snapshot.exists()) {
+        const val = result.snapshot.val();
+        return { ok: true, players: val.players || [], status: val.status || 'open' };
+      }
+      return { ok: false, reason: reason || 'gone' };
+    } catch (e) {
+      console.error('addPlayerToRoom transaction failed:', e);
+      return { ok: false, reason: 'error' };
+    }
+  },
+
   cleanupOldRooms: async () => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     const cutoff = Date.now() - (48 * 60 * 60 * 1000);
     const roomsRef = ref(db, 'lobby/rooms');
     try {
@@ -102,7 +166,7 @@ window.firebaseGameBackend = {
 
   // --- LOBBY CHAT ---
   listenLobbyChat: async (onChatCallback) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (chatUnsubscribe) chatUnsubscribe();
     const chatRef = ref(db, "lobby/chats");
     const q = query(chatRef, limitToLast(30));
@@ -114,7 +178,7 @@ window.firebaseGameBackend = {
   },
 
   sendLobbyChat: async (chatMsg) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     const chatRef = ref(db, "lobby/chats");
     const newMsgRef = push(chatRef);
     await set(newMsgRef, chatMsg);
@@ -122,7 +186,7 @@ window.firebaseGameBackend = {
 
   // --- GAME SESSION ---
   initGameSession: async (roomId, initialGameData) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (!roomId) return;
     const gameRef = ref(db, `games/${roomId}`);
     await set(gameRef, {
@@ -132,7 +196,7 @@ window.firebaseGameBackend = {
   },
 
   updateGameState: async (roomId, stateUpdates) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (!roomId) return;
     const gameRef = ref(db, `games/${roomId}`);
     await update(gameRef, {
@@ -142,7 +206,7 @@ window.firebaseGameBackend = {
   },
 
   listenGameState: async (roomId, onStateCallback) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (gameStateUnsubscribe) gameStateUnsubscribe();
     if (!roomId) return;
     const gameRef = ref(db, `games/${roomId}`);
@@ -155,26 +219,48 @@ window.firebaseGameBackend = {
 
   // --- REAL-TIME GAME EVENTS (Dice Roll, Hold, Score Actions) ---
   sendGameEvent: async (roomId, eventObj) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (!roomId) return;
     const eventsRef = ref(db, `games/${roomId}/events`);
     const newEvtRef = push(eventsRef);
     await set(newEvtRef, {
       ...eventObj,
-      timestamp: Date.now()
+      // Server clock, so the listener's freshness filter compares like-for-like
+      // across devices instead of trusting the sender's (possibly skewed) clock.
+      timestamp: serverTimestamp()
     });
   },
 
   listenGameEvents: async (roomId, onEventCallback) => {
-    await authPromise;
+    if (!(await requireAuth())) return;
     if (gameEventsUnsubscribe) gameEventsUnsubscribe();
     if (!roomId) return;
     const eventsRef = ref(db, `games/${roomId}/events`);
-    const startTime = Date.now();
+
+    // Events are stamped with serverTimestamp() (server clock). Compare against the
+    // SERVER's "now" (Date.now() + offset), read from the synthetic .info path via a
+    // listener (a one-time get() rejects that path as "Invalid token in path").
+    let serverTimeOffset = 0;
+    try {
+      serverTimeOffset = await new Promise((resolve) => {
+        let settled = false;
+        const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
+        try {
+          onValue(ref(db, '.info/serverTimeOffset'), (snap) => finish(snap.val() || 0), { onlyOnce: true });
+        } catch (e) { finish(0); }
+        setTimeout(() => finish(0), 3000);
+      });
+    } catch (e) {
+      console.error("Failed to read serverTimeOffset, falling back to local clock:", e);
+    }
+    const startTime = Date.now() + serverTimeOffset;
+
     const q = query(eventsRef, limitToLast(10));
     gameEventsUnsubscribe = onChildAdded(q, (snapshot) => {
       const evt = snapshot.val();
-      if (evt && evt.timestamp >= startTime - 5000) {
+      // Allow events with no timestamp yet (serverTimestamp resolves async) and
+      // any event newer than ~5s before we joined.
+      if (evt && (!evt.timestamp || evt.timestamp >= startTime - 5000)) {
         onEventCallback(evt);
       }
     });
