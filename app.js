@@ -450,6 +450,9 @@ function renderRooms() {
     
     validRoomCount++;
     const isReturning = r.status === 'in-progress' && isPlayer;
+    const isHost = (r.hostUuid === myUuid || r.host === myPeerId);
+    const otherPlayers = playerList.filter(p => p.uuid !== myUuid && p.peerId !== myPeerId);
+    const canDelete = isHost && (otherPlayers.length === 0);
     
     const div = document.createElement('div');
     div.className = 'room-card';
@@ -473,8 +476,11 @@ function renderRooms() {
                  (isFull ? 'Game Full' : `${emptySeats} Seat${emptySeats === 1 ? '' : 's'} Remaining`) + 
                  `</p>`;
     }
+
+    const deleteBtnHtml = canDelete ? `<button class="delete-room-btn" title="Delete Game Room" onclick="promptDeleteRoom(event, '${r.id}')">✕</button>` : '';
     
     div.innerHTML = `
+      ${deleteBtnHtml}
       <h3>${r.name} - ${displayGameType}</h3>
       <p>Host: ${r.hostName || 'Host'}</p>
       ${seatText}
@@ -960,6 +966,62 @@ if (confirmUuidYes) {
     confirmUuidModal.classList.add('hidden');
     showToast("Player ID synced! Reloading...");
     setTimeout(() => location.reload(), 1500);
+  });
+}
+
+// --- DELETE ROOM LOGIC ---
+let pendingDeleteRoomId = null;
+
+window.promptDeleteRoom = function(e, roomId) {
+  if (e) e.stopPropagation();
+  const room = activeRooms[roomId];
+  if (!room) return;
+
+  pendingDeleteRoomId = roomId;
+  const nameEl = document.getElementById('delete-room-name');
+  if (nameEl) nameEl.innerText = room.name || 'this game';
+
+  const modal = document.getElementById('delete-room-modal');
+  if (modal) modal.classList.remove('hidden');
+};
+
+const deleteRoomModal = document.getElementById('delete-room-modal');
+const btnConfirmDeleteRoom = document.getElementById('btn-confirm-delete-room');
+const btnCancelDeleteRoom = document.getElementById('btn-cancel-delete-room');
+
+if (btnCancelDeleteRoom) {
+  btnCancelDeleteRoom.addEventListener('click', () => {
+    if (deleteRoomModal) deleteRoomModal.classList.add('hidden');
+    pendingDeleteRoomId = null;
+  });
+}
+
+if (btnConfirmDeleteRoom) {
+  btnConfirmDeleteRoom.addEventListener('click', async () => {
+    if (!pendingDeleteRoomId) return;
+    const targetRoomId = pendingDeleteRoomId;
+    if (deleteRoomModal) deleteRoomModal.classList.add('hidden');
+    
+    // Double check if room still exists & still empty
+    const room = activeRooms[targetRoomId];
+    if (room) {
+      const playerList = room.players || [];
+      const otherPlayers = playerList.filter(p => p.uuid !== myUuid && p.peerId !== myPeerId);
+      if (otherPlayers.length > 0) {
+        showToast("Cannot delete: another player is in the room", "#dc3545");
+        pendingDeleteRoomId = null;
+        return;
+      }
+    }
+
+    try {
+      await window.firebaseGameBackend.deleteRoom(targetRoomId);
+      showToast("Game room deleted");
+    } catch (err) {
+      console.error("Error deleting room:", err);
+      showToast("Failed to delete game room", "#dc3545");
+    }
+    pendingDeleteRoomId = null;
   });
 }
 

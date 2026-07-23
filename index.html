@@ -258,6 +258,18 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Room Modal -->
+    <div id="delete-room-modal" class="overlay hidden">
+      <div class="overlay-content">
+        <h2 style="color: #dc3545;">Delete Game Room?</h2>
+        <p style="margin: 15px 0;">Are you sure you want to delete <strong id="delete-room-name" style="color: #fff;"></strong>? This will permanently remove it from the lobby database.</p>
+        <div class="action-group">
+          <button id="btn-confirm-delete-room" class="capsule-button" style="background-color: #dc3545; color: white; margin-bottom: 0;">Delete Room</button>
+          <button id="btn-cancel-delete-room" class="capsule-button" style="margin-bottom: 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
     
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden"></div>
