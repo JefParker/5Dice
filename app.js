@@ -666,17 +666,26 @@ function handleGameStateUpdate(gameData) {
   gamePlayers = roomPlayerDetails.map(p => p.peerId);
   gameHost = gameData.host || (gamePlayers.length > 0 ? gamePlayers[0] : null);
 
+  const room = activeRooms[currentRoomId] || gameData;
+  const is5Dice = (room && room.gameType === '5 Dice');
+
+  // The game only becomes active once the room is full (status flips to
+  // 'in-progress'). Until then nobody may take a turn. This matters for 3-6 player
+  // rooms where players join over time; with 2 players the room fills instantly so
+  // this window was previously invisible.
+  window.gameStarted = (gameData.status === 'in-progress');
+  window.gameMaxPlayers = (room && room.maxPlayers) || gamePlayers.length;
+
   const turnPlayerId = gameData.currentTurnPlayerId || gameHost;
   window.currentTurnPlayerId = turnPlayerId;
 
-  if (gamePlayers.length <= 1) {
+  if (!window.gameStarted) {
+    myTurn = false;
+  } else if (gamePlayers.length <= 1) {
     myTurn = true;
   } else {
     myTurn = (myPeerId === turnPlayerId);
   }
-
-  const room = activeRooms[currentRoomId] || gameData;
-  const is5Dice = (room && room.gameType === '5 Dice');
 
   if (is5Dice) {
     if (gameData.fiveDiceState) {
@@ -697,9 +706,8 @@ function handleGameStateUpdate(gameData) {
         window.sync5DiceState(gameData.fiveDiceState);
       }
     }
-    if (!window.fiveDiceState || !window.fiveDiceState.isGameOver) {
-      document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getPlayerNameById(turnPlayerId)}'s turn...`;
-    }
+    // 5 Dice status text (waiting-for-players / whose-turn / game-over) is owned
+    // entirely by sync5DiceState so there's a single source of truth.
   } else {
     // Skip overwriting local state if we have pending moves being written to Firebase
     if (pendingMoveCount === 0) {

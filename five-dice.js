@@ -4,10 +4,9 @@ function getPeerName(pId) {
     const found = window.roomPlayerDetails.find(p => p.peerId === pId || p.uuid === pId);
     if (found && found.name) return found.name;
   }
-  if (typeof window.getOpponentName === 'function') {
-    return window.getOpponentName();
-  }
-  return 'Opponent';
+  // Generic fallback (do NOT use getOpponentName here — it returns the first other
+  // player, which is wrong in 3-6 player games).
+  return 'Player';
 }
 
 function getPeerColor(pId) {
@@ -16,9 +15,7 @@ function getPeerColor(pId) {
     const found = window.roomPlayerDetails.find(p => p.peerId === pId || p.uuid === pId);
     if (found && found.color) return found.color;
   }
-  if (typeof window.getOpponentColor === 'function') {
-    return window.getOpponentColor();
-  }
+  // Generic fallback (avoid getOpponentColor — 2-player biased).
   return '#333';
 }
 
@@ -681,11 +678,22 @@ window.sync5DiceState = function(incomingState) {
   
   // The person whose turn it is, is the first person in turnOrder who has the minCount
   let currentTurnId = turnOrder.find(p => getCount(p) === minCount) || window.gameHost;
-  
-  window.myTurn = (window.myPeerId === currentTurnId);
+
+  // No turns until the room is full and the game has started (gameStarted === false
+  // only when app.js has explicitly told us the room isn't full yet).
+  const notStarted = (window.gameStarted === false);
+  window.myTurn = !notStarted && (window.myPeerId === currentTurnId);
   window.currentTurnPlayerId = currentTurnId;
 
-  if (window.check5DiceGameOver()) {
+  if (notStarted) {
+    const elStatus = document.getElementById('game-status');
+    if (elStatus) {
+      const cnt = (window.gamePlayers || []).length;
+      const maxP = window.gameMaxPlayers || cnt;
+      elStatus.innerText = `Waiting for players... (${cnt}/${maxP})`;
+    }
+    update5DiceUI();
+  } else if (window.check5DiceGameOver()) {
     window.handle5DiceGameOver();
   } else {
     const elStatus = document.getElementById('game-status');
