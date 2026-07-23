@@ -442,8 +442,10 @@ document.getElementById('room-name-input').addEventListener('keydown', (e) => {
 document.getElementById('btn-create-room').addEventListener('click', async () => {
   const roomName = document.getElementById('room-name-input').value || 'New Game';
   const gameType = document.getElementById('game-type-select') ? document.getElementById('game-type-select').value : 'Tic-Tac-Toe';
-  const maxPlayers = document.getElementById('player-count') ? parseInt(document.getElementById('player-count').value, 10) : 2;
-  
+  let maxPlayers = document.getElementById('player-count') ? parseInt(document.getElementById('player-count').value, 10) : 2;
+  // Tic-Tac-Toe is strictly a 2-player game; enforce it regardless of dropdown state.
+  if (gameType === 'Tic-Tac-Toe') maxPlayers = 2;
+
   showLoading('Creating Room...');
   
   const roomId = Math.random().toString(36).substr(2, 9);
@@ -725,6 +727,10 @@ function handleGameStateUpdate(gameData) {
       if (!isOver) {
         document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getPlayerNameById(turnPlayerId)}'s turn`;
         document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+        // Safeguard: clear a stale tie/win background if a reset (empty-board) state
+        // arrives without the accompanying PLAY_AGAIN event.
+        const gs = document.getElementById('screen-game');
+        if (gs) gs.classList.remove('tie-background');
       } else {
         document.getElementById('btn-play-again').classList.remove('hidden');
       }
@@ -851,6 +857,9 @@ function createBoard() {
 }
 
 async function handleMove(index) {
+  // The game must have started (room full, or the host used "Start now") before
+  // anyone — including the host — can place a mark.
+  if (window.gameStarted === false) return;
   // Enforce turn order in multiplayer
   if (gamePlayers.length > 1 && !myTurn) return;
 
@@ -874,7 +883,11 @@ async function handleMove(index) {
   const otherPlayer = gamePlayers.find(p => p !== myPeerId) || myPeerId;
   const nextTurnPlayer = gameOver ? myPeerId : (gamePlayers.length <= 1 ? myPeerId : otherPlayer);
 
-  myTurn = (myPeerId === nextTurnPlayer || gamePlayers.length <= 1);
+  // Keep local turn state consistent immediately (so the turn-color background is
+  // correct before the Firebase echo). Don't re-enable my turn once the game is over
+  // — checkWin() already set myTurn=false on a final move.
+  window.currentTurnPlayerId = nextTurnPlayer;
+  myTurn = !gameOver && (myPeerId === nextTurnPlayer || gamePlayers.length <= 1);
 
   if (!gameOver) {
     document.getElementById('game-status').innerText = (gamePlayers.length <= 1 || myTurn) ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
