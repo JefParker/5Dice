@@ -59,6 +59,21 @@ if (!myColor) {
 }
 saveSharedProfile(myName, myColor);
 
+function parseGameState(rawState) {
+  const result = ['', '', '', '', '', '', '', '', ''];
+  if (!rawState) return result;
+  if (Array.isArray(rawState)) {
+    for (let i = 0; i < 9; i++) {
+      result[i] = rawState[i] || '';
+    }
+  } else if (typeof rawState === 'object') {
+    for (let i = 0; i < 9; i++) {
+      result[i] = rawState[i] || rawState[i.toString()] || '';
+    }
+  }
+  return result;
+}
+
 window.addEventListener('storage', (e) => {
   if (e.key === 'playerName' || e.key === 'playerColor' || e.key === 'UserData') {
     const updatedName = localStorage.getItem('playerName');
@@ -648,7 +663,7 @@ function handleGameStateUpdate(gameData) {
       document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
     }
   } else {
-    gameState = gameData.gameState || ['', '', '', '', '', '', '', '', ''];
+    gameState = parseGameState(gameData.gameState);
     updateBoard();
     const isOver = checkWin();
     if (!isOver) {
@@ -752,6 +767,7 @@ function createBoard() {
 }
 
 async function handleMove(index) {
+  gameState = parseGameState(gameState);
   if (gameState[index] !== '') return;
 
   if (!myTurn && gamePlayers.length > 1) {
@@ -801,7 +817,7 @@ async function handleMove(index) {
 function resetGame(firstTurn = null) {
   const selectedFirstTurn = firstTurn || gameHost;
   window.currentTurnPlayerId = selectedFirstTurn;
-  myTurn = (myPeerId === selectedFirstTurn);
+  myTurn = (myPeerId === selectedFirstTurn || gamePlayers.length <= 1);
   gameState = ['', '', '', '', '', '', '', '', ''];
   updateBoard();
   
@@ -848,6 +864,7 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
 });
 
 function updateBoard() {
+  gameState = parseGameState(gameState);
   const cells = document.querySelectorAll('.cell');
   cells.forEach((cell, i) => {
     const val = gameState[i] || '';
@@ -862,6 +879,7 @@ function updateBoard() {
 }
 
 function checkWin() {
+  gameState = parseGameState(gameState);
   const winPatterns = [
     [0,1,2],[3,4,5],[6,7,8],
     [0,3,6],[1,4,7],[2,5,8],
