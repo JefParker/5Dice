@@ -1193,66 +1193,6 @@ const MakeContextMenuHTML = (sWindowShowing) => {
     return sPage;
 }
 
-const InitializeContextMenu = (sWindowShowing) => {
-    contextMenu = document.querySelector(".context");
-    contextMenu.style.textAlign = 'left';
-
-    const shareBtn = document.querySelector("#Share");
-    if (shareBtn) {
-        shareBtn.addEventListener("click", () => {
-            ShowShareModal();
-        });
-    }
-
-    document.querySelector("#ToggleDice").addEventListener("click", () => {
-
-        if (document.getElementById('DiceRack')) {
-            document.getElementById('DiceRack').style.visibility = g_objGame.DiceRackShowing ? null : 'visible';
-        }
-
-        g_objGame.DiceRackShowing = g_objGame.DiceRackShowing ? false : true;
-
-        //ColorToast('Not yet implemented... ' + g_objGame.DiceRackShowing, "#533A51");
-
-    });
-
-    document.querySelector("#RefreshLeaderBoard").addEventListener("click", () => {
-        //g_objGame.LeaderList = [];
-        //DisplayScore(g_objScore);
-        //BCastRequestScores();
-        RequestLeaderBoard();
-        BCastRequestLeaderBoard();
-    });
-
-    document.querySelector("#GameID").addEventListener("click", () => {
-        ShowEnterID();
-    });
-
-    document.querySelector("#About").addEventListener("click", () => {
-        alert("Score Sheet rev. v240225k");
-    });
-
-    document.querySelector("#ClearRoom").addEventListener("click", () => {
-        if (confirm("Clear the room?"))
-            ClearRoomInServerDB();
-    });
-
-    document.querySelector("#ClearAllRooms").addEventListener("click", () => {
-        if (confirm("Clear all rooms?"))
-            ClearAllRoomsInServerDB();
-    });
-
-    document.querySelector("#GetRoomList").addEventListener("click", () => {
-        postFileFromServer("Score.php", "GetRoomList=" + true, getRoomListCallback);
-        function getRoomListCallback(data) {
-            if (data) {
-                alert(data);
-            }
-        }
-    });
-
-    //GetRoomList = true
-
 // --- SHARE FEATURE HANDLERS ---
 const getShareUrl = () => {
     const baseUrl = window.location.origin + window.location.pathname;
@@ -1340,6 +1280,79 @@ window.shareToEmail = () => {
     window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
 };
 
+const InitializeContextMenu = (sWindowShowing) => {
+    contextMenu = document.querySelector(".context");
+    if (!contextMenu) return;
+    contextMenu.style.textAlign = 'left';
+
+    const shareBtn = document.querySelector("#Share");
+    if (shareBtn) {
+        shareBtn.addEventListener("click", (ev) => {
+            if (ev) ev.stopPropagation();
+            if (contextMenu) contextMenu.style.visibility = null;
+            ShowShareModal();
+        });
+    }
+
+    const toggleDiceBtn = document.querySelector("#ToggleDice");
+    if (toggleDiceBtn) {
+        toggleDiceBtn.addEventListener("click", () => {
+            if (document.getElementById('DiceRack')) {
+                document.getElementById('DiceRack').style.visibility = g_objGame.DiceRackShowing ? null : 'visible';
+            }
+            g_objGame.DiceRackShowing = g_objGame.DiceRackShowing ? false : true;
+        });
+    }
+
+    const refreshLeaderBtn = document.querySelector("#RefreshLeaderBoard");
+    if (refreshLeaderBtn) {
+        refreshLeaderBtn.addEventListener("click", () => {
+            RequestLeaderBoard();
+            BCastRequestLeaderBoard();
+        });
+    }
+
+    const gameIdBtn = document.querySelector("#GameID");
+    if (gameIdBtn) {
+        gameIdBtn.addEventListener("click", () => {
+            ShowEnterID();
+        });
+    }
+
+    const aboutBtn = document.querySelector("#About");
+    if (aboutBtn) {
+        aboutBtn.addEventListener("click", () => {
+            alert("Score Sheet rev. v240225k");
+        });
+    }
+
+    const clearRoomBtn = document.querySelector("#ClearRoom");
+    if (clearRoomBtn) {
+        clearRoomBtn.addEventListener("click", () => {
+            if (confirm("Clear the room?"))
+                ClearRoomInServerDB();
+        });
+    }
+
+    const clearAllRoomsBtn = document.querySelector("#ClearAllRooms");
+    if (clearAllRoomsBtn) {
+        clearAllRoomsBtn.addEventListener("click", () => {
+            if (confirm("Clear all rooms?"))
+                ClearAllRoomsInServerDB();
+        });
+    }
+
+    const getRoomListBtn = document.querySelector("#GetRoomList");
+    if (getRoomListBtn) {
+        getRoomListBtn.addEventListener("click", () => {
+            postFileFromServer("Score.php", "GetRoomList=" + true, getRoomListCallback);
+            function getRoomListCallback(data) {
+                if (data) {
+                    alert(data);
+                }
+            }
+        });
+    }
 
     document.addEventListener("contextmenu", (ev) => {
         ev.preventDefault();
@@ -1348,8 +1361,7 @@ window.shareToEmail = () => {
     });
 
     document.addEventListener("click", () => {
-        contextMenu.style.visibility = null;
-        // document.getElementById('DiceRack').style.visibility = null;
+        if (contextMenu) contextMenu.style.visibility = null;
     });
 }
 
