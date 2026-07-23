@@ -745,12 +745,18 @@ function createBoard() {
   const board = document.getElementById('tic-tac-toe-board');
   if (!board) return;
   board.innerHTML = '';
-  for (let i=0; i<9; i++) {
+  for (let i = 0; i < 9; i++) {
     const cell = document.createElement('div');
     const val = gameState[i] || '';
     cell.className = 'cell' + (val === 'X' ? ' cell-x' : (val === 'O' ? ' cell-o' : ''));
     cell.dataset.index = i;
     cell.innerText = val;
+    
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleMove(i);
+    });
+
     board.appendChild(cell);
   }
 
@@ -770,22 +776,12 @@ async function handleMove(index) {
   gameState = parseGameState(gameState);
   if (gameState[index] !== '') return;
 
-  if (!myTurn && gamePlayers.length > 1) {
-    const statusEl = document.getElementById('game-status');
-    if (statusEl) {
-      const origText = statusEl.innerText;
-      statusEl.innerText = `Wait for ${window.getOpponentName()}'s turn!`;
-      setTimeout(() => { statusEl.innerText = origText; }, 1500);
-    }
-    return;
-  }
-
+  const playedCount = gameState.filter(c => c !== '').length;
   let mySymbol = 'X';
   if (gamePlayers.length <= 1) {
-    const playedCount = gameState.filter(c => c !== '').length;
     mySymbol = (playedCount % 2 === 0) ? 'X' : 'O';
   } else {
-    mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+    mySymbol = (myPeerId === gameHost) ? (playedCount % 2 === 0 ? 'X' : 'O') : (playedCount % 2 === 1 ? 'O' : 'X');
   }
 
   gameState[index] = mySymbol;
