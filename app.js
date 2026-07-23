@@ -583,9 +583,10 @@ function setupGameUI(gameType, isRejoin = false) {
       update5DiceUI();
     }
   } else {
-    tttBoard.classList.remove('hidden');
+    tttBoard.classList.remove('hidden', 'disabled');
     fdContainer.classList.add('hidden');
     document.body.classList.remove('bg-five-dice');
+    updateBoard();
   }
 }
 
@@ -612,7 +613,12 @@ function handleGameStateUpdate(gameData) {
 
   const turnPlayerId = gameData.currentTurnPlayerId || gameHost;
   window.currentTurnPlayerId = turnPlayerId;
-  myTurn = (myPeerId === turnPlayerId);
+
+  if (gamePlayers.length <= 1) {
+    myTurn = true;
+  } else {
+    myTurn = (myPeerId === turnPlayerId);
+  }
 
   const room = activeRooms[currentRoomId] || gameData;
   const is5Dice = (room && room.gameType === '5 Dice');
@@ -640,16 +646,14 @@ function handleGameStateUpdate(gameData) {
       document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
     }
   } else {
-    if (gameData.gameState) {
-      gameState = gameData.gameState;
-      updateBoard();
-      const isOver = checkWin();
-      if (!isOver) {
-        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
-        document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-      } else {
-        document.getElementById('btn-play-again').classList.remove('hidden');
-      }
+    gameState = gameData.gameState || ['', '', '', '', '', '', '', '', ''];
+    updateBoard();
+    const isOver = checkWin();
+    if (!isOver) {
+      document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+      document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+    } else {
+      document.getElementById('btn-play-again').classList.remove('hidden');
     }
   }
 
@@ -735,18 +739,18 @@ function createBoard() {
 
 async function handleMove(index) {
   if (gameState[index] !== '' || !myTurn) return;
-  const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+  const mySymbol = (myPeerId === gameHost || gamePlayers.length <= 1) ? 'X' : 'O';
   gameState[index] = mySymbol;
   updateBoard();
   
   const gameOver = checkWin();
   const otherPlayer = gamePlayers.find(p => p !== myPeerId) || myPeerId;
-  const nextTurnPlayer = gameOver ? myPeerId : otherPlayer;
+  const nextTurnPlayer = gameOver ? myPeerId : (gamePlayers.length <= 1 ? myPeerId : otherPlayer);
 
-  myTurn = (myPeerId === nextTurnPlayer);
+  myTurn = (myPeerId === nextTurnPlayer || gamePlayers.length <= 1);
 
   if (!gameOver) {
-    document.getElementById('game-status').innerText = `${window.getOpponentName()}'s turn`;
+    document.getElementById('game-status').innerText = (gamePlayers.length <= 1 || myTurn) ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
   } else {
     document.getElementById('btn-play-again').classList.remove('hidden');
   }
