@@ -738,8 +738,26 @@ function createBoard() {
 }
 
 async function handleMove(index) {
-  if (gameState[index] !== '' || !myTurn) return;
-  const mySymbol = (myPeerId === gameHost || gamePlayers.length <= 1) ? 'X' : 'O';
+  if (gameState[index] !== '') return;
+
+  if (!myTurn && gamePlayers.length > 1) {
+    const statusEl = document.getElementById('game-status');
+    if (statusEl) {
+      const origText = statusEl.innerText;
+      statusEl.innerText = `Wait for ${window.getOpponentName()}'s turn!`;
+      setTimeout(() => { statusEl.innerText = origText; }, 1500);
+    }
+    return;
+  }
+
+  let mySymbol = 'X';
+  if (gamePlayers.length <= 1) {
+    const playedCount = gameState.filter(c => c !== '').length;
+    mySymbol = (playedCount % 2 === 0) ? 'X' : 'O';
+  } else {
+    mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
+  }
+
   gameState[index] = mySymbol;
   updateBoard();
   
