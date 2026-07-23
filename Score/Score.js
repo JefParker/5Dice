@@ -1184,9 +1184,6 @@ const MakeContextMenuHTML = (sWindowShowing) => {
     sPage += "<li class='context-link' id='RefreshLeaderBoard'>";
     sPage += "<span class='context-label'>Refresh Leaders</span>";
     sPage += "</li>";
-    sPage += "<li class='context-link' id='ClearAllRooms'>";
-    sPage += "<span class='context-label'>Clear All Rooms</span>";
-    sPage += "</li>";
     sPage += "<li class='context-link' id='ClearRoom'>";
     sPage += "<span class='context-label'>Clear Room</span>";
     sPage += "</li>";
@@ -1404,14 +1401,6 @@ const InitializeContextMenu = (sWindowShowing) => {
         clearRoomBtn.addEventListener("click", () => {
             if (confirm("Clear the room?"))
                 ClearRoomInServerDB();
-        });
-    }
-
-    const clearAllRoomsBtn = document.querySelector("#ClearAllRooms");
-    if (clearAllRoomsBtn) {
-        clearAllRoomsBtn.addEventListener("click", () => {
-            if (confirm("Clear all rooms?"))
-                ClearAllRoomsInServerDB();
         });
     }
 
