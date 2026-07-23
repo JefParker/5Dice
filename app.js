@@ -773,15 +773,20 @@ function createBoard() {
 }
 
 async function handleMove(index) {
+  // Enforce turn order in multiplayer
+  if (gamePlayers.length > 1 && !myTurn) return;
+
   gameState = parseGameState(gameState);
   if (gameState[index] !== '') return;
 
   const playedCount = gameState.filter(c => c !== '').length;
   let mySymbol = 'X';
   if (gamePlayers.length <= 1) {
+    // Solo: alternate X and O each move
     mySymbol = (playedCount % 2 === 0) ? 'X' : 'O';
   } else {
-    mySymbol = (myPeerId === gameHost) ? (playedCount % 2 === 0 ? 'X' : 'O') : (playedCount % 2 === 1 ? 'O' : 'X');
+    // Multiplayer: host is always X, non-host is always O
+    mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
   }
 
   gameState[index] = mySymbol;
@@ -861,7 +866,9 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
 
 function updateBoard() {
   gameState = parseGameState(gameState);
-  const cells = document.querySelectorAll('.cell');
+  const board = document.getElementById('tic-tac-toe-board');
+  if (!board) return;
+  const cells = board.querySelectorAll('.cell');
   cells.forEach((cell, i) => {
     const val = gameState[i] || '';
     cell.innerText = val;
