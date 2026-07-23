@@ -79,7 +79,7 @@ window.firebaseGameBackend = {
 
   cleanupOldRooms: async () => {
     await authPromise;
-    const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+    const cutoff = Date.now() - (48 * 60 * 60 * 1000);
     const roomsRef = ref(db, 'lobby/rooms');
     try {
       const snapshot = await get(roomsRef);

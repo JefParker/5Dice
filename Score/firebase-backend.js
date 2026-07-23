@@ -42,6 +42,7 @@ window.firebaseBackend = {
 
     getAllRooms: async () => {
         await authPromise;
+        await window.firebaseBackend.cleanupOldRooms();
         const snapshot = await get(ref(db, 'rooms'));
         const roomList = [];
         if (snapshot.exists()) {
@@ -86,22 +87,21 @@ window.firebaseBackend = {
         // 48 hours in milliseconds
         const cutoff = Date.now() - (48 * 60 * 60 * 1000);
         const roomsRef = ref(db, 'rooms');
-        const oldRoomsQuery = query(roomsRef, orderByChild('lastEntered'), endAt(cutoff));
         try {
-            const snapshot = await get(oldRoomsQuery);
+            const snapshot = await get(roomsRef);
             if (snapshot.exists()) {
+                const rooms = snapshot.val();
                 const updates = {};
-                snapshot.forEach((childSnapshot) => {
-                    const val = childSnapshot.val();
+                for (let roomId in rooms) {
+                    const val = rooms[roomId];
                     let shouldDelete = false;
                     if (val && val.lastEntered && val.lastEntered < cutoff) {
                         shouldDelete = true;
                     } else if (val && !val.lastEntered) {
-                        // For legacy rooms without lastEntered, check if they are old based on scores
                         let isOld = true;
                         if (val.scores) {
                             for (let pid in val.scores) {
-                                if (val.scores[pid].lastdataset > cutoff) {
+                                if (val.scores[pid].lastdataset && val.scores[pid].lastdataset > cutoff) {
                                     isOld = false;
                                     break;
                                 }
@@ -110,12 +110,12 @@ window.firebaseBackend = {
                         if (isOld) shouldDelete = true;
                     }
                     if (shouldDelete) {
-                        updates[childSnapshot.key] = null;
+                        updates[roomId] = null;
                     }
-                });
+                }
                 if (Object.keys(updates).length > 0) {
-                    await update(ref(db, 'rooms'), updates);
-                    console.log("Cleaned up old rooms:", Object.keys(updates));
+                    await update(roomsRef, updates);
+                    console.log("Cleaned up old 48h rooms:", Object.keys(updates));
                 }
             }
         } catch (e) {
@@ -130,9 +130,8 @@ window.firebaseBackend = {
         
         set(ref(db, `rooms/${room}/lastEntered`), serverTimestamp());
         
-        if (Math.random() < 0.1) {
-            window.firebaseBackend.cleanupOldRooms();
-        }
+        // Clean up any stale rooms (>48h inactive)
+        window.firebaseBackend.cleanupOldRooms();
         
         if (window.firebaseBackend.currentUnsubscribe) {
             window.firebaseBackend.currentUnsubscribe();
