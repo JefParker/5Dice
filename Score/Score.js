@@ -19,6 +19,11 @@ onload = () => {
     if (roomParam) {
         g_objUserData.GameID = parseInt(roomParam) || roomParam;
         isViaShareLink = true;
+
+        // Strip room query parameter from address bar to prevent going back to setup screen on page refresh
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
     }
 
     SetUpData();
