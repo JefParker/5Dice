@@ -171,6 +171,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(registration => {
       console.log('SW registered: ', registration);
+      registration.update();
     }).catch(registrationError => {
       console.log('SW registration failed: ', registrationError);
     });
@@ -586,6 +587,7 @@ function setupGameUI(gameType, isRejoin = false) {
     tttBoard.classList.remove('hidden', 'disabled');
     fdContainer.classList.add('hidden');
     document.body.classList.remove('bg-five-dice');
+    createBoard();
     updateBoard();
   }
 }
@@ -730,10 +732,22 @@ function createBoard() {
   board.innerHTML = '';
   for (let i=0; i<9; i++) {
     const cell = document.createElement('div');
-    cell.className = 'cell';
+    const val = gameState[i] || '';
+    cell.className = 'cell' + (val === 'X' ? ' cell-x' : (val === 'O' ? ' cell-o' : ''));
     cell.dataset.index = i;
-    cell.addEventListener('click', () => handleMove(i));
+    cell.innerText = val;
     board.appendChild(cell);
+  }
+
+  if (!board.dataset.hasDelegation) {
+    board.dataset.hasDelegation = 'true';
+    board.addEventListener('click', (e) => {
+      const cell = e.target.closest('.cell');
+      if (cell && cell.dataset.index !== undefined) {
+        const idx = parseInt(cell.dataset.index, 10);
+        if (!isNaN(idx)) handleMove(idx);
+      }
+    });
   }
 }
 

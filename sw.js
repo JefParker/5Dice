@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v77';
+const CACHE_NAME = '5dice-cache-v79';
 const urlsToCache = [
   './',
   './index.html',
@@ -46,17 +46,16 @@ self.addEventListener('fetch', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(clients.claim());
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          if (cacheName !== CACHE_NAME) {
+            console.log('SW deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

@@ -413,15 +413,15 @@ label {
 }
 
 .cell.cell-x {
-  color: #00ffcc;
+  color: #00ffcc !important;
   text-shadow: 0 0 12px rgba(0, 255, 204, 0.6);
-  background-color: #2b2b2b;
+  background-color: #2b2b2b !important;
 }
 
 .cell.cell-o {
-  color: #ffaa00;
+  color: #ffaa00 !important;
   text-shadow: 0 0 12px rgba(255, 170, 0, 0.6);
-  background-color: #2b2b2b;
+  background-color: #2b2b2b !important;
 }
 
 /* Overlays */
