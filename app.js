@@ -91,6 +91,7 @@ let recentChats = []; // { id, author, text, timestamp }
 // --- GAME STATE GLOBALS ---
 let gameState = ['', '', '', '', '', '', '', '', ''];
 let myTurn = false;
+let pendingMove = false; // Flag to prevent Firebase listener from overwriting local state during a write
 let gamePlayers = [];
 let gameHost = null;
 let roomPlayerDetails = [];
@@ -663,8 +664,11 @@ function handleGameStateUpdate(gameData) {
       document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
     }
   } else {
-    gameState = parseGameState(gameData.gameState);
-    updateBoard();
+    // Skip overwriting local state if we have a pending move being written to Firebase
+    if (!pendingMove) {
+      gameState = parseGameState(gameData.gameState);
+      updateBoard();
+    }
     const isOver = checkWin();
     if (!isOver) {
       document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
@@ -806,16 +810,24 @@ async function handleMove(index) {
   updateGameBackground();
 
   if (window.firebaseGameBackend && currentRoomId) {
-    await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'move', index, player: mySymbol, sender: myPeerId });
-    await window.firebaseGameBackend.updateGameState(currentRoomId, {
-      gameState: gameState,
-      currentTurnPlayerId: nextTurnPlayer,
-      lastUpdated: Date.now()
-    });
+    // Set pendingMove flag to prevent the Firebase listener from overwriting
+    // our local state with stale data before the write completes
+    pendingMove = true;
+    try {
+      await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'move', index, player: mySymbol, sender: myPeerId });
+      await window.firebaseGameBackend.updateGameState(currentRoomId, {
+        gameState: gameState,
+        currentTurnPlayerId: nextTurnPlayer,
+        lastUpdated: Date.now()
+      });
+    } finally {
+      pendingMove = false;
+    }
   }
 }
 
 function resetGame(firstTurn = null) {
+  pendingMove = false;
   const selectedFirstTurn = firstTurn || gameHost;
   window.currentTurnPlayerId = selectedFirstTurn;
   myTurn = (myPeerId === selectedFirstTurn || gamePlayers.length <= 1);
