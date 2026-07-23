@@ -275,20 +275,24 @@ body {
     width: 100%;
     bottom: 90px;
     text-align: center;
-    /*z-index: 4;*/
+    z-index: 2000;
+    pointer-events: none;
 }
 
 .ToastMsg {
     font-family: 'Poppins', arial, helvetica, sans-serif;
-    background-color: cornflowerblue;
+    background-color: #28a745;
+    color: #ffffff;
+    font-weight: 500;
     display: inline-block;
-    min-width: 100px;
-    padding: 5px 15px 5px 15px;
+    min-width: 120px;
+    padding: 8px 18px;
     margin-right: auto;
     margin-left: auto;
     text-align: center;
-    z-index: 5;
-    border-radius: 5px;
+    z-index: 2001;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
     opacity: 0.0;
     -webkit-animation: ToastAni 4.5s ease-in-out 0.2s backwards;
     -moz-animation: ToastAni 4.5s ease-in-out 0.2s backwards;

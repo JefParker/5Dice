@@ -1228,7 +1228,7 @@ window.copyShareUrl = () => {
     const url = getShareUrl();
     navigator.clipboard.writeText(url).then(() => {
         if (typeof ColorToast === 'function') {
-            ColorToast('Room link copied to clipboard!', '#25d366');
+            ColorToast('Room link copied to clipboard!', '#28a745');
         } else {
             alert('Room link copied to clipboard!');
         }
