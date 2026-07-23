@@ -1210,12 +1210,18 @@ window.ShowShareModal = () => {
 
     if (roomIdEl) roomIdEl.innerText = g_objUserData.GameID || '';
     if (urlInputEl) urlInputEl.value = getShareUrl();
-    if (modalEl) modalEl.classList.remove('hidden');
+    if (modalEl) {
+        modalEl.classList.remove('hidden');
+        modalEl.style.display = 'flex';
+    }
 };
 
 window.hideShareModal = () => {
     const modalEl = document.getElementById('share-modal');
-    if (modalEl) modalEl.classList.add('hidden');
+    if (modalEl) {
+        modalEl.classList.add('hidden');
+        modalEl.style.display = 'none';
+    }
 };
 
 window.copyShareUrl = () => {
