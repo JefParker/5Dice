@@ -91,7 +91,7 @@ let recentChats = []; // { id, author, text, timestamp }
 // --- GAME STATE GLOBALS ---
 let gameState = ['', '', '', '', '', '', '', '', ''];
 let myTurn = false;
-let pendingMove = false; // Flag to prevent Firebase listener from overwriting local state during a write
+let pendingMoveCount = 0; // Counter to prevent Firebase listener from overwriting local state during writes
 let gamePlayers = [];
 let gameHost = null;
 let roomPlayerDetails = [];
@@ -664,17 +664,17 @@ function handleGameStateUpdate(gameData) {
       document.getElementById('game-status').innerText = window.myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn...`;
     }
   } else {
-    // Skip overwriting local state if we have a pending move being written to Firebase
-    if (!pendingMove) {
+    // Skip overwriting local state if we have pending moves being written to Firebase
+    if (pendingMoveCount === 0) {
       gameState = parseGameState(gameData.gameState);
       updateBoard();
-    }
-    const isOver = checkWin();
-    if (!isOver) {
-      document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
-      document.getElementById('tic-tac-toe-board').classList.remove('disabled');
-    } else {
-      document.getElementById('btn-play-again').classList.remove('hidden');
+      const isOver = checkWin();
+      if (!isOver) {
+        document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+        document.getElementById('tic-tac-toe-board').classList.remove('disabled');
+      } else {
+        document.getElementById('btn-play-again').classList.remove('hidden');
+      }
     }
   }
 
@@ -724,7 +724,13 @@ window.sendGameAction = async function(msgObj) {
 function updateGameBackground() {
   const gameScreen = document.getElementById('screen-game');
   if (!gameScreen) return;
-  gameScreen.classList.remove('tie-background', 'bg-watermark-x', 'bg-watermark-o');
+
+  // Don't overwrite winner/tie backgrounds
+  if (gameScreen.classList.contains('tie-background')) return;
+  const boardEl = document.getElementById('tic-tac-toe-board');
+  if (boardEl && boardEl.classList.contains('disabled') && checkWinSilent()) return;
+
+  gameScreen.classList.remove('bg-watermark-x', 'bg-watermark-o');
   
   const room = activeRooms[currentRoomId];
   if (gameHost !== null && (!room || room.gameType !== '5 Dice')) {
@@ -742,6 +748,21 @@ function updateGameBackground() {
   } else {
     gameScreen.style.backgroundColor = turnColor;
   }
+}
+
+// Silent win check (no side effects) — used by updateGameBackground to detect game-over state
+function checkWinSilent() {
+  const state = parseGameState(gameState);
+  const winPatterns = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  for (let pattern of winPatterns) {
+    const [a,b,c] = pattern;
+    if (state[a] && state[a] === state[b] && state[a] === state[c]) return true;
+  }
+  return !state.includes('');
 }
 
 // TIC TAC TOE LOGIC
@@ -804,15 +825,17 @@ async function handleMove(index) {
 
   if (!gameOver) {
     document.getElementById('game-status').innerText = (gamePlayers.length <= 1 || myTurn) ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
+    updateGameBackground();
   } else {
     document.getElementById('btn-play-again').classList.remove('hidden');
   }
-  updateGameBackground();
 
   if (window.firebaseGameBackend && currentRoomId) {
-    // Set pendingMove flag to prevent the Firebase listener from overwriting
-    // our local state with stale data before the write completes
-    pendingMove = true;
+    // Increment counter to prevent the Firebase listener from overwriting
+    // our local state with stale data before the write completes.
+    // Using a counter (not boolean) so overlapping rapid clicks don't
+    // let the first finally-block prematurely unblock the listener.
+    pendingMoveCount++;
     try {
       await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'move', index, player: mySymbol, sender: myPeerId });
       await window.firebaseGameBackend.updateGameState(currentRoomId, {
@@ -821,13 +844,13 @@ async function handleMove(index) {
         lastUpdated: Date.now()
       });
     } finally {
-      pendingMove = false;
+      pendingMoveCount--;
     }
   }
 }
 
 function resetGame(firstTurn = null) {
-  pendingMove = false;
+  pendingMoveCount = 0;
   const selectedFirstTurn = firstTurn || gameHost;
   window.currentTurnPlayerId = selectedFirstTurn;
   myTurn = (myPeerId === selectedFirstTurn || gamePlayers.length <= 1);
