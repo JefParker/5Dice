@@ -6,6 +6,19 @@ async function run() {
   const peerA = 'peer-A';
   const peerB = 'peer-B';
 
+  // 0. Reset inboxes so a re-run doesn't act on stale signals/new_peers from a prior run.
+  console.log('Resetting state...');
+  await fetch(`${API_BASE}/api/lobby/signal/${peerA}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reset: true })
+  });
+  await fetch(`${API_BASE}/api/lobby/signal/${peerB}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reset: true })
+  });
+
   // 1. Peer A becomes leader
   console.log('A claiming leadership...');
   await fetch(`${API_BASE}/api/lobby/leader`, {
@@ -44,8 +57,8 @@ async function run() {
   let signals = await res.json();
   console.log('B got signals:', signals);
 
-  if (signals.length > 0) {
-    // 6. B sends answer to A
+  if (signals.length > 0 && signals[signals.length - 1].type === 'offer') {
+    // 6. B sends answer to A (only in response to an actual offer)
     console.log('B sending answer to A...');
     await fetch(`${API_BASE}/api/lobby/signal/${peerA}`, {
       method: 'POST',

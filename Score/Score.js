@@ -17,7 +17,7 @@ onload = () => {
     const roomParam = urlParams.get('room') || urlParams.get('roomID') || urlParams.get('GameID');
     let isViaShareLink = false;
     if (roomParam) {
-        g_objUserData.GameID = parseInt(roomParam) || roomParam;
+        g_objUserData.GameID = parseInt(roomParam, 10) || roomParam;
         isViaShareLink = true;
 
         // Strip room query parameter from address bar to prevent going back to setup screen on page refresh
@@ -174,31 +174,35 @@ const colorBtn = () => {
 
 
 const IDGo = () => {
-    let nGameID = parseInt(document.getElementById('GameID').value.trim());
+    let nGameID = parseInt(document.getElementById('GameID').value.trim(), 10);
     if (isNaN(nGameID) || nGameID <= 0) {
         alert("Please enter a valid room number");
         return;
     }
     nGameID = nGameID.toString();
-    if (g_objUserData.GameID != nGameID) {
-        g_objUserData.GameID = nGameID;
-        initWebSocket();
-        g_objGame.LeaderList = [];
+
+    // Validate the player name BEFORE mutating state or sending anything to the server.
+    let sName = document.getElementById('PlayerName').value.trim();
+    if (sName.length < 3) {
+        alert("Please enter a player name");
+        return;
     }
+    g_objUserData.Name = g_objScore.Name = sName;
+
+    if (g_objUserData.GameID != nGameID) {
+        // Room changed: (re)subscribe to the new room.
+        g_objUserData.GameID = nGameID;
+        g_objGame.LeaderList = [];
+        initWebSocket();
+    } else {
+        // Room unchanged (e.g. arrived via a share link): make sure we're subscribed.
+        CheckConnection();
+    }
+
     setTimeout(function() {BCastRequestScores();}, 2000);
 
-    g_objUserData.Name = g_objScore.Name = document.getElementById('PlayerName').value.trim();
     SetGameID(g_objUserData.GameID);
     SendScoreToServerDB();
-
-    if (!g_objUserData.GameID) {
-        alert ("Please enter a room number");
-        return;
-    }
-    if (g_objUserData.Name.length < 3) {
-        alert ("Please enter a player name");
-        return;
-    }
 
     SetUserData();
     SetUpData();
@@ -647,6 +651,7 @@ const DisplayScore = (objData) => {
     }
     else if (1 == nTurns) {
         document.getElementById("Turns").innerHTML = nTurns + " turn remaining";
+        lockWakeState();
     } else {
         document.getElementById("Turns").innerHTML = nTurns + " turns remaining";
         lockWakeState();
@@ -685,22 +690,33 @@ const LeaderList = (sData) => {
     }
     sLeaderList += "</div>";
 
-    let nPlayers = g_objGame.LeaderList.length;
-    let sPlayerLabel = (nPlayers > 1) ? "users" : "user";
+    // Note: "who's here" (WhosHere/NamesHere) is intentionally NOT computed here.
+    // The scoreboard includes players who have left (so their scores remain
+    // visible); live presence is tracked separately by UpdatePresenceUI().
+
+    return sLeaderList;
+}
+
+// Render the live "who's here" count and name list from the presence feed
+// (rooms/{room}/presence), which reflects who is actually connected right now.
+const UpdatePresenceUI = () => {
+    let list = Array.isArray(g_objGame.Presence) ? g_objGame.Presence : [];
+    let nPlayers = list.length;
+    let sPlayerLabel = (nPlayers === 1) ? "user" : "users";
+
+    g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
     if (document.getElementById('WhosHere')) {
-        document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere = "<span onclick='CheckConnection()'>" + nPlayers + " " + sPlayerLabel + "</span>";
+        document.getElementById('WhosHere').innerHTML = g_objGame.WhosHere;
     }
-    
+
     let names = [];
-    for (let i = 0; i < g_objGame.LeaderList.length; i++) {
-        names.push(g_objGame.LeaderList[i].Name);
+    for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].Name) names.push(list[i].Name);
     }
     g_objGame.NamesHere = names.join(", ");
     if (document.getElementById('NamesHere')) {
         document.getElementById('NamesHere').innerHTML = g_objGame.NamesHere;
     }
-
-    return sLeaderList;
 }
 
 const FindColorbyName = (objData) => {
@@ -790,15 +806,15 @@ const DialogBox = (sMess, sCat) => {
 
 const CloseDlg = (sCat) => {
     if ("C" == sCat) {
-        g_objScore.Score[6] = parseInt(document.getElementById('Sel').value);
+        g_objScore.Score[6] = parseInt(document.getElementById('Sel').value) || 0;
         LagSendLastMoveToast(g_objScore.Score[6] + " on chance");
     }
     else if ("TK" == sCat) {
-        g_objScore.Score[7] = parseInt(document.getElementById('Sel').value);
+        g_objScore.Score[7] = parseInt(document.getElementById('Sel').value) || 0;
         LagSendLastMoveToast(g_objScore.Score[7] + " on 3 of a kind");
     }
     else if ("FK" == sCat) {
-        g_objScore.Score[8] = parseInt(document.getElementById('Sel').value);
+        g_objScore.Score[8] = parseInt(document.getElementById('Sel').value) || 0;
         LagSendLastMoveToast(g_objScore.Score[8] + " on 4 of a kind");
     }
     document.getElementById('DialogBox').innerHTML = '';
@@ -862,11 +878,9 @@ let initWebSocket = () => {
                         if (objLeaderBoard.length === 0) {
                             if (document.getElementById("LeaderBoardEntries"))
                                 document.getElementById("LeaderBoardEntries").innerHTML = "";
-                            if (document.getElementById('WhosHere')) 
-                                document.getElementById('WhosHere').innerHTML = "<span onclick='CheckConnection()'>0 users</span>";
-                            if (document.getElementById('NamesHere')) 
-                                document.getElementById('NamesHere').innerHTML = "";
-                                
+                            // WhosHere/NamesHere are driven by the presence feed, not the
+                            // scoreboard, so we no longer zero them out here.
+
                             g_objScore.Score = [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
                             localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
                             DisplayScore(g_objScore);
@@ -877,6 +891,10 @@ let initWebSocket = () => {
                                     document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
                             }
                         }
+                    }
+                    else if ('UpdatePresence' == objData.Event) {
+                        g_objGame.Presence = JSON.parse(objData.Presence);
+                        UpdatePresenceUI();
                     }
                 }
             }
@@ -893,10 +911,44 @@ let initWebSocket = () => {
                 }
             }
         }
+    }, {
+        // Self-presence: registered in the room's presence node with automatic
+        // removal on disconnect, so "who's here" reflects live connections.
+        id: g_objGame.id,
+        PlayerID: g_objUserData.PlayerID,
+        Name: g_objScore.Name ? g_objScore.Name : "Score",
+        Color: g_objUserData.Color
     });
 }
-let stopWebSocket = () => {}
-let close_socket = () => {}
+let stopWebSocket = () => {
+    if (!window.firebaseBackend) return;
+    // Tell peers we're leaving (best-effort) and remove our live presence node.
+    try {
+        let objData = {
+            Message: "PlayerExitingGame",
+            Type: "Score",
+            GameID: parseInt(g_objUserData.GameID),
+            ID: g_objGame.id,
+            Name: g_objScore.Name ? g_objScore.Name : "Score"
+        };
+        sendMessage(JSON.stringify(objData));
+    } catch (e) {}
+    if (window.firebaseBackend.leavePresence)
+        window.firebaseBackend.leavePresence(g_objUserData.GameID, g_objUserData.PlayerID);
+    if (window.firebaseBackend.currentUnsubscribe) {
+        window.firebaseBackend.currentUnsubscribe();
+        window.firebaseBackend.currentUnsubscribe = null;
+    }
+    window.firebaseBackend.isConnected = false;
+}
+let close_socket = () => stopWebSocket();
+
+// Remove presence promptly on a graceful close. onDisconnect() still covers
+// crashes / network drops server-side.
+window.addEventListener('pagehide', () => {
+    if (window.firebaseBackend && window.firebaseBackend.leavePresence)
+        window.firebaseBackend.leavePresence(g_objUserData.GameID, g_objUserData.PlayerID);
+});
 let CheckConnection = () => { if (!window.firebaseBackend || !window.firebaseBackend.isConnected) initWebSocket(); }
 let sendMessage = (jsonData) => {
     if (!window.firebaseBackend) {
@@ -1081,7 +1133,8 @@ const SendLastMoveToast = () => {
 
 const getRandomInt = (min, max) => {
 	var rval = 0;
-	var range = max - min;
+	// Inclusive of both min and max (callers pass length-1 expecting the last index to be reachable).
+	var range = max - min + 1;
 	var bits_needed = Math.ceil(Math.log2(range));
 	if (bits_needed > 53) {
 		throw new Exception("We cannot generate numbers larger than 53 bits.");
@@ -1445,15 +1498,21 @@ const InitializeContextMenu = (sWindowShowing) => {
         });
     }
 
-    document.addEventListener("contextmenu", (ev) => {
-        ev.preventDefault();
-        updateMenuPositon(ev.clientX, ev.clientY);
-        contextMenu.style.visibility = "visible";
-    });
+    // Register the document-level handlers only once. InitializeContextMenu runs on
+    // every ShowScoreMain() render; without this guard the listeners stack up and leak.
+    if (!window._contextMenuDocHandlersAdded) {
+        window._contextMenuDocHandlersAdded = true;
 
-    document.addEventListener("click", () => {
-        if (contextMenu) contextMenu.style.visibility = null;
-    });
+        document.addEventListener("contextmenu", (ev) => {
+            ev.preventDefault();
+            updateMenuPositon(ev.clientX, ev.clientY);
+            if (contextMenu) contextMenu.style.visibility = "visible";
+        });
+
+        document.addEventListener("click", () => {
+            if (contextMenu) contextMenu.style.visibility = null;
+        });
+    }
 }
 
 const updateMenuPositon = (x, y) => {

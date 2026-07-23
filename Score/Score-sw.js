@@ -1,6 +1,6 @@
  
- const staticCache = 'static-v260719a';
- const dynamicCache = 'dynamic-v260719a';
+ const staticCache = 'static-v260723a';
+ const dynamicCache = 'dynamic-v260723a';
  const assets = ['index.html', 'Score.js', 'firebase-backend.js',
     'Score.css', 'Score.json',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',
@@ -11,7 +11,7 @@
 self.addEventListener('install', evt => {
         evt.waitUntil(caches.open(staticCache).then(cache => {
             console.log('Caching shell assets');
-            cache.addAll(assets);
+            return cache.addAll(assets);
         })
     );
 });
@@ -29,13 +29,22 @@ self.addEventListener('activate', evt => {
 
 self.addEventListener('fetch', evt => {
     //console.log('fetch event', evt);
+    // Only handle GET requests. cache.put() throws on POST/PUT and would break
+    // Firebase and other non-GET traffic.
+    if (evt.request.method !== 'GET') return;
+
     evt.respondWith(
         caches.match(evt.request).then(cacheRes => {
             return cacheRes || fetch(evt.request).then(fetchRes => {
-                return caches.open(dynamicCache).then(cache => {
-                    cache.put(evt.request.url, fetchRes.clone());
-                    return fetchRes;
-                })
+                // Only cache successful, non-opaque responses so we don't poison the
+                // cache with errors (4xx/5xx) or opaque cross-origin failures.
+                if (fetchRes && fetchRes.ok) {
+                    const resClone = fetchRes.clone();
+                    caches.open(dynamicCache).then(cache => {
+                        cache.put(evt.request.url, resClone);
+                    });
+                }
+                return fetchRes;
             });
         }).catch(() => {
             if (evt.request.url.indexOf('.html') > -1) {

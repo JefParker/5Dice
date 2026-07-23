@@ -1,0 +1,85 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "rooms": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+
+      "$room": {
+
+        "lastEntered": {
+          ".validate": "newData.isNumber()"
+        },
+
+        "scores": {
+          "$player_id": {
+            ".validate": "newData.hasChildren(['player_id', 'score']) && newData.child('player_id').val() == $player_id",
+
+            "room": {
+              ".validate": "newData.isString() || newData.isNumber()"
+            },
+            "player_id": {
+              ".validate": "newData.isString() && newData.val() == $player_id"
+            },
+            "score": {
+              ".validate": "(newData.isString() && newData.val().length < 20000) || newData.hasChildren()"
+            },
+            "lastdataset": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+
+        "events": {
+          "$eventId": {
+            ".validate": "newData.hasChildren(['jsonData'])",
+
+            "jsonData": {
+              ".validate": "newData.isString() && newData.val().length < 20000"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+
+        "presence": {
+          "$playerId": {
+            ".validate": "newData.hasChildren(['PlayerID']) && newData.child('PlayerID').val() == $playerId",
+
+            "id": {
+              ".validate": "newData.isNumber() || newData.isString()"
+            },
+            "PlayerID": {
+              ".validate": "newData.isString() && newData.val() == $playerId"
+            },
+            "Name": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "Color": {
+              ".validate": "newData.isString() && newData.val().length <= 32"
+            },
+            "since": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
