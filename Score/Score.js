@@ -44,20 +44,50 @@ onload = () => {
 const GetUserData = () => {
     let sData = localStorage.getItem("UserData");
     if (null != sData) {
-        g_objUserData = JSON.parse(sData);
+        try { g_objUserData = JSON.parse(sData); } catch(e) { g_objUserData = {}; }
     } else {
-        g_objUserData.Name = "";
-        g_objUserData.PlayerID = MakeRandomCode(10);
-        g_objUserData.GameID = getRandomInt(1, 99999);
-        g_objUserData.Color = PickRandomColor();
-        document.body.style.background = g_objUserData.Color;
+        g_objUserData = {};
     }
+
+    if (!g_objUserData.PlayerID) {
+        g_objUserData.PlayerID = localStorage.getItem("timeline_user_id") || MakeRandomCode(10);
+    }
+    if (!g_objUserData.GameID) {
+        g_objUserData.GameID = getRandomInt(1, 99999);
+    }
+
+    const sharedName = localStorage.getItem("playerName");
+    const sharedColor = localStorage.getItem("playerColor");
+    const sharedUuid = localStorage.getItem("timeline_user_id");
+
+    if (sharedName) g_objUserData.Name = sharedName;
+    if (sharedColor) g_objUserData.Color = sharedColor;
+    if (sharedUuid) g_objUserData.PlayerID = sharedUuid;
+
+    if (!g_objUserData.Color) g_objUserData.Color = PickRandomColor();
+    if (g_objUserData.Name === undefined) g_objUserData.Name = "";
+
+    document.body.style.background = g_objUserData.Color;
+    SetUserData();
 }
 
 
 const SetUserData = () => {
     localStorage.setItem("UserData", JSON.stringify(g_objUserData));
+    if (g_objUserData.Name !== undefined) localStorage.setItem("playerName", g_objUserData.Name);
+    if (g_objUserData.Color) localStorage.setItem("playerColor", g_objUserData.Color);
+    if (g_objUserData.PlayerID) localStorage.setItem("timeline_user_id", g_objUserData.PlayerID);
 }
+
+window.addEventListener('storage', (e) => {
+    if (e.key === 'playerName' || e.key === 'playerColor' || e.key === 'UserData') {
+        GetUserData();
+        const pNameInput = document.getElementById('PlayerName');
+        if (pNameInput) pNameInput.value = g_objUserData.Name || '';
+        const bgColorInput = document.getElementById('bgcolor');
+        if (bgColorInput) bgColorInput.value = g_objUserData.Color || '#28a745';
+    }
+});
 
 
 const SetGameData = () => {
@@ -127,6 +157,7 @@ const ShowEnterID = () => {
     document.getElementById('bgcolor').addEventListener("input", function(){
             g_objUserData.Color = g_objScore.Color = document.getElementById('bgcolor').value;
             document.body.style.background = g_objUserData.Color;
+            SetUserData();
         }, false);
 }
 
@@ -135,6 +166,7 @@ const colorBtn = () => {
         let sColor = PickRandomColor();
         g_objUserData.Color = g_objScore.Color = sColor;
         document.body.style.background = g_objUserData.Color;
+        SetUserData();
     } else {
         document.getElementById('bgcolor').showPicker();
     }

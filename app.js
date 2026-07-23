@@ -11,10 +11,21 @@ function generateDarkColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-let myColor = localStorage.getItem('playerColor');
-if (!myColor) {
-  myColor = generateDarkColor();
-  localStorage.setItem('playerColor', myColor);
+function saveSharedProfile(name, color) {
+  if (name !== undefined && name !== null) {
+    myName = name;
+    localStorage.setItem('playerName', myName);
+  }
+  if (color !== undefined && color !== null) {
+    myColor = color;
+    localStorage.setItem('playerColor', myColor);
+  }
+  let userData = {};
+  try { userData = JSON.parse(localStorage.getItem('UserData') || '{}'); } catch(e) {}
+  userData.Name = myName;
+  userData.Color = myColor;
+  userData.PlayerID = myUuid;
+  localStorage.setItem('UserData', JSON.stringify(userData));
 }
 
 function generateUUID() {
@@ -31,6 +42,32 @@ if (!myUuid) {
 }
 
 let myName = localStorage.getItem('playerName') || '';
+let myColor = localStorage.getItem('playerColor');
+
+try {
+  const uData = JSON.parse(localStorage.getItem('UserData') || '{}');
+  if (uData.Name && !myName) myName = uData.Name;
+  if (uData.Color && !myColor) myColor = uData.Color;
+  if (uData.PlayerID && !myUuid) {
+    myUuid = uData.PlayerID;
+    localStorage.setItem('timeline_user_id', myUuid);
+  }
+} catch(e) {}
+
+if (!myColor) {
+  myColor = generateDarkColor();
+}
+saveSharedProfile(myName, myColor);
+
+window.addEventListener('storage', (e) => {
+  if (e.key === 'playerName' || e.key === 'playerColor' || e.key === 'UserData') {
+    const updatedName = localStorage.getItem('playerName');
+    const updatedColor = localStorage.getItem('playerColor');
+    if (updatedName) myName = updatedName;
+    if (updatedColor) myColor = updatedColor;
+  }
+});
+
 let currentRoomId = null; 
 let activeRooms = {}; // { roomId: { id, name, host, ... } }
 let isHost = false;
@@ -311,8 +348,7 @@ document.getElementById('global-player-name').addEventListener('input', (e) => {
 document.getElementById('btn-save-settings').addEventListener('click', () => {
   const newName = document.getElementById('global-player-name').value.trim();
   if (newName) {
-    myName = newName;
-    localStorage.setItem('playerName', myName);
+    saveSharedProfile(newName, myColor);
     showScreen('screen-lobby');
     startLobbyFirebase();
   } else {
@@ -323,8 +359,7 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
 const colorPickerEl = document.getElementById('player-color-picker');
 if (colorPickerEl) {
   colorPickerEl.addEventListener('input', (e) => {
-    myColor = e.target.value;
-    localStorage.setItem('playerColor', myColor);
+    saveSharedProfile(myName, e.target.value);
   });
 }
 
