@@ -1013,11 +1013,24 @@ function checkWin() {
       let opponentColor = opponent ? opponent.color : '#2a2a2a';
       let opponentName = opponent ? opponent.name : 'Opponent';
       let winnerColor = (winner === mySymbol) ? myColor : opponentColor;
-      
+
+      // Detect the transition into game-over (board isn't disabled yet) so the
+      // celebration fires once, not on every echoed checkWin() call.
+      const boardEl = document.getElementById('tic-tac-toe-board');
+      const firstDetection = boardEl && !boardEl.classList.contains('disabled');
+
       document.getElementById('game-status').innerText = (winner === mySymbol) ? 'You Win!' : `${opponentName} Wins!`;
-      document.getElementById('tic-tac-toe-board').classList.add('disabled');
+      if (boardEl) boardEl.classList.add('disabled');
       myTurn = false;
       document.getElementById('screen-game').style.backgroundColor = winnerColor;
+
+      // Confetti for the local winner only, once per game.
+      if (winner === mySymbol && firstDetection && window.confetti) {
+        const config = { spread: 100, startVelocity: 50, scalar: 1.2 };
+        window.confetti({ ...config, particleCount: 150, origin: { x: 0.2, y: 0.8 } });
+        window.confetti({ ...config, particleCount: 150, origin: { x: 0.8, y: 0.8 } });
+        setTimeout(() => window.confetti({ ...config, particleCount: 200, origin: { x: 0.5, y: 0.6 } }), 300);
+      }
       return true;
     }
   }
