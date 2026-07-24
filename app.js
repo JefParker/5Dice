@@ -545,6 +545,26 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   hideLoading();
 });
 
+// A room counts as idle (abandoned) if there's been no activity for a while.
+// Game rooms have no live presence, so this lets a host clear a zombie room even
+// when a player who has left is still listed in the roster.
+const ROOM_IDLE_MS = 15 * 60 * 1000;
+function isRoomIdle(room) {
+  if (!room || !room.lastActive) return true;
+  return (Date.now() - room.lastActive) > ROOM_IDLE_MS;
+}
+
+// Bump the room's lastActive during play (throttled to once/min) so an actively
+// played game never looks idle. Abandoned games stop bumping and go idle.
+let lastRoomTouchTs = 0;
+function touchRoomActivity() {
+  if (!currentRoomId || !window.firebaseGameBackend || !window.firebaseGameBackend.updateRoom) return;
+  const now = Date.now();
+  if (now - lastRoomTouchTs < 60000) return;
+  lastRoomTouchTs = now;
+  window.firebaseGameBackend.updateRoom(currentRoomId, {}); // updateRoom sets lastActive
+}
+
 function renderRooms() {
   const list = document.getElementById('room-list');
   const rooms = Object.values(activeRooms);
@@ -565,7 +585,9 @@ function renderRooms() {
     const isReturning = r.status === 'in-progress' && isPlayer;
     const isHost = (r.hostUuid === myUuid || r.host === myPeerId);
     const otherPlayers = playerList.filter(p => p.uuid !== myUuid && p.peerId !== myPeerId);
-    const canDelete = isHost && (otherPlayers.length === 0);
+    // Host can delete when no other players remain, OR the room has gone idle
+    // (abandoned) even if a stale player is still listed.
+    const canDelete = isHost && (otherPlayers.length === 0 || isRoomIdle(r));
     
     const div = document.createElement('div');
     div.className = 'room-card';
@@ -822,6 +844,7 @@ window.sendGameAction = async function(msgObj) {
   }
 
   await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
+  touchRoomActivity();
 };
 
 // Record a win/tie for a player in the current room (atomic; persists across games).
@@ -974,6 +997,7 @@ async function handleMove(index) {
         currentTurnPlayerId: nextTurnPlayer,
         lastUpdated: Date.now()
       });
+      touchRoomActivity();
     } finally {
       pendingMoveCount--;
     }
@@ -1297,13 +1321,14 @@ if (btnConfirmDeleteRoom) {
     const targetRoomId = pendingDeleteRoomId;
     if (deleteRoomModal) deleteRoomModal.classList.add('hidden');
     
-    // Double check if room still exists & still empty
+    // Double check the room still exists and is safe to delete: either no other
+    // players are listed, or it has gone idle (abandoned).
     const room = activeRooms[targetRoomId];
     if (room) {
       const playerList = room.players || [];
       const otherPlayers = playerList.filter(p => p.uuid !== myUuid && p.peerId !== myPeerId);
-      if (otherPlayers.length > 0) {
-        showToast("Cannot delete: another player is in the room", "#dc3545");
+      if (otherPlayers.length > 0 && !isRoomIdle(room)) {
+        showToast("Cannot delete: another player is active in the room", "#dc3545");
         pendingDeleteRoomId = null;
         return;
       }
@@ -1322,6 +1347,13 @@ if (btnConfirmDeleteRoom) {
 
 // APP INITIALIZATION
 createBoard();
+
+// Re-render the lobby once a minute so a room that crosses the idle threshold
+// surfaces the host delete-✕ even if no new Firebase event has arrived.
+setInterval(() => {
+  const lobby = document.getElementById('screen-lobby');
+  if (lobby && lobby.classList.contains('active')) renderRooms();
+}, 60000);
 if (!myName) {
   document.getElementById('settings-player-id-section').style.display = 'none';
   const btn = document.getElementById('btn-save-settings');
