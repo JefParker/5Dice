@@ -70,6 +70,9 @@
             "since": {
               ".validate": "newData.isNumber()"
             },
+            "lastSeen": {
+              ".validate": "newData.isNumber()"
+            },
             "$other": {
               ".validate": false
             }

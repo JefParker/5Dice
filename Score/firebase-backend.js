@@ -359,12 +359,11 @@ window.firebaseBackend = {
                     PlayerID: selfPresence.PlayerID,
                     Name: selfPresence.Name || "",
                     Color: selfPresence.Color || "",
-                    // `since` doubles as our freshness marker (refreshed by the
-                    // heartbeat). We deliberately do NOT add a separate lastSeen
-                    // field: the database security rules only permit the fields
-                    // listed for a presence node, so any extra key makes the whole
-                    // write permission_denied.
-                    since: serverTimestamp()
+                    // `since` = when we joined (set once). `lastSeen` = freshness,
+                    // refreshed by the heartbeat. Both fields must be declared in the
+                    // database security rules or the whole write is permission_denied.
+                    since: serverTimestamp(),
+                    lastSeen: serverTimestamp()
                 });
             } catch (e) {
                 console.error("Failed to register presence:", e);
@@ -396,10 +395,11 @@ window.firebaseBackend = {
         }
     },
 
-    // Heartbeat: refresh our presence node's `since` timestamp so other clients keep
-    // counting us as "here". We re-set the whole node so it self-heals if it was
-    // pruned/removed, and we re-arm onDisconnect each time. Called on an interval by
-    // the client while connected and visible.
+    // Heartbeat: refresh our presence node's `lastSeen` so other clients keep counting
+    // us as "here", leaving `since` (join time) untouched. We re-arm onDisconnect each
+    // time as cheap insurance. A live client is never pruned (it's always the freshest
+    // entry), so the node reliably exists for this update. Called on an interval by the
+    // client while connected and visible.
     touchPresence: async (room, playerId) => {
         room = room || window.firebaseBackend._room;
         const selfPresence = window.firebaseBackend._selfPresence;
@@ -408,13 +408,7 @@ window.firebaseBackend = {
         const selfRef = ref(db, `rooms/${room}/presence/${playerId}`);
         try {
             await onDisconnect(selfRef).remove();
-            await set(selfRef, {
-                id: (selfPresence.id !== undefined && selfPresence.id !== null) ? selfPresence.id : null,
-                PlayerID: selfPresence.PlayerID,
-                Name: selfPresence.Name || "",
-                Color: selfPresence.Color || "",
-                since: serverTimestamp()
-            });
+            await update(selfRef, { lastSeen: serverTimestamp() });
         } catch (e) {
             console.error("Failed to heartbeat presence:", e);
         }
