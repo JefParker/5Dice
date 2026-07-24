@@ -1299,9 +1299,32 @@ let initWebSocket = () => {
         Name: g_objScore.Name ? g_objScore.Name : "Score",
         Color: g_objUserData.Color
     });
+
+    startPresenceHeartbeat();
 }
+
+// Keep our presence node fresh so peers don't age us out. The backend prunes any
+// presence not seen within its stale window; this interval re-asserts ours well
+// inside that window while we're connected and the tab is visible.
+const PRESENCE_HEARTBEAT_MS = 30000;
+const startPresenceHeartbeat = () => {
+    stopPresenceHeartbeat();
+    g_objGame.presenceHeartbeat = setInterval(() => {
+        if (document.visibilityState === 'hidden') return;
+        if (window.firebaseBackend && window.firebaseBackend.touchPresence)
+            window.firebaseBackend.touchPresence(g_objUserData.GameID, g_objUserData.PlayerID);
+    }, PRESENCE_HEARTBEAT_MS);
+};
+const stopPresenceHeartbeat = () => {
+    if (g_objGame.presenceHeartbeat) {
+        clearInterval(g_objGame.presenceHeartbeat);
+        g_objGame.presenceHeartbeat = null;
+    }
+};
+
 let stopWebSocket = () => {
     if (!window.firebaseBackend) return;
+    stopPresenceHeartbeat();
     // Tell peers we're leaving (best-effort) and remove our live presence node.
     try {
         let objData = {
@@ -1377,6 +1400,11 @@ function ShowVisibilityChange() {
         CheckConnection();
         // BCastRequestScores();
         BCastRequestLeaderBoard();
+        // Refresh presence right away so returning to a backgrounded tab doesn't
+        // wait up to a full heartbeat interval to re-announce us.
+        if (window.firebaseBackend && window.firebaseBackend.touchPresence)
+            window.firebaseBackend.touchPresence(g_objUserData.GameID, g_objUserData.PlayerID);
+        startPresenceHeartbeat();
     }
     else if ('hidden' === document.visibilityState) {
         g_objScore.dLastLoaded = new Date();
