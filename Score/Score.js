@@ -1172,11 +1172,28 @@ let initWebSocket = () => {
                         if (document.getElementById("LeaderBoardEntries"))
                             document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(objData.Player);
                         let objPlayer = JSON.parse(objData.Player);
-                        if (objPlayer.PlayerID == g_objGame.ScoreSheetShowing) {
+                        if (objPlayer.PlayerID === g_objUserData.PlayerID) {
+                            // Our own sheet, echoed from another tab sharing this UUID.
+                            // Apply newest-wins: only accept it if it's strictly newer than
+                            // what we hold, otherwise ignore it. Without this, a stale/blank
+                            // echo (e.g. the other tab answering a score request before it
+                            // has synced) would DisplayScore over our in-progress card and
+                            // wipe it.
+                            if ((objPlayer.dLastUpdate || 0) > (g_objScore.dLastUpdate || 0)) {
+                                g_objScore = objPlayer;
+                                g_objScore.dLastLoaded = new Date();
+                                localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
+                                if (g_objGame.ScoreSheetShowing == null ||
+                                    g_objGame.ScoreSheetShowing == g_objUserData.PlayerID) {
+                                    DisplayScore(g_objScore);
+                                }
+                            }
+                        } else if (objPlayer.PlayerID == g_objGame.ScoreSheetShowing) {
+                            // An opponent's sheet we're currently viewing — show the update.
                             DisplayScore(objPlayer);
                         }
-                        // An opponent's score arrived — this may be the last player
-                        // finishing, which triggers the winner's confetti.
+                        // This may be the last player finishing, which triggers the
+                        // winner's confetti.
                         HandleGameOverState();
                     }
                     else if ("RequestScore" == objData.Event) {
