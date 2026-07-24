@@ -1,11 +1,12 @@
 function getPeerName(pId) {
-  if (pId === window.myPeerId) return window.myName;
+  // Delegate to the canonical resolver in app.js (handles set names and the
+  // "Player N" numbering for players who haven't set a display name).
+  if (typeof window.getDisplayName === 'function') return window.getDisplayName(pId);
+  if (pId === window.myPeerId && window.myName) return window.myName;
   if (window.roomPlayerDetails && Array.isArray(window.roomPlayerDetails)) {
     const found = window.roomPlayerDetails.find(p => p.peerId === pId || p.uuid === pId);
     if (found && found.name) return found.name;
   }
-  // Generic fallback (do NOT use getOpponentName here — it returns the first other
-  // player, which is wrong in 3-6 player games).
   return 'Player';
 }
 

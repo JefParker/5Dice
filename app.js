@@ -298,16 +298,27 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
   setTimeout(() => { if (div.parentNode) div.remove(); }, timeRemaining);
 }
 
+// Canonical display name for a player: their set name if they have one, otherwise
+// "Player N" based on their position in the roster (stable across all clients since
+// everyone shares the same players array order).
+window.getDisplayName = function(peerId) {
+  const list = roomPlayerDetails || [];
+  const idx = list.findIndex(p => p.peerId === peerId || p.uuid === peerId);
+  if (peerId === myPeerId && myName) return myName;      // live self-name
+  if (idx >= 0 && list[idx].name) return list[idx].name; // set name
+  if (idx >= 0) return `Player ${idx + 1}`;              // unnamed → numbered
+  return 'Player';
+};
+
 window.getOpponentName = function() {
-  const otherPlayer = roomPlayerDetails.find(p => p.peerId !== myPeerId);
-  return otherPlayer ? otherPlayer.name : 'Opponent';
+  const otherPlayer = (roomPlayerDetails || []).find(p => p.peerId !== myPeerId);
+  return otherPlayer ? window.getDisplayName(otherPlayer.peerId) : 'Opponent';
 };
 
 // Name of the player whose turn it actually is (correct for 3+ players, unlike
 // getOpponentName which just returns the first other player).
 window.getPlayerNameById = function(peerId) {
-  const p = (roomPlayerDetails || []).find(pp => pp.peerId === peerId);
-  return p && p.name ? p.name : 'Opponent';
+  return window.getDisplayName(peerId);
 };
 
 window.getOpponentColor = function() {
@@ -1014,7 +1025,7 @@ function checkWin() {
       const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
       let opponent = roomPlayerDetails.find(p => p.peerId !== myPeerId);
       let opponentColor = opponent ? opponent.color : '#2a2a2a';
-      let opponentName = opponent ? opponent.name : 'Opponent';
+      let opponentName = opponent ? window.getDisplayName(opponent.peerId) : 'Opponent';
       let winnerColor = (winner === mySymbol) ? myColor : opponentColor;
 
       // Detect the transition into game-over (board isn't disabled yet) so the
