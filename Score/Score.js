@@ -80,14 +80,65 @@ const SetUserData = () => {
 }
 
 window.addEventListener('storage', (e) => {
-    if (e.key === 'playerName' || e.key === 'playerColor' || e.key === 'UserData') {
+    if (e.key === 'playerName' || e.key === 'playerColor' || e.key === 'UserData' || e.key === 'timeline_user_id') {
+        // Remember who we were, then re-read shared identity from localStorage. The
+        // Lobby's Settings screen writes timeline_user_id / UserData when you paste a
+        // Player ID, and we want the open score sheet to follow that change live.
+        const oldPlayerID = g_objUserData.PlayerID;
         GetUserData();
         const pNameInput = document.getElementById('PlayerName');
         if (pNameInput) pNameInput.value = g_objUserData.Name || '';
         const bgColorInput = document.getElementById('bgcolor');
         if (bgColorInput) bgColorInput.value = g_objUserData.Color || '#28a745';
+
+        if (g_objUserData.PlayerID && oldPlayerID && g_objUserData.PlayerID !== oldPlayerID) {
+            SwitchIdentity(oldPlayerID);
+        }
     }
 });
+
+// Re-identify a live score sheet after the Player ID changed underneath us (e.g. the
+// Lobby synced to another device's UUID). We leave the old identity's presence, tear
+// down the old subscription, reset to a fresh sheet for the new identity, and
+// reconnect — the server feed then adopts the new identity's existing sheet (if any)
+// via the same newest-wins path used everywhere else. No page reload needed.
+const SwitchIdentity = (oldPlayerID) => {
+    // Only meaningful once the score view is actually on screen (its cells exist).
+    // On the setup screen there's nothing live to migrate; the new ID is used when
+    // the player joins.
+    if (!document.getElementById("Ones")) return;
+
+    if (window.firebaseBackend && window.firebaseBackend.leavePresence && oldPlayerID)
+        window.firebaseBackend.leavePresence(g_objUserData.GameID, oldPlayerID);
+
+    // Tear down the old identity's subscription + heartbeat.
+    stopWebSocket();
+
+    // Start from a blank sheet for the new identity (dLastUpdate 0 so it can never
+    // clobber a real server sheet). The onValue feed will adopt the new identity's
+    // actual sheet for this room if one exists.
+    g_objScore = {
+        Name: g_objUserData.Name,
+        PlayerID: g_objUserData.PlayerID,
+        Color: g_objUserData.Color,
+        Score: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+        dLastUpdate: 0,
+        dLastLoaded: new Date()
+    };
+    localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
+
+    document.body.style.background = g_objUserData.Color;
+    g_objGame.LeaderList = [];
+    g_objGame.ScoreSheetShowing = g_objUserData.PlayerID;
+    DisplayScore(g_objScore);
+
+    // Reconnect under the new identity (registers new presence, restarts heartbeat,
+    // resubscribes; the scores feed then syncs the new identity's sheet in).
+    initWebSocket();
+
+    if (typeof ColorToast === 'function')
+        ColorToast("Player ID synced", g_objUserData.Color);
+};
 
 
 const SetGameData = () => {
