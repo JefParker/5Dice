@@ -154,17 +154,31 @@ function update5DiceUI() {
   const myScores = state.scores[window.myPeerId] || {};
   let upperTotal = 0;
   let lowerTotal = 0;
-  
-  document.querySelectorAll('.fd-cat').forEach(catEl => {
+
+  // Tint the board + roll button in the local player's own color.
+  const fdc = document.getElementById('five-dice-container');
+  if (fdc && window.myColor) fdc.style.setProperty('--pc', fdHexToRgb(window.myColor));
+
+  // Live "potential score" previews appear on unscored tiles once you've rolled.
+  const rolled = state.rollsLeft < 3;
+
+  document.querySelectorAll('#fd-board .fd-cat').forEach(catEl => {
     const cat = catEl.getAttribute('data-category');
     const scoreEl = catEl.querySelector('.fd-cat-score');
-    if (myScores[cat] !== null && myScores[cat] !== undefined) {
+    catEl.classList.remove('scored', 'avail', 'zero');
+    const scored = (myScores[cat] !== null && myScores[cat] !== undefined);
+    if (scored) {
       scoreEl.innerText = myScores[cat];
-      if (['ones','twos','threes','fours','fives','sixes'].includes(cat)) {
-        upperTotal += myScores[cat];
-      } else {
-        lowerTotal += myScores[cat];
-      }
+      catEl.classList.add('scored');
+      if (FD_UPPER_KEYS.includes(cat)) upperTotal += myScores[cat];
+      else lowerTotal += myScores[cat];
+    } else if (cat === 'bonus-5s') {
+      scoreEl.innerText = '';            // filled only by the Yahtzee bonus rule
+    } else if (rolled && window.myTurn) {
+      const pot = calculate5DiceScore(cat, state.dice);
+      scoreEl.innerText = pot;
+      catEl.classList.add('avail');
+      if (pot === 0) catEl.classList.add('zero');
     } else {
       scoreEl.innerText = '';
     }

@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=18">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -154,35 +154,37 @@
         </div>
 
         <div id="fd-board" class="fd-board">
+          <div class="fd-sec-label">Upper</div>
           <div class="fd-upper-section">
-            <div class="fd-cat" data-category="ones"><div class="fd-cat-die die-1"></div><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="fours"><div class="fd-cat-die die-4"></div><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="twos"><div class="fd-cat-die die-2"></div><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="fives"><div class="fd-cat-die die-5"></div><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="threes"><div class="fd-cat-die die-3"></div><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="sixes"><div class="fd-cat-die die-6"></div><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="ones"><span class="fd-cat-ic">⚀</span><span class="fd-cat-name">1's</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="fours"><span class="fd-cat-ic">⚃</span><span class="fd-cat-name">4's</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="twos"><span class="fd-cat-ic">⚁</span><span class="fd-cat-name">2's</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="fives"><span class="fd-cat-ic">⚄</span><span class="fd-cat-name">5's</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="threes"><span class="fd-cat-ic">⚂</span><span class="fd-cat-name">3's</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="sixes"><span class="fd-cat-ic">⚅</span><span class="fd-cat-name">6's</span><span class="fd-cat-score"></span></div>
           </div>
-          
+
           <div class="fd-upper-totals">
             <span>Total: <span id="fd-total-par">0 (on par)</span></span>
-            <span>Bonus (if > 62): <span id="fd-bonus">0</span></span>
+            <span>Bonus &gt; 62: <span id="fd-bonus">0</span></span>
           </div>
-          <div class="fd-upper-total-row">Upper Total: <span id="fd-upper-total">0</span></div>
+          <div class="fd-totrow"><span>Upper Total</span><span id="fd-upper-total">0</span></div>
 
+          <div class="fd-sec-label">Lower</div>
           <div class="fd-lower-section">
-            <div class="fd-cat" data-category="chance"><span class="fd-cat-name">Chance:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="sm-straight"><span class="fd-cat-name">Sm Straight:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="three-kind"><span class="fd-cat-name">3 of a kind:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="lg-straight"><span class="fd-cat-name">Lg Straight:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="four-kind"><span class="fd-cat-name">4 of a kind:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="five-dice"><span class="fd-cat-name">5 Dice:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="full-house"><span class="fd-cat-name">Full House:</span><span class="fd-cat-score"></span></div>
-            <div class="fd-cat" data-category="bonus-5s"><span class="fd-cat-name">Bonus 5's:</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="chance"><span class="fd-cat-ic fd-q">?</span><span class="fd-cat-name">Chance</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="sm-straight"><span class="fd-cat-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 18a9 9 0 0 1 18 0" stroke="#ff8a8a"/><path d="M6 18a6 6 0 0 1 12 0" stroke="#ffd08a"/><path d="M9 18a3 3 0 0 1 6 0" stroke="#8fe08a"/></svg></span><span class="fd-cat-name">Sm Strt</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="three-kind"><span class="fd-cat-ic">⚂</span><span class="fd-cat-name">3 of a kind</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="lg-straight"><span class="fd-cat-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 18a9 9 0 0 1 18 0" stroke="#ff8a8a"/><path d="M6 18a6 6 0 0 1 12 0" stroke="#ffd08a"/><path d="M9 18a3 3 0 0 1 6 0" stroke="#8fe08a"/></svg></span><span class="fd-cat-name">Lg Strt</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="four-kind"><span class="fd-cat-ic">⚃</span><span class="fd-cat-name">4 of a kind</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="five-dice"><span class="fd-cat-ic">⚄</span><span class="fd-cat-name">5 Dice</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="full-house"><span class="fd-cat-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ffd08a" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg></span><span class="fd-cat-name">Full House</span><span class="fd-cat-score"></span></div>
+            <div class="fd-cat" data-category="bonus-5s"><span class="fd-cat-ic fd-star">★</span><span class="fd-cat-name">Bonus 5's</span><span class="fd-cat-score"></span></div>
           </div>
 
           <div class="fd-lower-totals">
-            <div>Lower Total: <span id="fd-lower-total">0</span></div>
-            <div style="font-weight:bold;">Grand Total: <span id="fd-grand-total">0</span></div>
+            <div class="fd-totrow"><span>Lower Total</span><span id="fd-lower-total">0</span></div>
+            <div class="fd-totrow fd-grandrow"><span>Grand Total</span><span id="fd-grand-total">0</span></div>
           </div>
 
         </div>
@@ -280,7 +282,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=21"></script>
-  <script src="five-dice.js?v=26"></script>
+  <script src="five-dice.js?v=27"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <script src="app.js?v=27"></script>
 </body>

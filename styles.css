@@ -574,104 +574,168 @@ body.bg-five-dice {
 
 #five-dice-container {
   position: relative;
+  --pc: 106,62,166; /* set to the local player's color by update5DiceUI */
 }
 
+/* ---- Player (your-turn) board skin ---- */
 .fd-board {
   width: 100%;
-  max-width: 450px;
+  max-width: 480px;
   margin: 0 auto;
-  color: white;
-  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #eaf2fb;
   display: flex;
   flex-direction: column;
-  padding: 10px;
+  gap: 4px;
+  padding: 12px 12px 4px;
 }
 
-.fd-upper-section {
+.fd-sec-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: #8fa6be;
+  margin: 4px 2px 4px;
+}
+
+.fd-upper-section,
+.fd-lower-section {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px 40px;
-  margin-bottom: 40px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .fd-cat {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  gap: 8px;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  font-size: 1.4rem;
+  padding: 7px 10px;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.07);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
 }
 
-.fd-cat:active {
-  background-color: rgba(255,255,255,0.2);
+.fd-cat-ic {
+  width: 22px;
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
+  color: #bcd0e6;
+  font-size: 18px;
+  line-height: 1;
 }
+.fd-cat-ic.fd-q { font-weight: 800; color: #8fd0ff; font-size: 15px; }
+.fd-cat-ic.fd-star { color: #ffd76a; font-size: 16px; }
 
-.fd-cat-die {
-  width: 48px;
-  height: 48px;
-  border: 3px solid white;
-  border-radius: 6px;
-  position: relative;
+.fd-cat-name {
+  flex: 1;
+  font-weight: 600;
+  color: #dbe7f4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fd-cat-score {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: inherit;
-  margin-left: 10px;
+  min-width: 30px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #eef5fc;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.25);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.4);
 }
+
+.fd-cat.scored { opacity: .72; }
+.fd-cat.scored .fd-cat-score { color: #c7d6e6; background: rgba(0,0,0,.32); }
+
+.fd-cat.avail {
+  background: linear-gradient(180deg, rgba(var(--pc), .16), rgba(var(--pc), .05));
+  border: 1px solid rgba(var(--pc), .55);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 0 12px rgba(var(--pc), .28);
+}
+.fd-cat.avail .fd-cat-score { color: #fff; background: rgba(var(--pc), .55); }
+.fd-cat.avail.zero .fd-cat-score { color: #6f89a2; background: rgba(0,0,0,.28); }
 
 .fd-upper-totals {
   display: flex;
   justify-content: space-between;
-  font-size: 0.9rem;
-  margin-bottom: 5px;
+  align-items: center;
+  font-size: 13px;
+  color: #c7d6e6;
+  margin: 6px 2px 2px;
 }
 
-.fd-upper-total-row {
-  text-align: center;
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-}
-
-.fd-lower-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px 20px;
-  margin-bottom: 20px;
+.fd-totrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+  font-weight: 700;
+  color: #fff;
 }
 
 .fd-lower-totals {
-  text-align: center;
-  font-size: 1.2rem;
-  line-height: 1.6;
-  margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+
+.fd-grandrow {
+  font-size: 17px;
+  background: linear-gradient(180deg, rgba(var(--pc), .30), rgba(var(--pc), .12));
+  border: 1px solid rgba(var(--pc), .6);
 }
 
 .fd-play-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 20px;
+  margin: 4px 0 16px;
 }
 
 .fd-dice-row {
+  position: relative;
   display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 20px;
-  margin-bottom: 10px;
+  gap: 9px;
+  align-items: flex-end;
+  margin-top: 14px;
+  margin-bottom: 8px;
+  padding-bottom: 16px;
+}
+.fd-dice-row::before {
+  content: '';
+  position: absolute;
+  left: -3%;
+  right: -3%;
+  bottom: 0;
+  height: 22px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #26466a, #16293e);
+  transform: perspective(320px) rotateX(46deg);
+  transform-origin: bottom;
+  box-shadow: 0 14px 22px rgba(0,0,0,.5);
+  z-index: 0;
 }
 
 .fd-die {
-  width: 44px;
-  height: 44px;
-  border: 3px solid white;
-  border-radius: 6px;
+  width: 46px;
+  height: 46px;
+  border: 3px solid rgba(255,255,255,.9);
+  border-radius: 10px;
   position: relative;
   cursor: pointer;
+  z-index: 1;
   background-color: transparent;
   transition: transform 0.2s, background-color 0.2s;
 }
@@ -681,8 +745,9 @@ body.dice3d-active .fd-die {
 }
 
 .fd-die.held {
-  border-color: #a0d8cc;
-  background-color: rgba(160, 216, 204, 0.2);
+  outline: 3px solid rgb(var(--pc));
+  outline-offset: 2px;
+  border-color: rgba(var(--pc), .9);
 }
 
 @keyframes spinRoll {
@@ -717,18 +782,23 @@ body.dice3d-active .fd-die {
 .die-6::after { background-color: transparent; box-shadow: -10px -10px 0 white, -10px 0 0 white, -10px 10px 0 white, 10px -10px 0 white, 10px 0 0 white, 10px 10px 0 white; }
 
 .fd-roll-btn {
-  width: 50px;
-  height: 50px;
-  background-color: #4a4a4a;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
   cursor: pointer;
   user-select: none;
-  margin-left: 10px;
+  margin-left: 6px;
+  z-index: 1;
+  background: linear-gradient(180deg, rgb(var(--pc)), rgba(var(--pc), .6));
+  border: 1px solid rgba(255,255,255,.35);
+  box-shadow: 0 8px 14px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.3);
 }
 
 .fd-roll-btn:active {
@@ -736,7 +806,10 @@ body.dice3d-active .fd-die {
 }
 
 .fd-turns-left {
-  font-size: 0.9rem;
+  font-size: 14px;
+  font-weight: 600;
+  color: #c7d6e6;
+  margin-top: 8px;
 }
 
 .fd-commit-overlay {
