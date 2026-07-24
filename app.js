@@ -703,6 +703,8 @@ function setupGameUI(gameType, isRejoin = false) {
     tttBoard.classList.remove('hidden', 'disabled');
     fdContainer.classList.add('hidden');
     document.body.classList.remove('bg-five-dice');
+    const winsElSetup = document.getElementById('fd-wins');
+    if (winsElSetup) winsElSetup.classList.add('hidden');
     createBoard();
     updateBoard();
   }
@@ -799,6 +801,8 @@ function handleGameStateUpdate(gameData) {
         if (gs) gs.classList.remove('tie-background');
       } else {
         document.getElementById('btn-play-again').classList.remove('hidden');
+        // Show/refresh the room's running win tally at game over.
+        if (typeof window.renderWinsTally === 'function') window.renderWinsTally();
       }
     }
   }
@@ -912,6 +916,22 @@ function checkWinSilent() {
   return !state.includes('');
 }
 
+// Returns the winning symbol ('X'/'O') if there's a completed line, else null
+// (a full board with no line is a draw).
+function getTTTWinnerSymbol() {
+  const state = parseGameState(gameState);
+  const winPatterns = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  for (let pattern of winPatterns) {
+    const [a,b,c] = pattern;
+    if (state[a] && state[a] === state[b] && state[a] === state[c]) return state[a];
+  }
+  return null;
+}
+
 // TIC TAC TOE LOGIC
 function createBoard() {
   const board = document.getElementById('tic-tac-toe-board');
@@ -982,6 +1002,15 @@ async function handleMove(index) {
     updateGameBackground();
   } else {
     document.getElementById('btn-play-again').classList.remove('hidden');
+    // This client made the final move, so it records the result exactly once
+    // into the room's running tally (a win for me, or a tie for everyone).
+    const winSym = getTTTWinnerSymbol();
+    if (winSym) {
+      if (typeof window.recordRoomWin === 'function') window.recordRoomWin(myPeerId);
+    } else {
+      (gamePlayers || []).forEach(p => { if (typeof window.recordRoomTie === 'function') window.recordRoomTie(p); });
+    }
+    if (typeof window.renderWinsTally === 'function') window.renderWinsTally();
   }
 
   if (window.firebaseGameBackend && currentRoomId) {
@@ -1015,7 +1044,9 @@ function resetGame(firstTurn = null) {
   document.getElementById('tic-tac-toe-board').classList.remove('disabled');
   document.getElementById('btn-play-again').classList.add('hidden');
   document.getElementById('screen-game').classList.remove('tie-background');
-  
+  const winsElReset = document.getElementById('fd-wins');
+  if (winsElReset) winsElReset.classList.add('hidden');
+
   updateGameBackground();
   
   document.getElementById('game-status').innerText = myTurn ? 'Your turn!' : `${window.getOpponentName()}'s turn`;
