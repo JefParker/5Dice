@@ -629,7 +629,12 @@ window.reset5DiceGame = function(firstTurnId = null) {
   if (btnPlayAgain) btnPlayAgain.classList.add('hidden');
   const winsEl = document.getElementById('fd-wins');
   if (winsEl) winsEl.classList.add('hidden');
-  
+
+  // Clear the previous game's winner/tie background so the new game returns to
+  // the normal turn-colored board.
+  const gs = document.getElementById('screen-game');
+  if (gs) { gs.classList.remove('tie-background'); gs.style.backgroundColor = ''; }
+
   const elStatus = document.getElementById('game-status');
   if (elStatus) {
     elStatus.innerText = window.myTurn ? 'Your turn!' : `${getPeerName(selectedFirstTurn)}'s turn`;
@@ -814,10 +819,28 @@ window.renderWinsTally = function() {
   el.classList.remove('hidden');
 };
 
+// Paint the game screen in the winner's color at game over (a tie uses two-color
+// stripes, mirroring the tic-tac-toe tie background).
+window.apply5DiceWinnerBackground = function() {
+  const gameScreen = document.getElementById('screen-game');
+  if (!gameScreen || !window.fiveDiceState || !window.fiveDiceState.isGameOver) return;
+  const winners = compute5DiceWinners();
+  if (winners.length === 1) {
+    gameScreen.classList.remove('tie-background');
+    gameScreen.style.backgroundColor = getPeerColor(winners[0]);
+  } else if (winners.length > 1) {
+    gameScreen.style.setProperty('--color-1', getPeerColor(winners[0]));
+    gameScreen.style.setProperty('--color-2', getPeerColor(winners[1] || winners[0]));
+    gameScreen.style.backgroundColor = '';
+    gameScreen.classList.add('tie-background');
+  }
+};
+
 window.handle5DiceGameOver = function() {
   window.fiveDiceState.isGameOver = true;
   update5DiceUI();
   const winners = compute5DiceWinners();
+  window.apply5DiceWinnerBackground();
 
   const elStatus = document.getElementById('game-status');
   if (winners.includes(window.myPeerId)) {

@@ -75,8 +75,9 @@ saveSharedProfile(myName, myColor);
 // --- HINTS SETTING ---
 // When off, the 5 Dice board hides potential-score previews and the highlight
 // on available categories, leaving just scored vs. open cells. five-dice.js reads
-// window.hintsEnabled when rendering. Default: on.
-let hintsEnabled = (localStorage.getItem('hintsEnabled') !== 'false');
+// window.hintsEnabled when rendering. Default: OFF — only on if the user has
+// explicitly turned it on before (their choice is remembered).
+let hintsEnabled = (localStorage.getItem('hintsEnabled') === 'true');
 window.hintsEnabled = hintsEnabled;
 
 function setHintsEnabled(on) {
@@ -836,6 +837,17 @@ window.recordRoomTie = function(playerId) {
 function updateGameBackground() {
   const gameScreen = document.getElementById('screen-game');
   if (!gameScreen) return;
+
+  // 5 Dice game over: the winner's color (or tie stripes) owns the background —
+  // don't overwrite it with the current-turn color on later state syncs. Key off
+  // the visible 5 Dice view so a stale isGameOver from a prior game can't affect
+  // a tic-tac-toe board.
+  const fdcNow = document.getElementById('five-dice-container');
+  const in5DiceView = fdcNow && !fdcNow.classList.contains('hidden');
+  if (in5DiceView && window.fiveDiceState && window.fiveDiceState.isGameOver) {
+    if (typeof window.apply5DiceWinnerBackground === 'function') window.apply5DiceWinnerBackground();
+    return;
+  }
 
   // Don't overwrite winner/tie backgrounds
   if (gameScreen.classList.contains('tie-background')) return;
