@@ -40,6 +40,19 @@ async function requireAuth() {
     return !authError;
 }
 
+// Safely extract a sheet's dLastUpdate (its "last real change" timestamp) from a
+// stored score, which may be a JSON string or an already-parsed object. Returns 0
+// when absent/unparseable so a blank or malformed sheet never wins newest-wins.
+function parseUpdateTs(score) {
+    try {
+        const obj = typeof score === "string" ? JSON.parse(score) : score;
+        const ts = obj && obj.dLastUpdate;
+        return typeof ts === "number" ? ts : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
 window.firebaseBackend = {
     isConnected: false,
     authError: null,
@@ -49,6 +62,30 @@ window.firebaseBackend = {
 
     setScore: async (room, player_id, scoreJson) => {
         if (!(await requireAuth())) throw new Error("Not authenticated");
+
+        // Newest-wins guard. Multiple tabs in the same browser share one PlayerID
+        // and therefore write to this same node. Without this check, a tab that
+        // just opened (and whose sheet is blank or stale) could overwrite an
+        // in-progress sheet, and the live onValue listener would then mirror the
+        // wipe back to every tab. We compare dLastUpdate and skip the write when
+        // the server already holds a newer sheet.
+        const incomingTs = parseUpdateTs(scoreJson);
+        try {
+            const existingSnap = await get(ref(db, `rooms/${room}/scores/${player_id}`));
+            if (existingSnap.exists()) {
+                const existingTs = parseUpdateTs(existingSnap.val().score);
+                // Strictly newer on the server -> keep it, don't clobber.
+                if (existingTs > incomingTs) {
+                    await set(ref(db, `rooms/${room}/lastEntered`), serverTimestamp());
+                    return;
+                }
+            }
+        } catch (e) {
+            // If the pre-read fails, fall through to a normal write rather than
+            // blocking the player from saving.
+            console.error("setScore pre-read failed, writing anyway:", e);
+        }
+
         await set(ref(db, `rooms/${room}/scores/${player_id}`), {
             room: room,
             player_id: player_id,

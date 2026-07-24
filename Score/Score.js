@@ -123,6 +123,11 @@ const SetUpData = () => {
         g_objScore.PlayerID = g_objUserData.PlayerID;
         g_objScore.Score =  [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
         document.body.style.background = g_objScore.Color = g_objUserData.Color;
+        // A brand-new blank sheet must never win the newest-wins comparison, or a
+        // freshly-opened second tab (same PlayerID) would clobber an in-progress
+        // sheet already on the server. dLastUpdate=0 means "no real data yet"; it
+        // gets a real timestamp the moment an actual score is entered.
+        g_objScore.dLastUpdate = 0;
     }
 }
 
@@ -1082,6 +1087,9 @@ const Clear = () => {
         return;
     if (confirm("Are you sure you want to clear the score sheet?")) {
         g_objScore.Score =  [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+        // Bump the change timestamp so this clear wins newest-wins and syncs to
+        // other tabs sharing our PlayerID instead of being ignored as "not newer".
+        g_objScore.dLastUpdate = new Date().valueOf();
         g_objGame.LeaderList = [];
         DisplayScore(g_objScore);
         BCastScore(JSON.stringify(g_objScore));
@@ -1190,10 +1198,33 @@ let initWebSocket = () => {
                             localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
                             DisplayScore(g_objScore);
                         } else {
+                            let adoptedOwn = false;
                             for (let x=0; x<objLeaderBoard.length; x++) {
                                 let jsonPlayer = objLeaderBoard[x].score;
                                 if (document.getElementById("LeaderBoardEntries"))
                                     document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
+
+                                // Perfect-sync for tabs sharing our PlayerID (same UUID):
+                                // if this entry is OUR sheet and is newer than what we hold
+                                // locally, adopt it so an edit made in the other tab shows up
+                                // here live instead of the two tabs racing and clobbering.
+                                try {
+                                    let incoming = JSON.parse(jsonPlayer);
+                                    if (incoming && incoming.PlayerID === g_objUserData.PlayerID &&
+                                        (incoming.dLastUpdate || 0) > (g_objScore.dLastUpdate || 0)) {
+                                        g_objScore = incoming;
+                                        g_objScore.dLastLoaded = new Date();
+                                        localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
+                                        adoptedOwn = true;
+                                    }
+                                } catch (e) {}
+                            }
+                            // Redraw the main card only when we're viewing our own sheet, so
+                            // syncing doesn't yank us off an opponent's sheet we're inspecting.
+                            if (adoptedOwn &&
+                                (g_objGame.ScoreSheetShowing == null ||
+                                 g_objGame.ScoreSheetShowing == g_objUserData.PlayerID)) {
+                                DisplayScore(g_objScore);
                             }
                         }
                     }
