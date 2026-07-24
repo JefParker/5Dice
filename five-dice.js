@@ -196,6 +196,7 @@ function fdHexToRgb(hex){
   if (h.length!==6 || isNaN(n)) return '90,110,140';
   return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
 }
+function fdLighten(rgb, amt){ const [r,g,b]=rgb.split(',').map(Number); const m=v=>Math.round(v+(255-v)*amt); return `${m(r)},${m(g)},${m(b)}`; }
 function fdSum(state,p,keys){ let t=0; const s=state.scores[p]; if(s) keys.forEach(k=>{ if(typeof s[k]==='number') t+=s[k]; }); return t; }
 function fdUpper(state,p){ return fdSum(state,p,FD_UPPER_KEYS); }
 function fdLower(state,p){ return fdSum(state,p,FD_LOWER_KEYS); }
@@ -236,9 +237,15 @@ function renderScorecard() {
   };
   const rowCells = (fn)=>players.map(fn).join('');
 
-  // header
-  let html = `<div class="fd-sc-row fd-sc-head"><div class="fd-sc-cat"></div>${
-    rowCells(p=>`<div class="fd-sc-ph${p===activeId?' active':''}" style="--pc:${fdHexToRgb(getPeerColor(p))}">${fdEsc(getPeerName(p))}</div>`)}</div>`;
+  // active-column glow layer (one full-height panel behind the active player's column)
+  let html = `<div class="fd-sc-colbg"><div class="col"></div>${
+    rowCells(p=>`<div class="col${p===activeId?' active':''}" style="--pc:${fdHexToRgb(getPeerColor(p))}"></div>`)}</div>`;
+
+  // header (names tinted in a lightened version of each player's own color)
+  html += `<div class="fd-sc-row fd-sc-head"><div class="fd-sc-cat"></div>${
+    rowCells(p=>{ const rgb=fdHexToRgb(getPeerColor(p));
+      return `<div class="fd-sc-ph${p===activeId?' active':''}" style="--pc:${rgb};--pcl:${fdLighten(rgb,.55)}">${fdEsc(getPeerName(p))}</div>`;
+    })}</div>`;
 
   // upper rows
   upperCats.forEach(c=>{

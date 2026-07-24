@@ -788,6 +788,7 @@ body.dice3d-active .fd-die {
 /* ---- Scorecard (multi-column) skin ---- */
 #fd-scorecard {
   --fd-catw: 116px;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -804,7 +805,24 @@ body.dice3d-active .fd-die {
 }
 #fd-scorecard.tight { --fd-catw: 96px; }
 
+/* Full-height glow panel behind the active player's column */
+.fd-sc-colbg {
+  position: absolute;
+  left: 12px; right: 12px; top: 14px; bottom: 16px;
+  display: grid; gap: 8px;
+  grid-template-columns: var(--fd-catw) repeat(var(--n, 2), minmax(0, 1fr));
+  z-index: 0; pointer-events: none;
+}
+.fd-sc-colbg .col { border-radius: 14px; }
+.fd-sc-colbg .col.active {
+  background: rgba(var(--pc), .06);
+  border: 1.5px solid rgba(var(--pc), .8);
+  box-shadow: 0 0 18px rgba(var(--pc), .45), inset 0 0 22px rgba(var(--pc), .10);
+}
+
 .fd-sc-row {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 8px;
   align-items: stretch;
@@ -833,7 +851,7 @@ body.dice3d-active .fd-die {
 .fd-sc-ph {
   display: flex; align-items: center; justify-content: center;
   min-height: 26px; padding: 3px 4px;
-  color: #fff; font-weight: 700; font-size: 13.5px;
+  color: rgb(var(--pcl, 255,255,255)); font-weight: 700; font-size: 13.5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .fd-sc-ph.active { text-shadow: 0 1px 8px rgba(var(--pc), .9); }
