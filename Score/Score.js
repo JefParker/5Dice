@@ -552,6 +552,12 @@ const RollDice = () => {
     if (!g_objGame.Dice) InitDice();
     if (g_objGame.Dice.rollsLeft <= 0) return;
 
+    // If we're viewing another player's sheet (tapped from the leaderboard), snap
+    // back to our own sheet before rolling so the roll/scoring applies to us.
+    if (g_objGame.ScoreSheetShowing !== g_objUserData.PlayerID) {
+        DisplayScore(g_objScore);
+    }
+
     setSheetUnLocked();               // scoring taps need the sheet unlocked
     g_objGame.Dice.manualCats = {};   // a fresh roll re-enables auto scoring
 
