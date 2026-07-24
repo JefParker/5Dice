@@ -966,19 +966,29 @@ const DisplayScore = (objData) => {
 
 const LeaderList = (sData) => {
     //console.log(sData);
-    let objData = JSON.parse(sData);
+    // Defensive parse: a malformed/undefined payload used to throw here and, because
+    // this runs inside a Firebase onValue/onChildAdded callback, took down the whole
+    // handler (leaving the board half-updated). Bad input now just re-renders the
+    // current list instead of crashing.
+    let objData = null;
+    try {
+        if (sData !== undefined && sData !== null && sData !== "undefined")
+            objData = JSON.parse(sData);
+    } catch (e) {
+        objData = null;
+    }
 
     let sLeaderList = "";
     let bFound = false;
     let x=0;
-    for (x=0; x<g_objGame.LeaderList.length; x++) {
+    if (objData) for (x=0; x<g_objGame.LeaderList.length; x++) {
         if (g_objGame.LeaderList[x].PlayerID == objData.PlayerID) {
             if (g_objGame.LeaderList[x].dLastUpdate < objData.dLastUpdate)
                 g_objGame.LeaderList[x] = objData;
             bFound = true;
         }
     }
-    if (!bFound) {
+    if (objData && !bFound) {
         g_objGame.LeaderList[x] = objData;
     }
 

@@ -15,6 +15,11 @@
 
 
 self.addEventListener('install', evt => {
+        // Activate a freshly-installed SW immediately instead of waiting for every
+        // controlled tab to close. Without this, a new version sits in "waiting"
+        // and the old cached code keeps running until all tabs are shut — which is
+        // exactly how stale Score.js kept being served after updates.
+        self.skipWaiting();
         evt.waitUntil(caches.open(staticCache).then(cache => {
             console.log('Caching shell assets');
             return cache.addAll(assets);
@@ -29,7 +34,7 @@ self.addEventListener('activate', evt => {
                 .filter(key => key !== staticCache && key !== dynamicCache)
                 .map(key => caches.delete(key))
             )
-        })
+        }).then(() => self.clients.claim())
     );
 });
 
