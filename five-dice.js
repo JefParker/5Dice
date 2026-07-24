@@ -675,7 +675,25 @@ window.sync5DiceState = function(incomingState) {
   }
 
   if (shouldUpdateState) {
+    // Preserve accumulated Yahtzee bonuses (bonus-5s). They only ever increase and
+    // are NOT reflected in the score-count used above, so an equal-count incoming
+    // state that happens to lack a just-awarded bonus would otherwise silently wipe
+    // it. Take the max per player so a bonus can never be reduced by a sync.
+    const prevBonus = {};
+    if (window.fiveDiceState && window.fiveDiceState.scores) {
+      for (const p in window.fiveDiceState.scores) {
+        const b = window.fiveDiceState.scores[p] && window.fiveDiceState.scores[p]['bonus-5s'];
+        if (typeof b === 'number') prevBonus[p] = b;
+      }
+    }
     window.fiveDiceState = incomingState;
+    if (window.fiveDiceState.scores) {
+      for (const p in prevBonus) {
+        if (!window.fiveDiceState.scores[p]) continue;
+        const inc = window.fiveDiceState.scores[p]['bonus-5s'];
+        window.fiveDiceState.scores[p]['bonus-5s'] = Math.max(prevBonus[p], typeof inc === 'number' ? inc : 0);
+      }
+    }
   }
 
   // Recalculate turn order robustly
