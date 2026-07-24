@@ -786,7 +786,7 @@ body.dice3d-active .fd-die {
 }
 
 /* ---- Scorecard (multi-column) skin ---- */
-.fd-scorecard {
+#fd-scorecard {
   --fd-catw: 116px;
   display: flex;
   flex-direction: column;
@@ -802,7 +802,7 @@ body.dice3d-active .fd-die {
   border-radius: 20px;
   box-shadow: 0 18px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
 }
-.fd-scorecard.tight { --fd-catw: 96px; }
+#fd-scorecard.tight { --fd-catw: 96px; }
 
 .fd-sc-row {
   display: grid;
@@ -825,7 +825,7 @@ body.dice3d-active .fd-die {
 
 .fd-ic { width: 20px; flex: 0 0 20px; display: grid; place-items: center; color: #bcd0e6; font-size: 16px; }
 .fd-sc-cat.lower .fd-ic { width: 18px; flex: 0 0 18px; }
-.fd-scorecard.tight .fd-sc-cat.lower .fd-ic { display: none; }
+#fd-scorecard.tight .fd-sc-cat.lower .fd-ic { display: none; }
 .fd-face { font-size: 17px; line-height: 1; }
 .fd-q { font-weight: 800; color: #8fd0ff; }
 .fd-star { color: #ffd76a; font-size: 16px; }
