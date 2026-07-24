@@ -244,7 +244,7 @@ function renderScorecard() {
   // header (names tinted in a lightened version of each player's own color)
   html += `<div class="fd-sc-row fd-sc-head"><div class="fd-sc-cat"></div>${
     rowCells(p=>{ const rgb=fdHexToRgb(getPeerColor(p));
-      return `<div class="fd-sc-ph${p===activeId?' active':''}" style="--pc:${rgb};--pcl:${fdLighten(rgb,.55)}">${fdEsc(getPeerName(p))}</div>`;
+      return `<div class="fd-sc-ph${p===activeId?' active':''}" style="--pc:${rgb};--pcl:${fdLighten(rgb,.55)};--pcm:${fdLighten(rgb,.18)}">${fdEsc(getPeerName(p))}</div>`;
     })}</div>`;
 
   // upper rows
