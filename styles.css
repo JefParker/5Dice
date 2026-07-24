@@ -943,6 +943,7 @@ body.dice3d-active .fd-die {
   letter-spacing: .5px;
   color: #8fa6be;
 }
+.fd-win-tie .fd-win-name { color: #9fb4cc; }
 
 .fd-commit-overlay {
   position: absolute;

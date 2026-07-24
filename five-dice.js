@@ -807,15 +807,36 @@ window.renderWinsTally = function() {
   let players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers.slice() : Object.keys(wins);
   if (players.length === 0) { el.classList.add('hidden'); return; }
   players.sort((a, b) => ((wins[b] || 0) - (wins[a] || 0)) || ((ties[b] || 0) - (ties[a] || 0)));
-  const head = `<div class="fd-win-row fd-win-head"><span class="fd-win-dot" style="visibility:hidden"></span>`
-    + `<span class="fd-win-name"></span><span class="fd-win-count">W</span><span class="fd-win-count">T</span></div>`;
-  const rows = players.map(p => {
-    return `<div class="fd-win-row"><span class="fd-win-dot" style="background:${getPeerColor(p)}"></span>`
+
+  let html = `<div class="fd-wins-title">Room record</div>`;
+
+  if (players.length <= 2) {
+    // 2 players (or solo): a tie is shared by everyone, so listing it on each
+    // player just duplicates the same number. Show a single wins column plus one
+    // "Ties" row instead.
+    html += players.map(p =>
+      `<div class="fd-win-row"><span class="fd-win-dot" style="background:${getPeerColor(p)}"></span>`
+      + `<span class="fd-win-name">${fdEsc(getPeerName(p))}</span>`
+      + `<span class="fd-win-count">${wins[p] || 0}</span></div>`
+    ).join('');
+    const tieCount = Math.max(0, ...players.map(p => ties[p] || 0));
+    html += `<div class="fd-win-row fd-win-tie"><span class="fd-win-dot" style="visibility:hidden"></span>`
+      + `<span class="fd-win-name">Ties</span>`
+      + `<span class="fd-win-count">${tieCount}</span></div>`;
+  } else {
+    // 3+ players: a tie can be between only some players, so keep the per-player
+    // Win / Tie columns.
+    html += `<div class="fd-win-row fd-win-head"><span class="fd-win-dot" style="visibility:hidden"></span>`
+      + `<span class="fd-win-name"></span><span class="fd-win-count">W</span><span class="fd-win-count">T</span></div>`;
+    html += players.map(p =>
+      `<div class="fd-win-row"><span class="fd-win-dot" style="background:${getPeerColor(p)}"></span>`
       + `<span class="fd-win-name">${fdEsc(getPeerName(p))}</span>`
       + `<span class="fd-win-count">${wins[p] || 0}</span>`
-      + `<span class="fd-win-count">${ties[p] || 0}</span></div>`;
-  }).join('');
-  el.innerHTML = `<div class="fd-wins-title">Room record</div>${head}${rows}`;
+      + `<span class="fd-win-count">${ties[p] || 0}</span></div>`
+    ).join('');
+  }
+
+  el.innerHTML = html;
   el.classList.remove('hidden');
 };
 
