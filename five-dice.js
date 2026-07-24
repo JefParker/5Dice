@@ -159,8 +159,9 @@ function update5DiceUI() {
   const fdc = document.getElementById('five-dice-container');
   if (fdc && window.myColor) fdc.style.setProperty('--pc', fdHexToRgb(window.myColor));
 
-  // Live "potential score" previews appear on unscored tiles once you've rolled.
-  const rolled = state.rollsLeft < 3;
+  // Live "potential score" previews appear on unscored tiles once you've rolled —
+  // but not while the 3D dice are still tumbling (wait for them to settle).
+  const rolled = state.rollsLeft < 3 && !(window.dice3d && window.dice3d.rolling);
 
   document.querySelectorAll('#fd-board .fd-cat').forEach(catEl => {
     const cat = catEl.getAttribute('data-category');
@@ -346,6 +347,7 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
       btn.classList.remove('is-rolling');
       update5DiceUI();
     });
+    update5DiceUI(); // clear the previous previews immediately while the dice tumble
   } else {
     btn.classList.remove('is-rolling');
     update5DiceUI();
