@@ -1141,3 +1141,77 @@ body.dice3d-active .fd-die {
 .audio-btn.outline-red {
   box-shadow: 0 0 0 2px #ff3b30;
 }
+
+/* ------------------------------------------------------------------ */
+/* Larger screens: the game screen has no sidebar, so the full width   */
+/* is free. Scale the boards, dice and type up to use the extra room.  */
+/* Mobile keeps its compact defaults above; these only add on top.     */
+/* ------------------------------------------------------------------ */
+
+/* Tablets & small desktops */
+@media (min-width: 768px) {
+  .game-status { font-size: 1.5rem; margin-bottom: 24px; }
+
+  /* 5 Dice — your-turn board */
+  .fd-board { max-width: 600px; gap: 6px; padding: 16px 18px 8px; }
+  .fd-sec-label { font-size: 14px; }
+  .fd-upper-section, .fd-lower-section { gap: 10px; }
+  .fd-cat { min-height: 54px; font-size: 16px; padding: 10px 14px; gap: 10px; border-radius: 14px; }
+  .fd-cat-ic { font-size: 22px; width: 26px; flex-basis: 26px; }
+  .fd-cat-score { font-size: 17px; min-width: 36px; }
+  .fd-upper-totals { font-size: 15px; }
+  .fd-totrow { font-size: 15.5px; padding: 10px 14px; }
+  .fd-grandrow { font-size: 20px; }
+
+  /* Dice + roll button (3D dice scale to the .fd-die element size) */
+  .fd-die { width: 62px; height: 62px; }
+  .fd-dice-row { gap: 14px; }
+  .fd-roll-btn { width: 70px; height: 70px; font-size: 20px; }
+  .fd-turns-left { font-size: 16px; }
+
+  /* 5 Dice — multi-player scorecard (waiting view) */
+  #fd-scorecard { max-width: 640px; --fd-catw: 140px; padding: 16px 14px 18px; }
+  #fd-scorecard.tight { --fd-catw: 120px; }
+  .fd-sc-cat { font-size: 15.5px; min-height: 40px; }
+  .fd-sc-cat.lower { font-size: 14px; }
+  .fd-sc-ph { font-size: 15px; min-height: 32px; }
+  .fd-sc-score { font-size: 15.5px; min-height: 40px; }
+  .fd-sc-score.grand { font-size: 18px; min-height: 46px; }
+  .fd-face { font-size: 19px; }
+
+  /* Tic-Tac-Toe */
+  .tic-tac-toe-board { max-width: 420px; }
+  .cell { font-size: 4.5rem; }
+}
+
+/* Large desktops — go bigger still */
+@media (min-width: 1200px) {
+  .game-status { font-size: 1.8rem; }
+
+  .fd-board { max-width: 720px; gap: 8px; padding: 20px 22px 10px; }
+  .fd-sec-label { font-size: 16px; }
+  .fd-upper-section, .fd-lower-section { gap: 12px; }
+  .fd-cat { min-height: 62px; font-size: 18.5px; padding: 12px 16px; gap: 12px; }
+  .fd-cat-ic { font-size: 26px; width: 30px; flex-basis: 30px; }
+  .fd-cat-score { font-size: 20px; min-width: 42px; }
+  .fd-upper-totals { font-size: 17px; }
+  .fd-totrow { font-size: 18px; padding: 12px 16px; }
+  .fd-grandrow { font-size: 23px; }
+
+  .fd-die { width: 74px; height: 74px; }
+  .fd-dice-row { gap: 18px; }
+  .fd-roll-btn { width: 82px; height: 82px; font-size: 23px; }
+  .fd-turns-left { font-size: 18px; }
+
+  #fd-scorecard { max-width: 760px; --fd-catw: 160px; }
+  #fd-scorecard.tight { --fd-catw: 132px; }
+  .fd-sc-cat { font-size: 17px; min-height: 44px; }
+  .fd-sc-cat.lower { font-size: 15px; }
+  .fd-sc-ph { font-size: 16.5px; }
+  .fd-sc-score { font-size: 17px; min-height: 44px; }
+  .fd-sc-score.grand { font-size: 20px; min-height: 52px; }
+  .fd-face { font-size: 21px; }
+
+  .tic-tac-toe-board { max-width: 480px; }
+  .cell { font-size: 5.5rem; }
+}
