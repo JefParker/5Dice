@@ -600,11 +600,12 @@ const CancelDiceScore = () => {
     document.getElementById('DialogBox').innerHTML = "";
 };
 
-// Manual: remember this category as hand-entered (so we don't re-prompt) and let
-// the user tap through the normal options as if using physical dice.
+// Manual: end the dice turn and reset the dice (ready to roll again). With the
+// dice cleared, tapping the category now runs the normal manual tap-through, just
+// as if the user had rolled physical dice.
 const DeclineDiceScore = (sClicked) => {
-    g_objGame.Dice.manualCats[sClicked] = true;
     document.getElementById('DialogBox').innerHTML = "";
+    ResetDiceTurn();
 };
 
 const CommitDiceScore = (sClicked, nScore) => {
