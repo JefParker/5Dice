@@ -327,6 +327,25 @@ body {
     height: 1px;
 }
 
+.LobbyLink {
+    position: fixed;
+    top: 6px;
+    left: 8px;
+    z-index: 1600;
+    font-size: 1.5vmax;
+    font-weight: 600;
+    color: #ffffff;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 4px 12px;
+    border-radius: 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.LobbyLink:hover {
+    background: rgba(0, 0, 0, 0.55);
+}
+
 .DiceRack {
     position: fixed;
     left: 0;

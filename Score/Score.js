@@ -212,6 +212,11 @@ const IDGo = () => {
 
 }
 
+// Navigate from the score sheet back to the main game lobby (one directory up).
+const GoToLobby = () => {
+    window.location.href = "../";
+};
+
 const ShowScoreMain = () => {
     let sPage = "";
 
@@ -382,6 +387,8 @@ const ShowScoreMain = () => {
     sPage += "</div>"; // end DiceRack
 
     sPage += "</div>"; // end Summary third
+
+    sPage += "<div id='LobbyLink' class='LobbyLink' onclick='GoToLobby()' title='Back to the game lobby'>← Lobby</div>";
 
     sPage += MakeContextMenuHTML("");
 
