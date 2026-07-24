@@ -301,19 +301,32 @@ window.firebaseBackend = {
         // fail — e.g. a tab whose identity changed (site-data cleared, new
         // PlayerID) orphans its old node, and a hard crash or lost socket may not
         // fire the handler. To keep "who's here" honest we run a heartbeat: each
-        // client refreshes its own `lastSeen` periodically, and here we treat any
-        // entry not seen within PRESENCE_STALE_MS as gone — filtering it out of the
-        // list AND best-effort deleting the dead node so ghosts self-clean.
+        // client refreshes its own `lastSeen` periodically.
+        //
+        // Staleness is judged CLOCK-INDEPENDENTLY: we compare each entry's lastSeen
+        // against the NEWEST lastSeen in the room (all server timestamps, compared to
+        // each other) rather than against the local clock. This matters because the
+        // local clock / serverTimeOffset can be wrong, and an earlier version that
+        // compared to Date.now() pruned everyone — including the viewer themselves —
+        // whenever the machine clock ran ahead of the server. Since our own heartbeat
+        // keeps us the freshest entry, we can never prune ourselves; only entries
+        // that have fallen more than PRESENCE_STALE_MS behind the newest are dropped.
         let unsubPresence = onValue(presenceRef, (snapshot) => {
             const raw = snapshot.exists() ? snapshot.val() : {};
-            const serverNow = Date.now() + serverTimeOffset;
+            let newestSeen = 0;
+            for (let pid in raw) {
+                if (!raw[pid]) continue;
+                const s = raw[pid].lastSeen || raw[pid].since || 0;
+                if (s > newestSeen) newestSeen = s;
+            }
             const arr = [];
             for (let pid in raw) {
                 const entry = raw[pid];
                 if (!entry) continue;
                 const seen = entry.lastSeen || entry.since || 0;
-                if (seen && (serverNow - seen) > PRESENCE_STALE_MS) {
-                    // Stale ghost: drop it from the live list and remove the node.
+                if (newestSeen && seen && (newestSeen - seen) > PRESENCE_STALE_MS) {
+                    // Fell too far behind the freshest client: a real ghost. Drop it
+                    // from the live list and best-effort delete the dead node.
                     remove(ref(db, `rooms/${room}/presence/${pid}`)).catch(() => {});
                     continue;
                 }

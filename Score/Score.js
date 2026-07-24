@@ -860,6 +860,10 @@ const SendScoreToServerDB = () => {
 
     let jsonData = JSON.stringify(objData);
     console.log("Sending: " + jsonData);
+    // Entering a score is proof we're here — refresh presence so an active player is
+    // always the freshest entry and can never be aged out of the "who's here" list.
+    if (window.firebaseBackend && window.firebaseBackend.touchPresence)
+        window.firebaseBackend.touchPresence(g_objUserData.GameID, g_objUserData.PlayerID);
     postFileFromServer("api", "SetData=" + jsonData, setDataCallback);
     function setDataCallback(data) {
         if (data) {
