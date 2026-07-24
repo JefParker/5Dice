@@ -66,6 +66,7 @@ const GetUserData = () => {
 
     if (!g_objUserData.Color) g_objUserData.Color = PickRandomColor();
     if (g_objUserData.Name === undefined) g_objUserData.Name = "";
+    if (g_objUserData.Hints === undefined) g_objUserData.Hints = true; // Hints on by default
 
     document.body.style.background = g_objUserData.Color;
     SetUserData();
@@ -135,6 +136,12 @@ const ShowEnterID = () => {
     sPage += "</div>";
 
     sPage += "</div><br><br>";
+
+    sPage += "<div class='HintsSetupRow'>";
+    sPage += "<label class='p-form-switch'><input type='checkbox' id='HintsToggle'><span></span></label>";
+    sPage += "<label for='HintsToggle' class='CheckBoxLbl'> Hints</label>";
+    sPage += "</div><br>";
+
     sPage += "<input type='button' value='Go' id='Go' class='GameSetupInputs WordReveal' style='width: 40%;' onclick='IDGo()'>";
 
 
@@ -151,6 +158,12 @@ const ShowEnterID = () => {
         document.getElementById('PlayerName').value = g_objUserData.Name;
         document.getElementById('GameID').value = g_objUserData.GameID;
     }
+
+    document.getElementById('HintsToggle').checked = (g_objUserData.Hints !== false);
+    document.getElementById('HintsToggle').addEventListener("change", function(){
+        g_objUserData.Hints = this.checked;
+        SetUserData();
+    }, false);
 
     document.getElementById('Go').focus();
 
@@ -642,6 +655,8 @@ const DisplayScore = (objData) => {
 
     document.body.style.background = objData.Color;
 
+    ApplyHints(objData);
+
     let nTurns = TurnsRemaining(objData);
     document.getElementById('ClearBtn').style.borderWidth = '0px';
     if (0 == nTurns) {
@@ -655,6 +670,34 @@ const DisplayScore = (objData) => {
     } else {
         document.getElementById("Turns").innerHTML = nTurns + " turns remaining";
         lockWakeState();
+    }
+}
+
+// Highlight the categories that are still open (not yet scored) so the player
+// can see at a glance which moves are available. Only shown when Hints is on;
+// when Hints is off the sheet just shows taken (a number) vs. available (blank).
+const ApplyHints = (objData) => {
+    const bHints = (g_objUserData.Hints !== false);
+
+    // Upper section: [score index, clickable box element id]
+    const aUpper = [[0, 'US1_1'], [1, 'US2_1'], [2, 'US3_1'], [3, 'US1_2'], [4, 'US2_2'], [5, 'US3_2']];
+    for (let i = 0; i < aUpper.length; i++) {
+        let el = document.getElementById(aUpper[i][1]);
+        if (!el) continue;
+        let bAvailable = (null == objData.Score[aUpper[i][0]]);
+        el.classList.toggle('HintAvailable', bHints && bAvailable);
+    }
+
+    // Lower section: [score index, value box element id]. Highlight the parent
+    // row (the clickable .HalfRow) so the whole category line lights up.
+    const aLower = [[6, 'C'], [7, '3K'], [8, '4K'], [9, 'FH'], [10, 'SS'], [11, 'LS'], [12, 'FD'], [13, 'B5']];
+    for (let j = 0; j < aLower.length; j++) {
+        let box = document.getElementById(aLower[j][1]);
+        if (!box) continue;
+        let row = box.parentElement;
+        if (!row) continue;
+        let bAvailable = (null == objData.Score[aLower[j][0]]);
+        row.classList.toggle('HintAvailable', bHints && bAvailable);
     }
 }
 
