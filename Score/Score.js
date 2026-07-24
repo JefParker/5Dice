@@ -388,7 +388,7 @@ const ShowScoreMain = () => {
 
     sPage += "</div>"; // end Summary third
 
-    sPage += "<div id='LobbyLink' class='LobbyLink' onclick='GoToLobby()' title='Back to the game lobby'>← Lobby</div>";
+    sPage += "<div id='LobbyLink' class='LobbyLink' onclick='GoToLobby()' title='Back to the game lobby' aria-label='Back to lobby'>⬅️</div>";
 
     sPage += MakeContextMenuHTML("");
 

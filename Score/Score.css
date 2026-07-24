@@ -330,20 +330,18 @@ body {
 .LobbyLink {
     position: fixed;
     top: 6px;
-    left: 8px;
+    left: 10px;
     z-index: 1600;
-    font-size: 1.5vmax;
-    font-weight: 600;
-    color: #ffffff;
-    background: rgba(0, 0, 0, 0.35);
-    padding: 4px 12px;
-    border-radius: 14px;
+    font-size: 1.6rem;
+    line-height: 1;
+    padding: 4px 6px;
     cursor: pointer;
+    background: transparent;
     -webkit-tap-highlight-color: transparent;
 }
 
-.LobbyLink:hover {
-    background: rgba(0, 0, 0, 0.55);
+.LobbyLink:active {
+    transform: scale(0.92);
 }
 
 .DiceRack {
