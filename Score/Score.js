@@ -1204,20 +1204,37 @@ let initWebSocket = () => {
                     }
                     else if ('UpdateLeaderBoard' == objData.Event) {
                         let objLeaderBoard = JSON.parse(objData.LeaderBoard);
+                        // Is this the authoritative Firebase feed (a live snapshot of the
+                        // room's scores node) or just a peer's in-memory reply to our
+                        // BCastRequestLeaderBoard? Only the authoritative feed is allowed to
+                        // ZERO our sheet; a peer whose LeaderList happens to be momentarily
+                        // empty must never wipe us. The backend feed is always "BCast2Game";
+                        // peer replies come back as "Msg2ID".
+                        let isAuthoritativeFeed = (objData.Message === "BCast2Game");
                         g_objGame.LeaderList = [];
                         if (objLeaderBoard.length === 0) {
-                            if (document.getElementById("LeaderBoardEntries"))
-                                document.getElementById("LeaderBoardEntries").innerHTML = "";
-                            // WhosHere/NamesHere are driven by the presence feed, not the
-                            // scoreboard, so we no longer zero them out here.
-
-                            g_objScore.Score = [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
-                            localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
-                            DisplayScore(g_objScore);
+                            if (isAuthoritativeFeed) {
+                                if (document.getElementById("LeaderBoardEntries"))
+                                    document.getElementById("LeaderBoardEntries").innerHTML = "";
+                                // WhosHere/NamesHere are driven by the presence feed.
+                                g_objScore.Score = [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+                                localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
+                                DisplayScore(g_objScore);
+                            }
+                            // Empty peer reply: ignore entirely.
                         } else {
                             let adoptedOwn = false;
                             for (let x=0; x<objLeaderBoard.length; x++) {
-                                let jsonPlayer = objLeaderBoard[x].score;
+                                // Entries arrive in two shapes: the authoritative feed wraps
+                                // each sheet as {player_id, score:"<json>"}, while a peer reply
+                                // (SendLeaderBoard2ID) sends the parsed sheet objects directly.
+                                // Normalize both to a sheet JSON string.
+                                let entry = objLeaderBoard[x];
+                                let jsonPlayer = (entry && entry.score !== undefined)
+                                    ? entry.score
+                                    : (entry ? JSON.stringify(entry) : null);
+                                if (!jsonPlayer) continue;
+
                                 if (document.getElementById("LeaderBoardEntries"))
                                     document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
 
