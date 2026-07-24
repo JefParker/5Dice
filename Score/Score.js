@@ -1822,6 +1822,19 @@ window.shareToEmail = () => {
 };
 
 // --- ROOM LIST MODAL HANDLERS ---
+// Human-readable "time since last activity" from a lastEntered timestamp (ms).
+const formatTimeAgo = (ts) => {
+    if (!ts || typeof ts !== 'number') return 'unknown';
+    let diff = Date.now() - ts;
+    if (diff < 0) diff = 0;
+    const min = 60000, hr = 3600000, day = 86400000;
+    if (diff < min) return 'just now';
+    if (diff < hr) { const n = Math.floor(diff / min); return n + 'm ago'; }
+    if (diff < day) { const n = Math.floor(diff / hr); return n + 'h ago'; }
+    const n = Math.floor(diff / day);
+    return n + 'd ago';
+};
+
 window.ShowRoomListModal = async () => {
     const modalEl = document.getElementById('room-list-modal');
     const containerEl = document.getElementById('room-list-container');
@@ -1853,12 +1866,14 @@ window.ShowRoomListModal = async () => {
         let html = '';
         rooms.forEach(r => {
             const playerStr = (r.players && r.players.length > 0) ? r.players.join(', ') : 'Waiting...';
+            const lastPlayed = formatTimeAgo(r.lastEntered);
             html += `
                 <div class="room-list-item" onclick="joinRoomFromList('${r.id}')">
-                    <div>
-                        <span class="room-link">Room #${r.id}</span>
+                    <span class="room-link">Room #${r.id}</span>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                        <span class="room-players">👥 ${playerStr}</span>
+                        <span class="room-lastplayed" style="color: #7a7f9a; font-size: 0.72rem;">🕐 ${lastPlayed}</span>
                     </div>
-                    <span class="room-players">👥 ${playerStr}</span>
                 </div>
             `;
         });
