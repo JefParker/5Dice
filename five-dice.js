@@ -184,99 +184,94 @@ function update5DiceUI() {
   document.getElementById('fd-grand-total').innerText = total;
 }
 
+// --- Scorecard skin helpers ---
+const FD_UPPER_KEYS = ['ones','twos','threes','fours','fives','sixes'];
+const FD_LOWER_KEYS = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'];
+
+function fdEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fdHexToRgb(hex){
+  let h = (hex||'').trim(); if (h[0]==='#') h = h.slice(1);
+  if (h.length===3) h = h.split('').map(c=>c+c).join('');
+  const n = parseInt(h,16);
+  if (h.length!==6 || isNaN(n)) return '90,110,140';
+  return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
+}
+function fdSum(state,p,keys){ let t=0; const s=state.scores[p]; if(s) keys.forEach(k=>{ if(typeof s[k]==='number') t+=s[k]; }); return t; }
+function fdUpper(state,p){ return fdSum(state,p,FD_UPPER_KEYS); }
+function fdLower(state,p){ return fdSum(state,p,FD_LOWER_KEYS); }
+function fdGrand(state,p){ const u=fdUpper(state,p); return u + (u>=63?35:0) + fdLower(state,p); }
+
+const FD_FACE = (n)=>`<span class="fd-face">${['','⚀','⚁','⚂','⚃','⚄','⚅'][n]}</span>`;
+const FD_ICONS = {
+  q:'<span class="fd-q">?</span>',
+  house:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ffd08a" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
+  rain:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 18a9 9 0 0 1 18 0" stroke="#ff8a8a"/><path d="M6 18a6 6 0 0 1 12 0" stroke="#ffd08a"/><path d="M9 18a3 3 0 0 1 6 0" stroke="#8fe08a"/></svg>',
+  star:'<span class="fd-star">★</span>'
+};
+
 function renderScorecard() {
   const state = window.fiveDiceState;
   let players = Object.keys(state.scores);
-  
-  if (state.isGameOver) {
-    players.sort((a, b) => {
-      const getGrandTotal = (p) => {
-        let u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
-        let l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores[p][k] || 0), 0);
-        let bonus = u >= 63 ? 35 : 0;
-        return u + l + bonus;
-      };
-      return getGrandTotal(b) - getGrandTotal(a);
-    });
-  }
-  
+  if (state.isGameOver) players.sort((a,b)=>fdGrand(state,b)-fdGrand(state,a));
+
+  const activeId = window.currentTurnPlayerId;
+
   const upperCats = [
-    { id: 'ones', label: "1's" },
-    { id: 'twos', label: "2's" },
-    { id: 'threes', label: "3's" },
-    { id: 'fours', label: "4's" },
-    { id: 'fives', label: "5's" },
-    { id: 'sixes', label: "6's" },
-    { id: 'bonus', label: "Bonus (> 62)" }
+    { id:'ones', label:"1's", ic:FD_FACE(1) }, { id:'twos', label:"2's", ic:FD_FACE(2) },
+    { id:'threes', label:"3's", ic:FD_FACE(3) }, { id:'fours', label:"4's", ic:FD_FACE(4) },
+    { id:'fives', label:"5's", ic:FD_FACE(5) }, { id:'sixes', label:"6's", ic:FD_FACE(6) },
+    { id:'bonus', label:'Bonus &gt; 62', ic:'' }
   ];
-  
   const lowerCats = [
-    { id: 'chance', label: "Chance" },
-    { id: 'three-kind', label: "3 of a kind" },
-    { id: 'four-kind', label: "4 of a kind" },
-    { id: 'full-house', label: "Full House" },
-    { id: 'sm-straight', label: "Sm Strt" },
-    { id: 'lg-straight', label: "Lg Strt" },
-    { id: 'five-dice', label: "5 Dice" },
-    { id: 'bonus-5s', label: "Bonus 5s" }
+    { id:'chance', label:'Chance', ic:FD_ICONS.q }, { id:'three-kind', label:'3 of a kind', ic:FD_FACE(3) },
+    { id:'four-kind', label:'4 of a kind', ic:FD_FACE(4) }, { id:'full-house', label:'Full House', ic:FD_ICONS.house },
+    { id:'sm-straight', label:'Sm Strt', ic:FD_ICONS.rain }, { id:'lg-straight', label:'Lg Strt', ic:FD_ICONS.rain },
+    { id:'five-dice', label:'5 Dice', ic:FD_FACE(5) }, { id:'bonus-5s', label:"Bonus 5's", ic:FD_ICONS.star }
   ];
-  
-  let html = `<div class="fd-sc-row fd-sc-header"><div class="fd-sc-cat">Categories</div>`;
-  players.forEach(p => {
-    let pName = getPeerName(p);
-    let pColor = getPeerColor(p);
-    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${pName}</div>`;
-  });
-  html += `</div>`;
-  
-  const renderCat = (c, addSection) => {
-    html += `<div class="fd-sc-row ${addSection ? 'fd-sc-section' : ''}"><div class="fd-sc-cat">${c.label}</div>`;
-    players.forEach(p => {
-      let score = state.scores && state.scores[p] ? state.scores[p][c.id] : null;
-      if (c.id === 'bonus') {
-        const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
-        score = u >= 63 ? 35 : 0;
-      }
-      let val = (score === null || score === undefined) ? '-' : score;
-      let pColor = getPeerColor(p);
-      html += `<div class="fd-sc-score" style="background-color: ${pColor};">${val}</div>`;
-    });
-    html += `</div>`;
+
+  const cell = (p, val, extra) => {
+    const empty = (val===null || val===undefined || val==='');
+    const cls = 'fd-sc-score' + (empty?' empty':'') + (p===activeId?' active':'') + (extra?(' '+extra):'');
+    return `<div class="${cls}" style="--pc:${fdHexToRgb(getPeerColor(p))}">${empty?'&ndash;':val}</div>`;
   };
-  
-  upperCats.forEach(c => renderCat(c, false));
-  
-  html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Upper Tot</div>`;
-  players.forEach(p => {
-    const pScores = (state.scores && state.scores[p]) ? state.scores[p] : {};
-    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (typeof pScores[k] === 'number' ? pScores[k] : 0), 0);
-    const parInfo = calculateUpperPar(pScores);
-    let pColor = getPeerColor(p);
-    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u}${parInfo.text}</div>`;
+  const rowCells = (fn)=>players.map(fn).join('');
+
+  // header
+  let html = `<div class="fd-sc-row fd-sc-head"><div class="fd-sc-cat"></div>${
+    rowCells(p=>`<div class="fd-sc-ph${p===activeId?' active':''}" style="--pc:${fdHexToRgb(getPeerColor(p))}">${fdEsc(getPeerName(p))}</div>`)}</div>`;
+
+  // upper rows
+  upperCats.forEach(c=>{
+    const catInner = c.ic ? `<span class="fd-ic">${c.ic}</span>${c.label}` : c.label;
+    html += `<div class="fd-sc-row"><div class="fd-sc-cat">${catInner}</div>${
+      rowCells(p=>{
+        if (c.id==='bonus') return cell(p, fdUpper(state,p)>=63?35:0);
+        return cell(p, state.scores[p]?state.scores[p][c.id]:null);
+      })}</div>`;
   });
-  html += `</div>`;
-  
-  lowerCats.forEach((c, i) => renderCat(c, i === 0));
-  
-  html += `<div class="fd-sc-row fd-sc-section"><div class="fd-sc-cat">Lower Tot</div>`;
-  players.forEach(p => {
-    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
-    let pColor = getPeerColor(p);
-    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${l}</div>`;
+  // upper total (with par)
+  html += `<div class="fd-sc-row fd-sc-tot"><div class="fd-sc-cat">Upper Tot</div>${
+    rowCells(p=>{
+      const u=fdUpper(state,p); const par=calculateUpperPar(state.scores[p]||{});
+      return cell(p, `${u}<span class="fd-sub">${par.text}</span>`, 'stack');
+    })}</div>`;
+
+  // lower rows
+  lowerCats.forEach(c=>{
+    html += `<div class="fd-sc-row"><div class="fd-sc-cat lower"><span class="fd-ic">${c.ic}</span>${c.label}</div>${
+      rowCells(p=>cell(p, state.scores[p]?state.scores[p][c.id]:null))}</div>`;
   });
-  html += `</div>`;
-  
-  html += `<div class="fd-sc-row fd-sc-section fd-sc-grand-total"><div class="fd-sc-cat">Total</div>`;
-  players.forEach(p => {
-    const u = ['ones','twos','threes','fours','fives','sixes'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
-    const l = ['chance','three-kind','four-kind','full-house','sm-straight','lg-straight','five-dice','bonus-5s'].reduce((sum, k) => sum + (state.scores && state.scores[p] ? (state.scores[p][k] || 0) : 0), 0);
-    const bonus = u >= 63 ? 35 : 0;
-    let pColor = getPeerColor(p);
-    html += `<div class="fd-sc-score" style="background-color: ${pColor};">${u + l + bonus}</div>`;
-  });
-  html += `</div>`;
-  
-  document.getElementById('fd-scorecard').innerHTML = html;
+  // lower total
+  html += `<div class="fd-sc-row fd-sc-tot"><div class="fd-sc-cat">Lower Tot</div>${
+    rowCells(p=>cell(p, fdLower(state,p)))}</div>`;
+  // grand total
+  html += `<div class="fd-sc-row fd-sc-tot fd-sc-grand"><div class="fd-sc-cat">Grand Total</div>${
+    rowCells(p=>cell(p, fdGrand(state,p), 'grand'))}</div>`;
+
+  const el = document.getElementById('fd-scorecard');
+  el.style.setProperty('--n', players.length);
+  el.classList.toggle('tight', players.length >= 4);
+  el.innerHTML = html;
 }
 
 // Bind dice click
