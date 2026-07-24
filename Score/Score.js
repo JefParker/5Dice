@@ -1585,19 +1585,23 @@ const MakeRandomCode = (nDigits) => {
 	return sCode;
 }
 
-// Check if the browser supports the beforeinstallprompt event
+// Capture the install prompt so it can be shown later from a user gesture.
+// Calling event.prompt() automatically (as before) throws NotAllowedError because
+// browsers require the install prompt to be triggered by a real user interaction.
+// We stash the event and expose InstallApp() to wire to an install button/gesture.
+let g_deferredInstallPrompt = null;
 if ('serviceWorker' in navigator && 'BeforeInstallPromptEvent' in window) {
-    window.addEventListener('load', () => {
-        // Wait for the beforeinstallprompt event
-        window.addEventListener('beforeinstallprompt', (event) => {
-            // Prevent the default "Add to Home Screen" prompt
-            event.preventDefault();
-
-            // Automatically show the "Add to Home Screen" prompt on page load
-            event.prompt();
-        });
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        g_deferredInstallPrompt = event;
     });
 }
+const InstallApp = () => {
+    // Must be called from within a user gesture (e.g. a click handler).
+    if (!g_deferredInstallPrompt) return;
+    g_deferredInstallPrompt.prompt();
+    g_deferredInstallPrompt = null;
+};
 
 
 // Detects if device is on iOS
@@ -1923,6 +1927,10 @@ const canWakeLock = () => 'wakeLock' in navigator;
 
 const lockWakeState = async () => {
   if(!canWakeLock()) return;
+  // A wake lock can only be acquired while the page is visible; requesting one on a
+  // hidden/backgrounded tab throws "The requesting page is not visible". Skip it —
+  // the visibilitychange handler re-locks when the tab comes back to the foreground.
+  if (document.visibilityState !== 'visible') return;
   try {
     wakelock = await navigator.wakeLock.request();
     wakelock.addEventListener('release', () => {
