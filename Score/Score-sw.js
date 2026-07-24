@@ -1,8 +1,14 @@
  
- const staticCache = 'static-v260724g';
- const dynamicCache = 'dynamic-v260724g';
- const assets = ['index.html', 'Score.js', 'firebase-backend.js',
-    'Score.css', 'Score.json',
+ const staticCache = 'static-v260724h';
+ const dynamicCache = 'dynamic-v260724h';
+ // Precache the SAME versioned URLs the page actually requests. The previous list
+ // cached bare names (e.g. 'Score.js') while index.html loads 'Score.js?v=10', so
+ // caches.match() (which compares the query string) never matched and the precache
+ // was dead weight. When you bump a ?v= number in index.html, bump it here too and
+ // bump the cache version strings above.
+ const assets = ['./', 'index.html',
+    'Score.js?v=10', 'firebase-backend.js?v=6', 'Score.css?v=5',
+    'forms.css', 'Score.json',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',
     'https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400&display=swap',
     'fallback.html'];
@@ -46,7 +52,14 @@ self.addEventListener('fetch', evt => {
                 }
                 return fetchRes;
             });
-        }).catch(() => {
+        }).catch(async () => {
+            // Offline fallback. Page navigations request the directory URL (e.g.
+            // /Score/), not literally "index.html", so serve the cached app shell.
+            if (evt.request.mode === 'navigate') {
+                return (await caches.match('index.html'))
+                    || (await caches.match('./'))
+                    || (await caches.match('fallback.html'));
+            }
             if (evt.request.url.indexOf('.html') > -1) {
                 return caches.match('fallback.html');
             }

@@ -111,6 +111,13 @@ const SetUpData = () => {
         g_objScore = JSON.parse(sData);
         g_objScore.Color = g_objUserData.Color;
         g_objScore.Name = g_objUserData.Name;
+        // JSON.parse leaves dLastLoaded as a string; restore a real Date object so
+        // the visibilitychange elapsed-time math (valueOf()) works. Preserve the
+        // stored dLastUpdate — it reflects the last actual score change and is used
+        // by LeaderList's newest-wins comparison.
+        g_objScore.dLastLoaded = new Date();
+        if (typeof g_objScore.dLastUpdate !== 'number')
+            g_objScore.dLastUpdate = new Date().valueOf();
     } else {
         g_objScore.Name = g_objUserData.Name;
         g_objScore.PlayerID = g_objUserData.PlayerID;
@@ -199,13 +206,17 @@ const IDGo = () => {
         CheckConnection();
     }
 
-    setTimeout(function() {BCastRequestScores();}, 2000);
-
     SetGameID(g_objUserData.GameID);
-    SendScoreToServerDB();
 
+    // Load (or create) THIS room's sheet before sending anything to the server.
+    // Previously SendScoreToServerDB() ran first, pushing the prior room's sheet
+    // into the newly-joined room under our PlayerID.
     SetUserData();
     SetUpData();
+
+    SendScoreToServerDB();
+    setTimeout(function() {BCastRequestScores();}, 2000);
+
     ShowScoreMain();
 
     localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
@@ -349,7 +360,7 @@ const ShowScoreMain = () => {
 
     sPage += "<div class='GameInfoBoxL'>";
     sPage += "<div onclick='ShowEnterID()'>Room: " + g_objUserData.GameID + "</div>";
-    sPage += "<div id='PlayerName' onclick='ShowEnterID()'>"+g_objScore.Name+"</div>";
+    sPage += "<div id='PlayerNameLabel' onclick='ShowEnterID()'>"+g_objScore.Name+"</div>";
     sPage += "</div>"
 
     sPage += "<div class='GameInfoBoxR'>";
@@ -1431,7 +1442,7 @@ const getRandomInt = (min, max) => {
 	var range = max - min + 1;
 	var bits_needed = Math.ceil(Math.log2(range));
 	if (bits_needed > 53) {
-		throw new Exception("We cannot generate numbers larger than 53 bits.");
+		throw new Error("We cannot generate numbers larger than 53 bits.");
 	}
 	var bytes_needed = Math.ceil(bits_needed / 8);
 	var mask = Math.pow(2, bits_needed) - 1;
@@ -1470,25 +1481,6 @@ const MakeRandomCode = (nDigits) => {
 	}
 	return sCode;
 }
-
-const setCookie = (c_name, value, exdays) => {
-    var exdate=new Date();
-    exdate.setDate(exdate.getDate() + exdays);
-    var c_value=escape(value) + ((exdays===null) ? '' : '; expires='+exdate.toUTCString());
-    document.cookie=c_name + '=' + c_value + "; SameSite=Strict";
-}
-
-const getCookie = (c_name) => {
-  var i,x,y,ARRcookies = document.cookie.split(';');
-  for (i=0;i<ARRcookies.length;i++) {
-    x=ARRcookies[i].substr(0,ARRcookies[i].indexOf('='));
-    y=ARRcookies[i].substr(ARRcookies[i].indexOf('=')+1);
-    x=x.replace(/^\s+|\s+$/g,'');
-    if (x===c_name)
-      return unescape(y);
-  }
-}
-
 
 // Check if the browser supports the beforeinstallprompt event
 if ('serviceWorker' in navigator && 'BeforeInstallPromptEvent' in window) {
@@ -1892,12 +1884,24 @@ const ColorToast = (sMess, sBGColor) => {
 }
 
 const askForNotificationApproval = () => {
-    Notification.requestPermission().then((result) => {
-    });
+    // Feature-detect: iOS Safari (outside an installed PWA) has no Notification API,
+    // and referencing it throws a ReferenceError that would abort the rest of onload
+    // (including the initial SendScoreToServerDB()).
+    if (typeof Notification === 'undefined' || !Notification.requestPermission)
+        return;
+    try {
+        const p = Notification.requestPermission();
+        if (p && typeof p.then === 'function') p.then((result) => {}).catch(() => {});
+    } catch (e) { /* older callback-style / unsupported */ }
 }
 
 const showNotification = (title, text, bOnlyIfHidden) => {
     if (bOnlyIfHidden && 'visible' === document.visibilityState)
+        return;
+
+    // Guard: no Notification API (e.g. iOS Safari tab) — bail instead of throwing
+    // inside the incoming-message handler.
+    if (typeof Notification === 'undefined')
         return;
 
     if ('granted' === Notification.permission) {
