@@ -412,17 +412,26 @@ body.dice3d-active .ScoreDie {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
+/* Roomier box so the three choices fit comfortably. */
+.DialogBoxMsg.DiceCommitMsg {
+    width: auto;
+    min-width: 46vh;
+    max-width: 92vw;
+    height: auto;
+}
+
 .DiceCommitBtns {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 16px;
+    gap: 10px;
     margin-top: 14px;
 }
 
 .DiceCommitBtn {
-    padding: 8px 22px;
+    padding: 8px 16px;
     border-radius: 10px;
-    font-size: 2vmax;
+    font-size: 1.8vmax;
     font-weight: 700;
     color: #ffffff;
     cursor: pointer;
@@ -430,8 +439,12 @@ body.dice3d-active .ScoreDie {
     border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
-.DiceCommitBtn.DiceCommitNo {
+.DiceCommitBtn.DiceCommitCancel {
     background: #6b6b6b;
+}
+
+.DiceCommitBtn.DiceCommitManual {
+    background: #4a90e2;
 }
 
 .DiceSumEntry {

@@ -581,18 +581,27 @@ const ComputeDiceScore = (sClicked, dice) => {
 };
 
 // Confirmation box shown when scoring a category from the computer dice.
+// Three choices: Commit (take the computed score), Cancel (dismiss so you can
+// try a different category), Manual (enter this category by hand instead).
 const OfferDiceScore = (sClicked) => {
     let nScore = ComputeDiceScore(sClicked, g_objGame.Dice.values);
     let sDlg = "Score <b>" + nScore + "</b> in " + CatLabel(sClicked) + "?";
     sDlg += "<div class='DiceCommitBtns'>";
     sDlg += "<div class='DiceCommitBtn' onclick='CommitDiceScore(\""+sClicked+"\","+nScore+")'>Commit</div>";
-    sDlg += "<div class='DiceCommitBtn DiceCommitNo' onclick='DeclineDiceScore(\""+sClicked+"\")'>No</div>";
+    sDlg += "<div class='DiceCommitBtn DiceCommitCancel' onclick='CancelDiceScore()'>Cancel</div>";
+    sDlg += "<div class='DiceCommitBtn DiceCommitManual' onclick='DeclineDiceScore(\""+sClicked+"\")'>Manual</div>";
     sDlg += "</div>";
-    document.getElementById('DialogBox').innerHTML = "<div class='DialogBoxMsg'>" + sDlg + "</div>";
+    document.getElementById('DialogBox').innerHTML = "<div class='DialogBoxMsg DiceCommitMsg'>" + sDlg + "</div>";
 };
 
-// User chose manual entry for this category: remember it (so we don't re-prompt)
-// and let them tap through the normal options as if using physical dice.
+// Cancel: just dismiss. The category is untouched and NOT flagged manual, so the
+// user can tap another category and get its confirm dialog.
+const CancelDiceScore = () => {
+    document.getElementById('DialogBox').innerHTML = "";
+};
+
+// Manual: remember this category as hand-entered (so we don't re-prompt) and let
+// the user tap through the normal options as if using physical dice.
 const DeclineDiceScore = (sClicked) => {
     g_objGame.Dice.manualCats[sClicked] = true;
     document.getElementById('DialogBox').innerHTML = "";
