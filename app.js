@@ -801,9 +801,14 @@ function handleGameStateUpdate(gameData) {
         if (gs) gs.classList.remove('tie-background');
       } else {
         document.getElementById('btn-play-again').classList.remove('hidden');
-        // Show/refresh the room's running win tally at game over.
-        if (typeof window.renderWinsTally === 'function') window.renderWinsTally();
       }
+    }
+    // Refresh the running tally from the freshest counts on EVERY update — even
+    // while our own move write is pending — so the two separate tie increments
+    // can't leave the finishing client stuck showing a stale total. roomWins/
+    // roomTies were already updated from gameData above the game-type branch.
+    if (checkWinSilent() && typeof window.renderWinsTally === 'function') {
+      window.renderWinsTally();
     }
   }
 
