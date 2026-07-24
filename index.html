@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=22">
+  <link rel="stylesheet" href="styles.css?v=23">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -60,6 +60,19 @@
           <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
             <input type="color" id="player-color-picker" style="width: 50px; height: 50px; padding: 0; border: none; border-radius: 8px; cursor: pointer;">
             <span style="font-size: 0.9rem; color: #ccc;">Tap to change</span>
+          </div>
+        </div>
+
+        <div class="settings-section" style="margin-top: 20px;">
+          <div class="hints-toggle-row">
+            <div>
+              <label for="hints-toggle">Hints</label>
+              <p class="small-hint" style="text-align: left; margin: 4px 0 0;">Show potential scores and highlight your options while you play. Turn off for just the plain scoresheet.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="hints-toggle" checked>
+              <span class="slider"></span>
+            </label>
           </div>
         </div>
 
@@ -283,8 +296,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=21"></script>
-  <script src="five-dice.js?v=31"></script>
+  <script src="five-dice.js?v=32"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

@@ -160,7 +160,9 @@ function update5DiceUI() {
   if (fdc && window.myColor) fdc.style.setProperty('--pc', fdHexToRgb(window.myColor));
 
   // Live "potential score" previews appear on unscored tiles once you've rolled —
-  // but not while the 3D dice are still tumbling (wait for them to settle).
+  // but not while the 3D dice are still tumbling (wait for them to settle), and
+  // only when Hints is on (Settings). With Hints off, unscored tiles stay blank.
+  const hintsOn = (window.hintsEnabled !== false);
   const rolled = state.rollsLeft < 3 && !(window.dice3d && window.dice3d.rolling);
 
   document.querySelectorAll('#fd-board .fd-cat').forEach(catEl => {
@@ -175,7 +177,7 @@ function update5DiceUI() {
       else lowerTotal += myScores[cat];
     } else if (cat === 'bonus-5s') {
       scoreEl.innerText = '';            // filled only by the Yahtzee bonus rule
-    } else if (rolled && window.myTurn) {
+    } else if (rolled && window.myTurn && hintsOn) {
       const pot = calculate5DiceScore(cat, state.dice);
       scoreEl.innerText = pot;
       catEl.classList.add('avail');

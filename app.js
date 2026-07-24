@@ -72,6 +72,21 @@ if (!myColor) {
 }
 saveSharedProfile(myName, myColor);
 
+// --- HINTS SETTING ---
+// When off, the 5 Dice board hides potential-score previews and the highlight
+// on available categories, leaving just scored vs. open cells. five-dice.js reads
+// window.hintsEnabled when rendering. Default: on.
+let hintsEnabled = (localStorage.getItem('hintsEnabled') !== 'false');
+window.hintsEnabled = hintsEnabled;
+
+function setHintsEnabled(on) {
+  hintsEnabled = !!on;
+  window.hintsEnabled = hintsEnabled;
+  localStorage.setItem('hintsEnabled', hintsEnabled ? 'true' : 'false');
+  // Reflect the change immediately if a game is on screen.
+  if (currentRoomId && typeof window.update5DiceUI === 'function') window.update5DiceUI();
+}
+
 function parseGameState(rawState) {
   const result = ['', '', '', '', '', '', '', '', ''];
   if (!rawState) return result;
@@ -375,6 +390,9 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   const colorPicker = document.getElementById('player-color-picker');
   if (colorPicker) colorPicker.value = myColor;
 
+  const hintsToggle = document.getElementById('hints-toggle');
+  if (hintsToggle) hintsToggle.checked = hintsEnabled;
+
   if (document.getElementById('settings-uuid')) {
     document.getElementById('settings-uuid').value = myUuid;
     document.getElementById('update-uuid-btn').style.display = 'none';
@@ -412,6 +430,12 @@ if (colorPickerEl) {
   colorPickerEl.addEventListener('input', (e) => {
     saveSharedProfile(myName, e.target.value);
   });
+}
+
+const hintsToggleEl = document.getElementById('hints-toggle');
+if (hintsToggleEl) {
+  hintsToggleEl.checked = hintsEnabled;
+  hintsToggleEl.addEventListener('change', (e) => setHintsEnabled(e.target.checked));
 }
 
 // --- ROOM CREATION & LOBBY RENDER ---

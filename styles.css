@@ -695,6 +695,43 @@ body.bg-five-dice {
 .fd-cat.avail.zero .fd-cat-name { color: #dbe7f4; }
 .fd-cat.avail.zero .fd-cat-score { color: #7a93ab; background: rgba(0,0,0,.28); }
 
+/* Settings: Hints toggle switch */
+.hints-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #555;
+  border-radius: 30px;
+  transition: background-color .2s;
+}
+.switch .slider::before {
+  content: "";
+  position: absolute;
+  height: 24px;
+  width: 24px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .2s;
+}
+.switch input:checked + .slider { background-color: #28a745; }
+.switch input:checked + .slider::before { transform: translateX(22px); }
+
 .fd-upper-totals {
   display: flex;
   justify-content: space-between;
