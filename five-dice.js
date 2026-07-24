@@ -423,6 +423,11 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       
       if (check5DiceGameOver()) {
         handle5DiceGameOver();
+        // This commit ended the game, so THIS client records the win(s) — exactly
+        // once (the single finishing player), which avoids every client double-counting.
+        if (typeof window.recordRoomWin === 'function') {
+          compute5DiceWinners().forEach(w => window.recordRoomWin(w));
+        }
       } else {
         if (window.sync5DiceState) {
           window.sync5DiceState(window.fiveDiceState);
@@ -615,6 +620,8 @@ window.reset5DiceGame = function(firstTurnId = null) {
 
   const btnPlayAgain = document.getElementById('btn-play-again');
   if (btnPlayAgain) btnPlayAgain.classList.add('hidden');
+  const winsEl = document.getElementById('fd-wins');
+  if (winsEl) winsEl.classList.add('hidden');
   
   const elStatus = document.getElementById('game-status');
   if (elStatus) {
@@ -766,28 +773,42 @@ window.check5DiceGameOver = function() {
   return true;
 };
 
+// Winner(s) of the current game = highest grand total (ties return >1).
+function compute5DiceWinners() {
+  const state = window.fiveDiceState;
+  const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : Object.keys(state.scores || {});
+  let maxScore = -1, winners = [];
+  players.forEach(p => {
+    const total = fdGrand(state, p);
+    if (total > maxScore) { maxScore = total; winners = [p]; }
+    else if (total === maxScore) winners.push(p);
+  });
+  return winners;
+}
+
+// Render the persistent per-room win tally at the bottom of the screen.
+window.renderWinsTally = function() {
+  const el = document.getElementById('fd-wins');
+  if (!el) return;
+  const wins = window.roomWins || {};
+  let players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers.slice() : Object.keys(wins);
+  if (players.length === 0) { el.classList.add('hidden'); return; }
+  players.sort((a, b) => (wins[b] || 0) - (wins[a] || 0));
+  const rows = players.map(p => {
+    const n = wins[p] || 0;
+    return `<div class="fd-win-row"><span class="fd-win-dot" style="background:${getPeerColor(p)}"></span>`
+      + `<span class="fd-win-name">${fdEsc(getPeerName(p))}</span>`
+      + `<span class="fd-win-count">${n}</span></div>`;
+  }).join('');
+  el.innerHTML = `<div class="fd-wins-title">Room wins</div>${rows}`;
+  el.classList.remove('hidden');
+};
+
 window.handle5DiceGameOver = function() {
   window.fiveDiceState.isGameOver = true;
   update5DiceUI();
-  const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : Object.keys(window.fiveDiceState.scores);
-  let maxScore = -1;
-  let winners = [];
-  players.forEach(p => {
-    let total = 0;
-    const pScores = window.fiveDiceState.scores[p] || {};
-    let upper = 0;
-    ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].forEach(c => upper += pScores[c] || 0);
-    if (upper >= 63) total += 35;
-    total += upper;
-    ['chance', 'sm-straight', 'lg-straight', 'three-kind', 'four-kind', 'five-dice', 'full-house', 'bonus-5s'].forEach(c => total += pScores[c] || 0);
-    if (total > maxScore) {
-      maxScore = total;
-      winners = [p];
-    } else if (total === maxScore) {
-      winners.push(p);
-    }
-  });
-  
+  const winners = compute5DiceWinners();
+
   const elStatus = document.getElementById('game-status');
   if (winners.includes(window.myPeerId)) {
     if (winners.length > 1) {
@@ -815,4 +836,5 @@ window.handle5DiceGameOver = function() {
   }
   const btnPlayAgain = document.getElementById('btn-play-again');
   if (btnPlayAgain) btnPlayAgain.classList.remove('hidden');
+  window.renderWinsTally();
 };

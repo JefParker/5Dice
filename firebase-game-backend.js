@@ -218,6 +218,17 @@ window.firebaseGameBackend = {
   },
 
   // --- REAL-TIME GAME EVENTS (Dice Roll, Hold, Score Actions) ---
+  // Atomically bump a player's win count for the room (persists across games).
+  incrementWin: async (roomId, playerId) => {
+    if (!(await requireAuth())) return;
+    if (!roomId || !playerId) return;
+    try {
+      await runTransaction(ref(db, `games/${roomId}/wins/${playerId}`), (cur) => (typeof cur === 'number' ? cur : 0) + 1);
+    } catch (e) {
+      console.error('incrementWin failed:', e);
+    }
+  },
+
   sendGameEvent: async (roomId, eventObj) => {
     if (!(await requireAuth())) return;
     if (!roomId) return;

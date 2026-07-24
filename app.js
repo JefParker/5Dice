@@ -691,6 +691,7 @@ function handleGameStateUpdate(gameData) {
   // this window was previously invisible.
   window.gameStarted = (gameData.status === 'in-progress');
   window.gameMaxPlayers = (room && room.maxPlayers) || gamePlayers.length;
+  window.roomWins = gameData.wins || {}; // persistent per-room win counts
 
   const turnPlayerId = gameData.currentTurnPlayerId || gameHost;
   window.currentTurnPlayerId = turnPlayerId;
@@ -732,6 +733,9 @@ function handleGameStateUpdate(gameData) {
     }
     // 5 Dice status text (waiting-for-players / whose-turn / game-over) is owned
     // entirely by sync5DiceState so there's a single source of truth.
+    if (window.fiveDiceState && window.fiveDiceState.isGameOver && window.renderWinsTally) {
+      window.renderWinsTally(); // keep the room win tally current at game over
+    }
   } else {
     // Skip overwriting local state if we have pending moves being written to Firebase
     if (pendingMoveCount === 0) {
@@ -792,6 +796,12 @@ window.sendGameAction = async function(msgObj) {
   }
 
   await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
+};
+
+// Record a win for a player in the current room (atomic; persists across games).
+window.recordRoomWin = function(playerId) {
+  if (!currentRoomId || !playerId || !window.firebaseGameBackend || !window.firebaseGameBackend.incrementWin) return;
+  window.firebaseGameBackend.incrementWin(currentRoomId, playerId);
 };
 
 function updateGameBackground() {

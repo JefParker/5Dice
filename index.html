@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=20">
+  <link rel="stylesheet" href="styles.css?v=21">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -207,6 +207,7 @@
         </div>
 
         <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
+          <div id="fd-wins" class="fd-wins hidden"></div>
           <button id="btn-play-again" class="capsule-button hidden" style="background-color: darkgreen; color: white; width: auto; padding-left: 40px; padding-right: 40px; margin: 0;">Play again?</button>
         </div>
       </div>
@@ -278,12 +279,12 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=21"></script>
+  <script type="module" src="firebase-game-backend.js?v=22"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=21"></script>
-  <script src="five-dice.js?v=29"></script>
+  <script src="five-dice.js?v=30"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>
