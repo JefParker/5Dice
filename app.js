@@ -112,6 +112,9 @@ let roomPlayerDetails = [];
 Object.defineProperty(window, 'myTurn', { get: () => myTurn, set: (v) => { myTurn = v; } });
 Object.defineProperty(window, 'gamePlayers', { get: () => gamePlayers, set: (v) => { gamePlayers = v; } });
 Object.defineProperty(window, 'gameHost', { get: () => gameHost, set: (v) => { gameHost = v; } });
+// five-dice.js reads window.roomPlayerDetails to resolve each player's name/color.
+// Without this it was undefined, so names fell back to the generic "Player" label.
+Object.defineProperty(window, 'roomPlayerDetails', { get: () => roomPlayerDetails, set: (v) => { roomPlayerDetails = v; } });
 Object.defineProperty(window, 'myPeerId', { get: () => myPeerId });
 Object.defineProperty(window, 'myName', { get: () => myName });
 Object.defineProperty(window, 'myColor', { get: () => myColor });
