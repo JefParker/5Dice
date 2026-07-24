@@ -423,10 +423,15 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
       
       if (check5DiceGameOver()) {
         handle5DiceGameOver();
-        // This commit ended the game, so THIS client records the win(s) — exactly
-        // once (the single finishing player), which avoids every client double-counting.
-        if (typeof window.recordRoomWin === 'function') {
-          compute5DiceWinners().forEach(w => window.recordRoomWin(w));
+        // This commit ended the game, so THIS client records the result — exactly
+        // once (the single finishing player), avoiding every client double-counting.
+        // A sole winner counts as a win; a tie is recorded separately for each
+        // tied player (not as a win).
+        const finalWinners = compute5DiceWinners();
+        if (finalWinners.length > 1) {
+          if (typeof window.recordRoomTie === 'function') finalWinners.forEach(w => window.recordRoomTie(w));
+        } else {
+          if (typeof window.recordRoomWin === 'function') finalWinners.forEach(w => window.recordRoomWin(w));
         }
       } else {
         if (window.sync5DiceState) {
@@ -791,16 +796,19 @@ window.renderWinsTally = function() {
   const el = document.getElementById('fd-wins');
   if (!el) return;
   const wins = window.roomWins || {};
+  const ties = window.roomTies || {};
   let players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers.slice() : Object.keys(wins);
   if (players.length === 0) { el.classList.add('hidden'); return; }
-  players.sort((a, b) => (wins[b] || 0) - (wins[a] || 0));
+  players.sort((a, b) => ((wins[b] || 0) - (wins[a] || 0)) || ((ties[b] || 0) - (ties[a] || 0)));
+  const head = `<div class="fd-win-row fd-win-head"><span class="fd-win-dot" style="visibility:hidden"></span>`
+    + `<span class="fd-win-name"></span><span class="fd-win-count">W</span><span class="fd-win-count">T</span></div>`;
   const rows = players.map(p => {
-    const n = wins[p] || 0;
     return `<div class="fd-win-row"><span class="fd-win-dot" style="background:${getPeerColor(p)}"></span>`
       + `<span class="fd-win-name">${fdEsc(getPeerName(p))}</span>`
-      + `<span class="fd-win-count">${n}</span></div>`;
+      + `<span class="fd-win-count">${wins[p] || 0}</span>`
+      + `<span class="fd-win-count">${ties[p] || 0}</span></div>`;
   }).join('');
-  el.innerHTML = `<div class="fd-wins-title">Room wins</div>${rows}`;
+  el.innerHTML = `<div class="fd-wins-title">Room record</div>${head}${rows}`;
   el.classList.remove('hidden');
 };
 

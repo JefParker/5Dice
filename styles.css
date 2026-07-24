@@ -889,11 +889,22 @@ body.dice3d-active .fd-die {
   text-overflow: ellipsis;
 }
 .fd-win-count {
-  min-width: 20px;
-  text-align: right;
+  width: 30px;
+  min-width: 30px;
+  text-align: center;
   font-size: 16px;
   font-weight: 800;
   color: #fff;
+}
+.fd-win-head {
+  border-top: none;
+  padding-bottom: 0;
+}
+.fd-win-head .fd-win-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: #8fa6be;
 }
 
 .fd-commit-overlay {

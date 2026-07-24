@@ -692,6 +692,7 @@ function handleGameStateUpdate(gameData) {
   window.gameStarted = (gameData.status === 'in-progress');
   window.gameMaxPlayers = (room && room.maxPlayers) || gamePlayers.length;
   window.roomWins = gameData.wins || {}; // persistent per-room win counts
+  window.roomTies = gameData.ties || {}; // persistent per-room tie counts
 
   const turnPlayerId = gameData.currentTurnPlayerId || gameHost;
   window.currentTurnPlayerId = turnPlayerId;
@@ -798,10 +799,14 @@ window.sendGameAction = async function(msgObj) {
   await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
 };
 
-// Record a win for a player in the current room (atomic; persists across games).
+// Record a win/tie for a player in the current room (atomic; persists across games).
 window.recordRoomWin = function(playerId) {
   if (!currentRoomId || !playerId || !window.firebaseGameBackend || !window.firebaseGameBackend.incrementWin) return;
   window.firebaseGameBackend.incrementWin(currentRoomId, playerId);
+};
+window.recordRoomTie = function(playerId) {
+  if (!currentRoomId || !playerId || !window.firebaseGameBackend || !window.firebaseGameBackend.incrementTie) return;
+  window.firebaseGameBackend.incrementTie(currentRoomId, playerId);
 };
 
 function updateGameBackground() {
