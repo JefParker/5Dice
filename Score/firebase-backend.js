@@ -359,8 +359,12 @@ window.firebaseBackend = {
                     PlayerID: selfPresence.PlayerID,
                     Name: selfPresence.Name || "",
                     Color: selfPresence.Color || "",
-                    since: serverTimestamp(),
-                    lastSeen: serverTimestamp()
+                    // `since` doubles as our freshness marker (refreshed by the
+                    // heartbeat). We deliberately do NOT add a separate lastSeen
+                    // field: the database security rules only permit the fields
+                    // listed for a presence node, so any extra key makes the whole
+                    // write permission_denied.
+                    since: serverTimestamp()
                 });
             } catch (e) {
                 console.error("Failed to register presence:", e);
@@ -392,10 +396,10 @@ window.firebaseBackend = {
         }
     },
 
-    // Heartbeat: refresh our presence node's lastSeen so other clients keep counting
-    // us as "here". We re-set the whole node (not just lastSeen) so it self-heals if
-    // it was pruned/removed, and we re-arm onDisconnect each time. Called on an
-    // interval by the client while connected and visible.
+    // Heartbeat: refresh our presence node's `since` timestamp so other clients keep
+    // counting us as "here". We re-set the whole node so it self-heals if it was
+    // pruned/removed, and we re-arm onDisconnect each time. Called on an interval by
+    // the client while connected and visible.
     touchPresence: async (room, playerId) => {
         room = room || window.firebaseBackend._room;
         const selfPresence = window.firebaseBackend._selfPresence;
@@ -409,8 +413,7 @@ window.firebaseBackend = {
                 PlayerID: selfPresence.PlayerID,
                 Name: selfPresence.Name || "",
                 Color: selfPresence.Color || "",
-                since: selfPresence.since || serverTimestamp(),
-                lastSeen: serverTimestamp()
+                since: serverTimestamp()
             });
         } catch (e) {
             console.error("Failed to heartbeat presence:", e);
