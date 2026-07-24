@@ -369,7 +369,17 @@ const ShowScoreMain = () => {
     sPage += "<div id='Toast1' class='Toast'></div>";
     sPage += "<div id='Toast2' class='Toast'></div>";
     sPage += "<div id='DialogBox' class='DialogBox'></div>";
-    sPage += "<div id='DiceRack' class='DiceRack'><div id='RollingDice' class='RollingDice'>\u2680 \u2680 \u2680 \u2680 \u2680</div>";
+    sPage += "<div id='DiceRack' class='DiceRack'>";
+    sPage += "<div id='DiceTray' class='DiceTray'>";
+    sPage += "<div class='ScoreDie' id='SD0' onclick='ToggleHold(0)'></div>";
+    sPage += "<div class='ScoreDie' id='SD1' onclick='ToggleHold(1)'></div>";
+    sPage += "<div class='ScoreDie' id='SD2' onclick='ToggleHold(2)'></div>";
+    sPage += "<div class='ScoreDie' id='SD3' onclick='ToggleHold(3)'></div>";
+    sPage += "<div class='ScoreDie' id='SD4' onclick='ToggleHold(4)'></div>";
+    sPage += "<div id='RollBtn' class='RollBtn' onclick='RollDice()'><span id='RollsLeft'>3</span><span class='RollMoreTxt'>roll</span></div>";
+    sPage += "</div>";
+    sPage += "<div id='DiceHint' class='DiceHint'>Tap Roll to start your turn</div>";
+    sPage += "</div>"; // end DiceRack
 
     sPage += "</div>"; // end Summary third
 
@@ -430,9 +440,213 @@ const setSheetUnLocked = () => {
     }
 }
 
+/* ================= Computer Dice (3D) ================= */
+
+const DiceGlyph = (n) => ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][n] || "";
+
+// Category key -> index into g_objScore.Score
+const CatIndex = (sClicked) => {
+    let n = parseInt(sClicked);
+    if (n >= 1 && n <= 6) return n - 1;
+    return {C:6, TK:7, FK:8, FH:9, SS:10, LS:11, FD:12, B5:13}[sClicked];
+};
+
+const CatLabel = (sClicked) => {
+    let n = parseInt(sClicked);
+    if (n >= 1 && n <= 6) return n + "'s";
+    return {C:"chance", TK:"3 of a kind", FK:"4 of a kind", FH:"full house",
+            SS:"small straight", LS:"large straight", FD:"5 Dice", B5:"Bonus 5's"}[sClicked] || sClicked;
+};
+
+const InitDice = () => {
+    g_objGame.Dice = {
+        values: [1, 1, 1, 1, 1],
+        held: [false, false, false, false, false],
+        rollsLeft: 3,
+        manualCats: {}
+    };
+};
+
+// Are we in a "computer dice" turn (tray open and at least one roll made)?
+const DiceScoringActive = () => {
+    return g_objGame.DiceRackShowing && g_objGame.Dice && g_objGame.Dice.rollsLeft < 3;
+};
+
+const DiceTargets = () => [0,1,2,3,4].map(i => document.getElementById('SD'+i));
+
+// Move the 3D dice off screen (used when the tray is closed or a turn resets).
+const ParkDice = () => {
+    if (window.dice3d)
+        window.dice3d.snapToState([1,1,1,1,1], [false,false,false,false,false], [null,null,null,null,null]);
+};
+
+const ResetDiceTurn = () => {
+    if (!g_objGame.Dice) InitDice();
+    g_objGame.Dice.values = [1, 1, 1, 1, 1];
+    g_objGame.Dice.held = [false, false, false, false, false];
+    g_objGame.Dice.rollsLeft = 3;
+    g_objGame.Dice.manualCats = {};
+    ParkDice();
+    UpdateDiceTray();
+};
+
+const RollDice = () => {
+    if (!g_objGame.Dice) InitDice();
+    if (g_objGame.Dice.rollsLeft <= 0) return;
+
+    setSheetUnLocked();               // scoring taps need the sheet unlocked
+    g_objGame.Dice.manualCats = {};   // a fresh roll re-enables auto scoring
+
+    let unheld = [];
+    let finalValues = [];
+    for (let i = 0; i < 5; i++) {
+        if (g_objGame.Dice.held[i]) {
+            finalValues.push(g_objGame.Dice.values[i]);
+        } else {
+            finalValues.push(1 + Math.floor(Math.random() * 6));
+            unheld.push(i);
+        }
+    }
+    g_objGame.Dice.values = finalValues;
+    g_objGame.Dice.rollsLeft--;
+
+    if (window.dice3d)
+        window.dice3d.roll(finalValues, unheld, DiceTargets(), UpdateDiceTray);
+
+    UpdateDiceTray();
+};
+
+const ToggleHold = (i) => {
+    if (!g_objGame.Dice) return;
+    if (3 == g_objGame.Dice.rollsLeft) return; // must roll at least once first
+    g_objGame.Dice.held[i] = !g_objGame.Dice.held[i];
+    if (window.dice3d)
+        window.dice3d.snapToState(g_objGame.Dice.values, g_objGame.Dice.held, DiceTargets());
+    UpdateDiceTray();
+};
+
+const UpdateDiceTray = () => {
+    if (!g_objGame.Dice) return;
+    for (let i = 0; i < 5; i++) {
+        let el = document.getElementById('SD'+i);
+        if (!el) continue;
+        el.innerHTML = DiceGlyph(g_objGame.Dice.values[i]);
+        el.classList.toggle('held', !!g_objGame.Dice.held[i]);
+    }
+    let rl = document.getElementById('RollsLeft');
+    if (rl) rl.innerHTML = g_objGame.Dice.rollsLeft;
+
+    let rb = document.getElementById('RollBtn');
+    if (rb) {
+        let bOut = g_objGame.Dice.rollsLeft <= 0;
+        rb.style.opacity = bOut ? '0.35' : '1';
+        rb.style.pointerEvents = bOut ? 'none' : 'auto';
+    }
+    let hint = document.getElementById('DiceHint');
+    if (hint) {
+        if (3 == g_objGame.Dice.rollsLeft)
+            hint.innerHTML = "Tap Roll to start your turn";
+        else if (g_objGame.Dice.rollsLeft > 0)
+            hint.innerHTML = "Tap dice to hold · tap a category to score";
+        else
+            hint.innerHTML = "No rolls left · tap a category to score";
+    }
+};
+
+// Compute what a category would score with the current dice.
+const ComputeDiceScore = (sClicked, dice) => {
+    let counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+    let sum = 0;
+    dice.forEach(d => { counts[d]++; sum += d; });
+    let hasN = (n) => Object.values(counts).some(c => c >= n);
+    let n = parseInt(sClicked);
+    if (n >= 1 && n <= 6) return counts[n] * n;
+    switch (sClicked) {
+        case "C":  return sum;
+        case "TK": return hasN(3) ? sum : 0;
+        case "FK": return hasN(4) ? sum : 0;
+        case "FH": return ((Object.values(counts).includes(3) && Object.values(counts).includes(2)) || hasN(5)) ? 25 : 0;
+        case "SS":
+            if (counts[1] && counts[2] && counts[3] && counts[4]) return 30;
+            if (counts[2] && counts[3] && counts[4] && counts[5]) return 30;
+            if (counts[3] && counts[4] && counts[5] && counts[6]) return 30;
+            return 0;
+        case "LS":
+            if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) return 40;
+            if (counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) return 40;
+            return 0;
+        case "FD": return hasN(5) ? 50 : 0;
+    }
+    return 0;
+};
+
+// Confirmation box shown when scoring a category from the computer dice.
+const OfferDiceScore = (sClicked) => {
+    let nScore = ComputeDiceScore(sClicked, g_objGame.Dice.values);
+    let sDlg = "Score <b>" + nScore + "</b> in " + CatLabel(sClicked) + "?";
+    sDlg += "<div class='DiceCommitBtns'>";
+    sDlg += "<div class='DiceCommitBtn' onclick='CommitDiceScore(\""+sClicked+"\","+nScore+")'>Commit</div>";
+    sDlg += "<div class='DiceCommitBtn DiceCommitNo' onclick='DeclineDiceScore(\""+sClicked+"\")'>No</div>";
+    sDlg += "</div>";
+    document.getElementById('DialogBox').innerHTML = "<div class='DialogBoxMsg'>" + sDlg + "</div>";
+};
+
+// User chose manual entry for this category: remember it (so we don't re-prompt)
+// and let them tap through the normal options as if using physical dice.
+const DeclineDiceScore = (sClicked) => {
+    g_objGame.Dice.manualCats[sClicked] = true;
+    document.getElementById('DialogBox').innerHTML = "";
+};
+
+const CommitDiceScore = (sClicked, nScore) => {
+    document.getElementById('DialogBox').innerHTML = "";
+    let nIdx = CatIndex(sClicked);
+    g_objScore.Score[nIdx] = nScore;
+
+    // Recompute the upper-section bonus if an upper box changed.
+    if (nIdx < 6) {
+        let nUTotal = 0;
+        for (let x = 0; x < 6; x++) nUTotal += g_objScore.Score[x];
+        g_objScore.Score[14] = (nUTotal > 62) ? 35 : 0;
+    }
+
+    // Yahtzee bonus: five-of-a-kind after 5 Dice is already scored (50) adds 100
+    // to Bonus 5's (unless the box being scored IS 5 Dice itself).
+    if ("FD" != sClicked) {
+        let d = g_objGame.Dice.values;
+        let bAllSame = d.every(v => v === d[0]);
+        if (bAllSame && 50 === g_objScore.Score[12]) {
+            let cur = g_objScore.Score[13] || 0;
+            g_objScore.Score[13] = Math.min(cur + 100, 900);
+        }
+    }
+
+    LagSendLastMoveToast(nScore + " on " + CatLabel(sClicked));
+
+    // Chosen behavior: clear the dice and wait for the next Roll.
+    ResetDiceTurn();
+
+    // Reuse EnterScore's tail (totals, broadcast, save) via the no-op "X" path.
+    EnterScore("X");
+};
+
 const EnterScore = (sClicked) => {
     if (g_objGame.Locked)
         return;
+
+    // Computer-dice scoring: if the dice tray is active and has been rolled this
+    // turn, tapping an unscored category offers its computed score with a Commit
+    // box instead of the manual tap-to-cycle. Declining (per category) or Bonus
+    // 5's fall through to the normal manual behavior below.
+    if (DiceScoringActive() && "X" != sClicked && "B5" != sClicked
+            && !g_objGame.Dice.manualCats[sClicked]) {
+        let nIdx = CatIndex(sClicked);
+        if (null != nIdx && null == g_objScore.Score[nIdx]) {
+            OfferDiceScore(sClicked);
+            return;
+        }
+    }
+
     let nClicked = parseInt(sClicked);
 
     if (nClicked < 7) {
@@ -1452,10 +1666,16 @@ const InitializeContextMenu = (sWindowShowing) => {
     const toggleDiceBtn = document.querySelector("#ToggleDice");
     if (toggleDiceBtn) {
         toggleDiceBtn.addEventListener("click", () => {
-            if (document.getElementById('DiceRack')) {
-                document.getElementById('DiceRack').style.visibility = g_objGame.DiceRackShowing ? null : 'visible';
+            g_objGame.DiceRackShowing = !g_objGame.DiceRackShowing;
+            const rack = document.getElementById('DiceRack');
+            if (rack)
+                rack.style.visibility = g_objGame.DiceRackShowing ? 'visible' : null;
+            if (g_objGame.DiceRackShowing) {
+                ResetDiceTurn();     // fresh turn: 3 rolls, nothing held
+                setSheetUnLocked();  // allow tapping categories to score
+            } else {
+                ParkDice();          // hide the 3D dice when the tray is closed
             }
-            g_objGame.DiceRackShowing = g_objGame.DiceRackShowing ? false : true;
         });
     }
 
