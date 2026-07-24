@@ -497,6 +497,57 @@ const ResetDiceTurn = () => {
     UpdateDiceTray();
 };
 
+const FireConfetti = () => {
+    if (!window.confetti) return;
+    const cfg = { spread: 100, startVelocity: 50, scalar: 1.2 };
+    window.confetti({ ...cfg, particleCount: 150, origin: { x: 0.2, y: 0.8 } });
+    window.confetti({ ...cfg, particleCount: 150, origin: { x: 0.8, y: 0.8 } });
+    setTimeout(() => window.confetti({ ...cfg, particleCount: 200, origin: { x: 0.5, y: 0.6 } }), 300);
+};
+
+// Called after every score/leaderboard update. When the local player's sheet is
+// full: hide the dice tray (remembering to restore it on Clear). When every
+// player in the room is finished, the top scorer gets confetti — once.
+const HandleGameOverState = () => {
+    if (TurnsRemaining(g_objScore) > 0) {
+        g_objGame.Celebrated = false; // (re)started — allow a fresh celebration
+        return;
+    }
+
+    // My game is over — hide the dice tray if it's open (park the 3D dice).
+    if (g_objGame.DiceRackShowing) {
+        g_objGame.DiceHiddenByGameOver = true;
+        g_objGame.DiceRackShowing = false;
+        let rack = document.getElementById('DiceRack');
+        if (rack) rack.style.visibility = null;
+        ParkDice();
+    }
+
+    // Confetti for the winner once EVERY player is out of turns.
+    if (!g_objGame.Celebrated) {
+        let list = g_objGame.LeaderList || [];
+        if (list.length === 0) return;
+        let allDone = list.every(p => TurnsRemaining(p) === 0);
+        if (!allDone) return;
+        let maxScore = Math.max.apply(null, list.map(p => Number(p.Score[17]) || 0));
+        if ((Number(g_objScore.Score[17]) || 0) === maxScore) {
+            g_objGame.Celebrated = true;
+            FireConfetti();
+        }
+    }
+};
+
+// After Clear, bring the dice tray back if we hid it at game over.
+const RestoreDiceAfterClear = () => {
+    if (!g_objGame.DiceHiddenByGameOver) return;
+    g_objGame.DiceHiddenByGameOver = false;
+    g_objGame.DiceRackShowing = true;
+    let rack = document.getElementById('DiceRack');
+    if (rack) rack.style.visibility = 'visible';
+    ResetDiceTurn();
+    setSheetUnLocked();
+};
+
 const RollDice = () => {
     if (!g_objGame.Dice) InitDice();
     if (g_objGame.Dice.rollsLeft <= 0) return;
@@ -887,6 +938,8 @@ const DisplayScore = (objData) => {
         document.getElementById("Turns").innerHTML = nTurns + " turns remaining";
         lockWakeState();
     }
+
+    HandleGameOverState();
 }
 
 const LeaderList = (sData) => {
@@ -1021,6 +1074,7 @@ const Clear = () => {
         localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
         document.getElementById('ClearBtn').style.borderWidth = '0px';
         SendScoreToServerDB();
+        RestoreDiceAfterClear();
     }
 }
 
@@ -1096,6 +1150,9 @@ let initWebSocket = () => {
                         if (objPlayer.PlayerID == g_objGame.ScoreSheetShowing) {
                             DisplayScore(objPlayer);
                         }
+                        // An opponent's score arrived — this may be the last player
+                        // finishing, which triggers the winner's confetti.
+                        HandleGameOverState();
                     }
                     else if ("RequestScore" == objData.Event) {
                         SendScore2ID(objData.ID, JSON.stringify(g_objScore));
