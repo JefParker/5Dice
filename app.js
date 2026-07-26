@@ -395,7 +395,7 @@ let menuReturnScreen = 'screen-lobby';
 const MENU_ACTIONS = {
   lobby:      { icon: '🏠',  label: 'Lobby' },
   game:       { icon: '🎲',  label: 'Back to Game' },
-  leaveGame:  { icon: '🚪',  label: 'Leave Game' },
+  leaveGame:  { icon: '🚪',  label: 'Leave Room' },
   settings:   { icon: '⚙️', label: 'Settings' },
   about:      { icon: 'ℹ️', label: 'About' },
   scoreSheet: { icon: '📋',  label: '5Dice Score Sheet' }
