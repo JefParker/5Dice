@@ -38,6 +38,14 @@ async function requireAuth() {
 }
 
 let roomsUnsubscribe = null;
+
+// A lobby room nobody has entered for this long is deleted. There is no server
+// cron, so clients sweep: on lobby start, on room creation, and periodically
+// while the lobby is open. The throttle keeps several clients doing it at once
+// from turning into a pile of redundant reads.
+const ROOM_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const CLEANUP_THROTTLE_MS = 30 * 60 * 1000;
+let lastCleanupAt = 0;
 let chatUnsubscribe = null;
 let gameStateUnsubscribe = null;
 let gameEventsUnsubscribe = null;
@@ -141,24 +149,46 @@ window.firebaseGameBackend = {
     }
   },
 
-  cleanupOldRooms: async () => {
+  // Delete lobby rooms nobody has entered in 48 hours. lastActive is refreshed
+  // whenever the room is created, updated, or someone joins, so it tracks
+  // exactly "when did anyone last go in here".
+  // Pass { force: true } to bypass the throttle.
+  cleanupOldRooms: async ({ force = false } = {}) => {
     if (!(await requireAuth())) return;
-    const cutoff = Date.now() - (48 * 60 * 60 * 1000);
+
+    const now = Date.now();
+    if (!force && (now - lastCleanupAt) < CLEANUP_THROTTLE_MS) return;
+    lastCleanupAt = now;
+
+    const cutoff = now - ROOM_MAX_AGE_MS;
     const roomsRef = ref(db, 'lobby/rooms');
     try {
       const snapshot = await get(roomsRef);
-      if (snapshot.exists()) {
-        const rooms = snapshot.val();
-        const updates = {};
-        for (let id in rooms) {
-          if (rooms[id].lastActive && rooms[id].lastActive < cutoff) {
-            updates[id] = null;
-          }
-        }
-        if (Object.keys(updates).length > 0) {
-          await update(roomsRef, updates);
-        }
-      }
+      if (!snapshot.exists()) return;
+
+      const rooms = snapshot.val();
+      const stale = Object.keys(rooms).filter(id => {
+        const room = rooms[id];
+        if (!room) return true;
+        // Rooms written before lastActive existed have nothing to date them by,
+        // which makes them at least as old as that change. Sweep them.
+        if (!room.lastActive) return true;
+        return room.lastActive < cutoff;
+      });
+
+      if (stale.length === 0) return;
+
+      const updates = {};
+      stale.forEach(id => { updates[id] = null; });
+      await update(roomsRef, updates);
+
+      // Drop the matching game state too — deleteRoom removes both, and without
+      // this the games/ node accumulates orphans forever.
+      await Promise.all(
+        stale.map(id => remove(ref(db, `games/${id}`)).catch(() => {}))
+      );
+
+      console.log(`Cleaned up ${stale.length} stale room(s).`);
     } catch (e) {
       console.error("Error cleaning up old rooms:", e);
     }

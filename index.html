@@ -256,6 +256,7 @@
               <li>Play starts when the room fills &mdash; or the host can tap <strong>Start now</strong> once at least 2 people are in.</li>
               <li>Games in progress are hidden from everyone but their players. If you're mid-game, your room shows a <strong>Rejoin Game</strong> card.</li>
               <li>The host can delete a room with the <strong>✕</strong> when nobody else is in it, or after it's gone idle for 15 minutes.</li>
+              <li>Rooms nobody enters for <strong>48 hours</strong> are removed automatically, so the lobby doesn't fill up with abandoned games.</li>
             </ul>
 
             <h4>Chat</h4>
@@ -534,12 +535,12 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=23"></script>
+  <script type="module" src="firebase-game-backend.js?v=24"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=21"></script>
   <script src="five-dice.js?v=34"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>

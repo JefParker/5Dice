@@ -282,6 +282,10 @@ function startLobbyFirebase() {
     appendChatMessage(msg.author, msg.text, msg.id, msg.timestamp, msg.color);
   });
 
+  // Sweep rooms nobody has entered in 48 hours. Cleanup used to run only when
+  // someone created a room, so a quiet lobby never got tidied.
+  window.firebaseGameBackend.cleanupOldRooms({ force: true });
+
   updateDiagnostics();
 }
 
@@ -1559,7 +1563,12 @@ createBoard();
 // surfaces the host delete-✕ even if no new Firebase event has arrived.
 setInterval(() => {
   const lobby = document.getElementById('screen-lobby');
-  if (lobby && lobby.classList.contains('active')) renderRooms();
+  if (lobby && lobby.classList.contains('active')) {
+    renderRooms();
+    // Throttled internally to twice an hour, so a long-open lobby still sweeps
+    // 48-hour-old rooms without hammering the database.
+    if (window.firebaseGameBackend) window.firebaseGameBackend.cleanupOldRooms();
+  }
 }, 60000);
 if (!myName) {
   document.getElementById('settings-player-id-section').style.display = 'none';
