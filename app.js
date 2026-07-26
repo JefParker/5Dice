@@ -432,6 +432,37 @@ function commitSettingsName() {
   if (newName && newName !== myName) saveSharedProfile(newName, myColor);
 }
 
+// Save the display name and leave the Settings screen. The only way out now
+// that the Back to Lobby button is first-run-only.
+function leaveSettings(target) {
+  const nameField = document.getElementById('global-player-name');
+  let newName = nameField.value.trim();
+
+  if (!newName) {
+    if (!myName) {
+      // First run — a name is required before there's a lobby to go to.
+      alert("Please enter a display name to continue.");
+      return;
+    }
+    // Field was cleared but a name already exists. Keep the old one rather than
+    // trapping the user here with no way out.
+    newName = myName;
+    nameField.value = myName;
+  }
+
+  saveSharedProfile(newName, myColor);
+
+  // If Settings was opened mid-game, drop straight back into the game rather
+  // than the lobby — the seat was never given up.
+  if (target === 'screen-game' && currentRoomId) {
+    showScreen('screen-game');
+  } else {
+    menuReturnScreen = 'screen-lobby';
+    showScreen('screen-lobby');
+    startLobbyFirebase();
+  }
+}
+
 function runMenuAction(key) {
   closeAppMenu();
   const settingsScreen = document.getElementById('screen-settings');
@@ -440,9 +471,9 @@ function runMenuAction(key) {
   switch (key) {
     case 'lobby':
     case 'game':
-      // Leaving Settings goes through the save button so a changed name sticks.
+      // Leaving Settings saves first so a changed name sticks.
       if (onSettings) {
-        document.getElementById('btn-save-settings').click();
+        leaveSettings(key === 'game' ? 'screen-game' : 'screen-lobby');
       } else {
         if (key === 'lobby') menuReturnScreen = 'screen-lobby';
         showScreen(key === 'game' ? 'screen-game' : 'screen-lobby');
@@ -513,23 +544,15 @@ document.addEventListener('keydown', (e) => {
 
 // --- SETTINGS UI ---
 
-// The save button changes color with its meaning. Classes rather than inline
-// styles, so skins can restyle it.
-function setSaveBtnRole(btn, role) {
-  btn.classList.toggle('btn-success', role === 'success');
-  btn.classList.toggle('btn-primary', role === 'primary');
-}
-
 const openSettings = () => {
   closeAppMenu();
   rememberMenuOrigin();
   const settingsMenuBtn = document.querySelector('.menu-btn[data-menu="settings"]');
   if (settingsMenuBtn) settingsMenuBtn.style.display = '';
   document.getElementById('global-player-name').value = myName;
-  const btn = document.getElementById('btn-save-settings');
-  const backLabel = (menuReturnScreen === 'screen-game') ? "Back to Game" : "Back to Lobby";
-  btn.innerText = myName ? backLabel : "Save & Return";
-  setSaveBtnRole(btn, myName ? 'success' : 'primary');
+  // The button is a first-run affordance only — the menu handles leaving once
+  // there's a name saved.
+  document.getElementById('btn-save-settings').classList.toggle('hidden', !!myName);
   document.getElementById('settings-player-id-section').style.display = 'block';
 
   const colorPicker = document.getElementById('player-color-picker');
@@ -548,47 +571,8 @@ const openSettings = () => {
   showScreen('screen-settings');
 };
 
-document.getElementById('global-player-name').addEventListener('input', (e) => {
-  const newName = e.target.value.trim();
-  const btn = document.getElementById('btn-save-settings');
-  if (!myName) {
-    btn.innerText = "Head to Lobby";
-    setSaveBtnRole(btn, 'success');
-  } else {
-    const isChanged = (newName && newName !== myName);
-    const backLabel = (menuReturnScreen === 'screen-game') ? "Back to Game" : "Back to Lobby";
-    btn.innerText = isChanged ? "Save & Return" : backLabel;
-    setSaveBtnRole(btn, isChanged ? 'primary' : 'success');
-  }
-});
-
 document.getElementById('btn-save-settings').addEventListener('click', () => {
-  const nameField = document.getElementById('global-player-name');
-  let newName = nameField.value.trim();
-
-  if (!newName) {
-    if (!myName) {
-      // First run — a name is required before there's a lobby to go to.
-      alert("Please enter a display name to continue.");
-      return;
-    }
-    // Field was cleared but a name already exists. Keep the old one instead of
-    // trapping the user on this screen with no way out.
-    newName = myName;
-    nameField.value = myName;
-  }
-
-  saveSharedProfile(newName, myColor);
-
-  // If Settings was opened mid-game, drop straight back into the game rather
-  // than the lobby — the seat was never given up.
-  if (menuReturnScreen === 'screen-game' && currentRoomId) {
-    showScreen('screen-game');
-  } else {
-    menuReturnScreen = 'screen-lobby';
-    showScreen('screen-lobby');
-    startLobbyFirebase();
-  }
+  leaveSettings('screen-lobby');
 });
 
 const colorPickerEl = document.getElementById('player-color-picker');
@@ -1582,9 +1566,8 @@ if (!myName) {
   // No lobby to go back to until a name is set — hide the menu on first run.
   const firstRunMenuBtn = document.querySelector('.menu-btn[data-menu="settings"]');
   if (firstRunMenuBtn) firstRunMenuBtn.style.display = 'none';
-  const btn = document.getElementById('btn-save-settings');
-  btn.innerText = "Head to Lobby";
-  setSaveBtnRole(btn, 'success');
+  // First run is the one time the button is shown — the menu is hidden above.
+  document.getElementById('btn-save-settings').classList.remove('hidden');
   const colorPicker = document.getElementById('player-color-picker');
   if (colorPicker) colorPicker.value = myColor;
   showScreen('screen-settings');

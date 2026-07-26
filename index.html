@@ -111,7 +111,9 @@
           <button id="update-uuid-btn" class="capsule-button btn-danger" style="display: none;">Update Player ID</button>
         </div>
 
-        <button id="btn-save-settings" class="capsule-button btn-primary" style="margin-top: 20px;">Save & Return</button>
+        <!-- First run only. Once a display name exists the ☰ menu handles leaving,
+             so this stays hidden. -->
+        <button id="btn-save-settings" class="capsule-button btn-success hidden" style="margin-top: 20px;">Head to Lobby</button>
       </div>
     </div>
 
@@ -538,6 +540,6 @@
   <script src="dice3d.js?v=21"></script>
   <script src="five-dice.js?v=34"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=37"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>
