@@ -394,6 +394,35 @@ body {
     flex-shrink: 0;
 }
 
+/* "More" — reveals the score-sheet actions in place */
+.ScoreMoreBtn {
+    border-top: 1px solid #3d4f66;
+    border-radius: 0 0 8px 8px;
+    margin-top: 4px;
+}
+
+.ScoreMenuChev {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #8fa6c0;
+    transition: transform 0.2s ease;
+}
+
+.ScoreMoreBtn[aria-expanded="true"] .ScoreMenuChev {
+    transform: rotate(180deg);
+}
+
+.ScoreSubMenu {
+    display: flex;
+    flex-direction: column;
+}
+
+.ScoreSubItem {
+    padding-left: 40px;
+    font-size: 0.9rem;
+    color: #cfd8e3;
+}
+
 .DiceRack {
     position: fixed;
     left: 0;

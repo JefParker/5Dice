@@ -552,6 +552,9 @@ html[data-skin],
 [data-skin] .ScoreMenuItem:hover,
 [data-skin] .ScoreMenuItem:focus { background-color: var(--sk-menu-hover); }
 [data-skin] .ScoreMenuItem:active { background-color: var(--sk-panel-3); }
+[data-skin] .ScoreMoreBtn { border-top: 1px solid var(--sk-border); }
+[data-skin] .ScoreMenuChev { color: var(--sk-accent); }
+[data-skin] .ScoreSubItem { color: var(--sk-text-muted); }
 
 /* Dice tray */
 [data-skin] .DiceTray {

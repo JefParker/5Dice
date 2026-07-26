@@ -313,6 +313,58 @@ const CloseScoreMenu = () => {
     const btn = document.getElementById('MenuBtn');
     if (menu) menu.classList.add('hidden');
     if (btn) btn.setAttribute('aria-expanded', 'false');
+    // Collapse "More" so the menu always reopens in its short form.
+    const sub = document.getElementById('ScoreSubMenu');
+    if (sub) sub.classList.add('hidden');
+    const moreBtn = document.getElementById('ScoreMoreBtn');
+    if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+};
+
+/* Score-sheet actions shared by the hamburger's "More" submenu and the
+   long-press context menu, so both drive the same code. */
+
+const MenuShare = () => {
+    if (contextMenu) contextMenu.style.visibility = null;
+    ShowShareModal();
+};
+
+const ToggleDiceRack = () => {
+    g_objGame.DiceRackShowing = !g_objGame.DiceRackShowing;
+    const rack = document.getElementById('DiceRack');
+    if (rack)
+        rack.style.visibility = g_objGame.DiceRackShowing ? 'visible' : null;
+    if (g_objGame.DiceRackShowing) {
+        ResetDiceTurn();     // fresh turn: 3 rolls, nothing held
+        setSheetUnLocked();  // allow tapping categories to score
+    } else {
+        ParkDice();          // hide the 3D dice when the tray is closed
+    }
+};
+
+const RefreshLeaders = () => {
+    RequestLeaderBoard();
+    BCastRequestLeaderBoard();
+};
+
+const PromptClearRoom = () => {
+    if (confirm("Clear the room?"))
+        ClearRoomInServerDB();
+};
+
+const MenuRoomList = () => {
+    if (contextMenu) contextMenu.style.visibility = null;
+    ShowRoomListModal();
+};
+
+// "More" reveals the score-sheet-specific actions inside the hamburger panel.
+const ToggleScoreMore = (ev) => {
+    if (ev) ev.stopPropagation();
+    const sub = document.getElementById('ScoreSubMenu');
+    const btn = document.getElementById('ScoreMoreBtn');
+    if (!sub) return;
+    const willOpen = sub.classList.contains('hidden');
+    sub.classList.toggle('hidden', !willOpen);
+    if (btn) btn.setAttribute('aria-expanded', String(willOpen));
 };
 
 const ToggleScoreMenu = (ev) => {
@@ -514,6 +566,16 @@ const ShowScoreMain = () => {
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='CloseScoreMenu(); ShowEnterID();'><span class='ScoreMenuIc'>&#128290;</span>Room</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToSettings()'><span class='ScoreMenuIc'>&#9881;&#65039;</span>Settings</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToAbout()'><span class='ScoreMenuIc'>&#8505;&#65039;</span>About</button>";
+
+    // "More" — the same score-sheet actions the long-press menu offers.
+    sPage += "<button type='button' id='ScoreMoreBtn' role='menuitem' aria-haspopup='true' class='ScoreMenuItem ScoreMoreBtn' aria-expanded='false' aria-controls='ScoreSubMenu' onclick='ToggleScoreMore(event)'><span class='ScoreMenuIc'>&#8943;</span>More<span class='ScoreMenuChev'>&#9662;</span></button>";
+    sPage += "<div id='ScoreSubMenu' class='ScoreSubMenu hidden' role='group' aria-label='More actions'>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); MenuShare();'>Share</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); ToggleDiceRack();'>Dice</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); RefreshLeaders();'>Refresh Leaders</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); PromptClearRoom();'>Clear Room</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); MenuRoomList();'>Get Room List</button>";
+    sPage += "</div>";
     sPage += "</nav>";
 
     sPage += MakeContextMenuHTML("");
@@ -1761,9 +1823,6 @@ if (isIos() && !isInStandaloneMode()) {
 const MakeContextMenuHTML = (sWindowShowing) => {
     let sPage = "";
     sPage += "<ul class='context' id='context'>";
-    sPage += "<li class='context-link' id='GameID'>";
-    sPage += "<span class='context-label'>Room</span>";
-    sPage += "</li>";
     sPage += "<li class='context-link' id='Share'>";
     sPage += "<span class='context-label'>Share</span>";
     sPage += "</li>";
@@ -1959,60 +2018,29 @@ const InitializeContextMenu = (sWindowShowing) => {
     if (!contextMenu) return;
     contextMenu.style.textAlign = 'left';
 
+    // Both menus call the same shared actions (defined near ToggleScoreMenu).
     const shareBtn = document.querySelector("#Share");
     if (shareBtn) {
         shareBtn.addEventListener("click", (ev) => {
             if (ev) ev.stopPropagation();
-            if (contextMenu) contextMenu.style.visibility = null;
-            ShowShareModal();
+            MenuShare();
         });
     }
 
     const toggleDiceBtn = document.querySelector("#ToggleDice");
-    if (toggleDiceBtn) {
-        toggleDiceBtn.addEventListener("click", () => {
-            g_objGame.DiceRackShowing = !g_objGame.DiceRackShowing;
-            const rack = document.getElementById('DiceRack');
-            if (rack)
-                rack.style.visibility = g_objGame.DiceRackShowing ? 'visible' : null;
-            if (g_objGame.DiceRackShowing) {
-                ResetDiceTurn();     // fresh turn: 3 rolls, nothing held
-                setSheetUnLocked();  // allow tapping categories to score
-            } else {
-                ParkDice();          // hide the 3D dice when the tray is closed
-            }
-        });
-    }
+    if (toggleDiceBtn) toggleDiceBtn.addEventListener("click", ToggleDiceRack);
 
     const refreshLeaderBtn = document.querySelector("#RefreshLeaderBoard");
-    if (refreshLeaderBtn) {
-        refreshLeaderBtn.addEventListener("click", () => {
-            RequestLeaderBoard();
-            BCastRequestLeaderBoard();
-        });
-    }
-
-    const gameIdBtn = document.querySelector("#GameID");
-    if (gameIdBtn) {
-        gameIdBtn.addEventListener("click", () => {
-            ShowEnterID();
-        });
-    }
+    if (refreshLeaderBtn) refreshLeaderBtn.addEventListener("click", RefreshLeaders);
 
     const clearRoomBtn = document.querySelector("#ClearRoom");
-    if (clearRoomBtn) {
-        clearRoomBtn.addEventListener("click", () => {
-            if (confirm("Clear the room?"))
-                ClearRoomInServerDB();
-        });
-    }
+    if (clearRoomBtn) clearRoomBtn.addEventListener("click", PromptClearRoom);
 
     const getRoomListBtn = document.querySelector("#GetRoomList");
     if (getRoomListBtn) {
         getRoomListBtn.addEventListener("click", (ev) => {
             if (ev) ev.stopPropagation();
-            if (contextMenu) contextMenu.style.visibility = null;
-            ShowRoomListModal();
+            MenuRoomList();
         });
     }
 
