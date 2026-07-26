@@ -328,11 +328,19 @@ const MenuShare = () => {
     ShowShareModal();
 };
 
-const ToggleDiceRack = () => {
-    g_objGame.DiceRackShowing = !g_objGame.DiceRackShowing;
+// .DiceRack is hidden by CSS and revealed by an inline style, so the tray's
+// visibility has to be re-asserted from state every time the sheet re-renders —
+// otherwise DiceRackShowing stays true while the tray is invisible, and the next
+// Dice tap just flips the flag back to false and appears to do nothing.
+const ApplyDiceRackVisibility = () => {
     const rack = document.getElementById('DiceRack');
     if (rack)
         rack.style.visibility = g_objGame.DiceRackShowing ? 'visible' : null;
+};
+
+const ToggleDiceRack = () => {
+    g_objGame.DiceRackShowing = !g_objGame.DiceRackShowing;
+    ApplyDiceRackVisibility();
     if (g_objGame.DiceRackShowing) {
         ResetDiceTurn();     // fresh turn: 3 rolls, nothing held
         setSheetUnLocked();  // allow tapping categories to score
@@ -584,6 +592,9 @@ const ShowScoreMain = () => {
 
     InitializeContextMenu("");
 
+    // The tray markup was just rebuilt, so restore its visibility from state.
+    ApplyDiceRackVisibility();
+
     if (g_objScore) {
         DisplayScore(g_objScore);
     }
@@ -706,8 +717,7 @@ const HandleGameOverState = () => {
     if (g_objGame.DiceRackShowing) {
         g_objGame.DiceHiddenByGameOver = true;
         g_objGame.DiceRackShowing = false;
-        let rack = document.getElementById('DiceRack');
-        if (rack) rack.style.visibility = null;
+        ApplyDiceRackVisibility();
         ParkDice();
     }
 
@@ -730,8 +740,7 @@ const RestoreDiceAfterClear = () => {
     if (!g_objGame.DiceHiddenByGameOver) return;
     g_objGame.DiceHiddenByGameOver = false;
     g_objGame.DiceRackShowing = true;
-    let rack = document.getElementById('DiceRack');
-    if (rack) rack.style.visibility = 'visible';
+    ApplyDiceRackVisibility();
     ResetDiceTurn();
     setSheetUnLocked();
 };

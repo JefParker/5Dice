@@ -1,13 +1,13 @@
  
- const staticCache = 'static-v260724v';
- const dynamicCache = 'dynamic-v260724v';
+ const staticCache = 'static-v260724w';
+ const dynamicCache = 'dynamic-v260724w';
  // Precache the SAME versioned URLs the page actually requests. The previous list
  // cached bare names (e.g. 'Score.js') while index.html loads 'Score.js?v=10', so
  // caches.match() (which compares the query string) never matched and the precache
  // was dead weight. When you bump a ?v= number in index.html, bump it here too and
  // bump the cache version strings above.
  const assets = ['./', 'index.html',
-    'Score.js?v=21', 'firebase-backend.js?v=11', 'Score.css?v=9',
+    'Score.js?v=22', 'firebase-backend.js?v=11', 'Score.css?v=9',
     'forms.css', 'Score.json', '../dice3d.js?v=21',
     '../skins.css?v=3', '../skins.js?v=1',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',
