@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=25">
+  <link rel="stylesheet" href="styles.css?v=26">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -15,8 +15,12 @@
     <div id="screen-lobby" class="screen active">
       <header class="top-header" style="position: relative;">
         <h1>🎲 Lobby 🎲</h1>
-        <button id="btn-score-sheet" onclick="window.location.href='Score/'" style="position: absolute; right: 52px; top: 16px; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: white;" aria-label="Score Sheet" title="Score Sheet">📋</button>
-        <button id="btn-settings" style="position: absolute; right: 16px; top: 16px; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: white;" aria-label="Settings">⚙️</button>
+        <button id="btn-menu" class="menu-btn" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
+        <nav id="lobby-menu" class="app-menu hidden" role="menu" aria-labelledby="btn-menu">
+          <button type="button" role="menuitem" class="app-menu-item" id="menu-settings"><span class="app-menu-ic">⚙️</span>Settings</button>
+          <button type="button" role="menuitem" class="app-menu-item" id="menu-about"><span class="app-menu-ic">ℹ️</span>About</button>
+          <button type="button" role="menuitem" class="app-menu-item" id="menu-score-sheet"><span class="app-menu-ic">📋</span>5Dice Score Sheet</button>
+        </nav>
       </header>
       <div class="content-layout">
         <aside id="chat-sidebar" class="sidebar">
@@ -49,7 +53,8 @@
 
     <!-- Screen C: Settings -->
     <div id="screen-settings" class="screen hidden">
-      <header class="top-header">
+      <header class="top-header" style="position: relative;">
+        <button id="btn-back-lobby-settings" class="icon-btn" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; border: none; background: transparent; cursor: pointer;" aria-label="Back to lobby" title="Back to lobby">⬅️</button>
         <h1>⚙️ Settings</h1>
       </header>
       <div class="setup-container">
@@ -93,6 +98,213 @@
         </div>
 
         <button id="btn-save-settings" class="capsule-button" style="background-color: #4a90e2; color: #fff; margin-top: 20px;">Save & Return</button>
+      </div>
+    </div>
+
+    <!-- Screen D: About -->
+    <div id="screen-about" class="screen hidden">
+      <header class="top-header" style="position: relative;">
+        <button id="btn-back-lobby-about" class="icon-btn" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; border: none; background: transparent; cursor: pointer;" aria-label="Back to lobby" title="Back to lobby">⬅️</button>
+        <h1>ℹ️ About</h1>
+      </header>
+      <div class="about-container">
+        <p class="about-intro">
+          <strong>5 Dice</strong> is a play-together app. Create a room, share the lobby with
+          friends, and play in real time from any phone, tablet, or computer &mdash; or use the
+          Score Sheet to keep score for a game you're playing with real dice at the table.
+        </p>
+
+        <details class="about-sec" open>
+          <summary><span class="about-ic">🎲</span>5 Dice</summary>
+          <div class="about-body">
+            <p>A five-dice, thirteen-turn game of luck and lock-in. <strong>2&ndash;6 players.</strong></p>
+
+            <h4>How a turn works</h4>
+            <ul>
+              <li>Tap the roll button to roll all five dice. You get <strong>3 rolls</strong> per turn.</li>
+              <li>After a roll, tap any die to <strong>hold</strong> it &mdash; held dice sit out the next roll. Tap again to release.</li>
+              <li>When you like your dice (or you're out of rolls), tap a category to claim it. You'll be asked to <strong>Commit</strong> or <strong>Undo</strong>.</li>
+              <li>Committing locks that category for the rest of the game and ends your turn. You get 13 turns, one per category.</li>
+            </ul>
+
+            <h4>Scoring</h4>
+            <table class="about-table">
+              <tr><th>Category</th><th>Points</th></tr>
+              <tr><td>1's &ndash; 6's</td><td>Sum of dice showing that number</td></tr>
+              <tr><td>Upper bonus</td><td>35 if your upper total reaches 63</td></tr>
+              <tr><td>3 of a kind</td><td>Sum of all five dice</td></tr>
+              <tr><td>4 of a kind</td><td>Sum of all five dice</td></tr>
+              <tr><td>Full House</td><td>25</td></tr>
+              <tr><td>Sm Strt <span class="about-dim">(4 in a row)</span></td><td>30</td></tr>
+              <tr><td>Lg Strt <span class="about-dim">(5 in a row)</span></td><td>40</td></tr>
+              <tr><td>5 Dice <span class="about-dim">(all five match)</span></td><td>50</td></tr>
+              <tr><td>Chance</td><td>Sum of all five dice</td></tr>
+              <tr><td>Bonus 5's</td><td>+100 each</td></tr>
+            </table>
+            <p>
+              If you don't meet the requirement for a category you can still claim it &mdash; you'll
+              just take a zero there. Sometimes that's the right move to protect a category you
+              still have a shot at.
+            </p>
+
+            <h4>Bonus 5's</h4>
+            <p>
+              You can't tap this one. Once you've scored <strong>5 Dice</strong> for the full 50,
+              every additional five-of-a-kind you roll adds <strong>+100</strong> automatically.
+            </p>
+
+            <h4>The par indicator</h4>
+            <p>
+              Under the upper section you'll see something like <strong>+4</strong>,
+              <strong>&minus;3</strong>, or <strong>on par</strong>. Par is three of each number
+              (3, 6, 9, 12, 15, 18) &mdash; exactly the pace that lands you on 63 and earns the
+              35-point bonus. Positive means you're ahead of that pace.
+            </p>
+
+            <h4>Turns and the scorecard</h4>
+            <p>
+              Play rotates automatically. On your turn you see your own board; when it isn't your
+              turn the screen switches to the shared scorecard with a column for every player, and
+              the active player's column glows. The background of the screen always shows whoever's
+              turn it is, in their color.
+            </p>
+            <p>
+              The game ends when everyone has filled all 13 categories. Highest grand total wins,
+              ties are honored, and the winner gets confetti and the screen painted in their color.
+              Each room keeps a running <strong>Room record</strong> of wins and ties, so a rematch
+              means something.
+            </p>
+          </div>
+        </details>
+
+        <details class="about-sec">
+          <summary><span class="about-ic">⭕</span>Tic-Tac-Toe</summary>
+          <div class="about-body">
+            <p>The classic 3&times;3 game, for <strong>exactly 2 players</strong>.</p>
+            <ul>
+              <li>Whoever created the room plays <strong>X</strong> and goes first; the player who joins is <strong>O</strong>.</li>
+              <li>Tap any empty square on your turn. Three in a row &mdash; across, down, or diagonally &mdash; wins.</li>
+              <li>A full board with no line is a draw, shown as two-color stripes.</li>
+              <li>Sitting in a room alone? Taps alternate X and O so you can play both sides while you wait.</li>
+            </ul>
+            <p>Wins and ties feed the same per-room <strong>Room record</strong> as 5 Dice.</p>
+          </div>
+        </details>
+
+        <details class="about-sec">
+          <summary><span class="about-ic">📋</span>5Dice Score Sheet</summary>
+          <div class="about-body">
+            <p>
+              A shared digital scorecard for when you're rolling <em>real</em> dice around a real
+              table. Everyone gets their own sheet, and every sheet in the room updates live on
+              everyone's screen.
+            </p>
+
+            <h4>Getting in</h4>
+            <ul>
+              <li>Open it from this menu, then enter a <strong>Room #</strong>. Everyone at the table enters the same number.</li>
+              <li>Enter your name (at least 3 characters) and pick your color. If you've already set these in Settings, they carry over.</li>
+            </ul>
+
+            <h4>Entering scores</h4>
+            <ul>
+              <li><strong>Upper boxes (1's&ndash;6's)</strong> tap to cycle up by that number. Tapping 3's goes 3, 6, 9, 12, 15, then back to blank.</li>
+              <li><strong>Fixed categories</strong> cycle blank &rarr; 0 &rarr; the value: Full House 25, Sm Str 30, Lg Str 40, 5 Dice 50.</li>
+              <li><strong>Bonus 5's</strong> adds 100 per tap.</li>
+              <li><strong>Chance, 3 of a Kind, and 4 of a Kind</strong> open a number picker, since those can be anything.</li>
+            </ul>
+
+            <div class="about-tip">
+              <strong>The Lock switch.</strong> Your sheet is locked by default so a stray thumb can't
+              rewrite a score. Unlock it to make changes &mdash; it re-locks itself after 30 seconds.
+            </div>
+
+            <h4>While you play</h4>
+            <ul>
+              <li>The <strong>Leader Board</strong> ranks everyone in the room by grand total, with turns remaining in parentheses. Tap a name to view their sheet.</li>
+              <li>Toasts announce who joined, who left, and what people scored.</li>
+              <li><strong>Clear</strong> wipes your sheet to start a fresh game.</li>
+              <li>Prefer computer dice? Long-press (or right-click) anywhere for the menu and turn on <strong>Dice</strong> for a 3D roller.</li>
+              <li>When everyone is out of turns, the top score gets confetti.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="about-sec">
+          <summary><span class="about-ic">🏠</span>The Lobby</summary>
+          <div class="about-body">
+            <h4>Rooms</h4>
+            <ul>
+              <li><strong>Create a New Game Room</strong> to name a room, pick the game, and set how many players you're waiting for. Your room card shows up in your color.</li>
+              <li>Tap any card with seats left to join. Seats are claimed atomically, so two people can never grab the same last seat.</li>
+              <li>Play starts when the room fills &mdash; or the host can tap <strong>Start now</strong> once at least 2 people are in.</li>
+              <li>Games in progress are hidden from everyone but their players. If you're mid-game, your room shows a <strong>Rejoin Game</strong> card.</li>
+              <li>The host can delete a room with the <strong>✕</strong> when nobody else is in it, or after it's gone idle for 15 minutes.</li>
+            </ul>
+
+            <h4>Chat</h4>
+            <p>
+              The lobby chat is deliberately <strong>temporary</strong>. Messages fade after about
+              five minutes (system notices after one), so it's for "anyone up for a game?" rather
+              than a conversation you come back to. Messages are tinted with each sender's color.
+              On a phone, tap the chat to expand it and <strong>Lobby &rarr;</strong> to collapse it.
+            </p>
+          </div>
+        </details>
+
+        <details class="about-sec">
+          <summary><span class="about-ic">⚙️</span>Settings</summary>
+          <div class="about-body">
+            <h4>Display name and color</h4>
+            <p>
+              Your name and color follow you everywhere &mdash; chat, room cards, the scorecard, the
+              winner's background, and the Score Sheet. Pick something you'll recognize at a glance.
+            </p>
+
+            <h4>Hints</h4>
+            <p>
+              <strong>On:</strong> unscored categories show what your current dice would be worth,
+              and the ones worth taking are highlighted. Good for learning the game or playing fast.
+            </p>
+            <p>
+              <strong>Off (the default):</strong> a plain scoresheet. You do the math, same as with
+              paper. Purists start here.
+            </p>
+
+            <h4>Player ID</h4>
+            <p>
+              Your Player ID is who the app thinks you are. It lives on the device, so by default
+              your phone and your laptop are two different players. To make them the same person:
+            </p>
+            <ul>
+              <li>On the device you want to keep, tap the <strong>copy</strong> button next to the ID.</li>
+              <li>On the other device, open Settings, <strong>paste</strong> it in, and tap <strong>Update Player ID</strong>.</li>
+              <li>Confirm the warning &mdash; the second device takes on that identity and reloads.</li>
+            </ul>
+            <div class="about-tip">
+              This one is permanent. Whatever history lived on the device you're changing gets
+              replaced by the history on the ID you pasted in.
+            </div>
+          </div>
+        </details>
+
+        <details class="about-sec">
+          <summary><span class="about-ic">📱</span>Installing the app</summary>
+          <div class="about-body">
+            <p>
+              5 Dice and the Score Sheet both install to your home screen and run full-screen with
+              no browser chrome.
+            </p>
+            <ul>
+              <li><strong>iPhone / iPad:</strong> tap Share <span class="share-icon">⬆️</span> in Safari, then <strong>Add to Home Screen</strong>.</li>
+              <li><strong>Android / Chrome:</strong> menu &rarr; <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
+              <li><strong>Desktop:</strong> the install icon at the right edge of the address bar.</li>
+            </ul>
+            <p>The screen stays awake while you're in the lobby or in a game, so it won't dim mid-turn.</p>
+          </div>
+        </details>
+
+        <p class="about-footer">🎲 5 Dice 🎲</p>
       </div>
     </div>
 
@@ -299,6 +511,6 @@
   <script src="dice3d.js?v=21"></script>
   <script src="five-dice.js?v=34"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=34"></script>
+  <script src="app.js?v=35"></script>
 </body>
 </html>

@@ -379,9 +379,69 @@ document.querySelector('.main-content').addEventListener('click', () => {
   }
 });
 
+// --- LOBBY MENU ---
+
+const menuBtn = document.getElementById('btn-menu');
+const lobbyMenu = document.getElementById('lobby-menu');
+
+const closeLobbyMenu = () => {
+  if (!lobbyMenu) return;
+  lobbyMenu.classList.add('hidden');
+  if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+};
+
+const toggleLobbyMenu = () => {
+  if (!lobbyMenu) return;
+  const isOpen = !lobbyMenu.classList.contains('hidden');
+  if (isOpen) {
+    closeLobbyMenu();
+  } else {
+    lobbyMenu.classList.remove('hidden');
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+  }
+};
+
+if (menuBtn) {
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleLobbyMenu();
+  });
+}
+
+if (lobbyMenu) lobbyMenu.addEventListener('click', (e) => e.stopPropagation());
+
+document.addEventListener('click', () => closeLobbyMenu());
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeLobbyMenu();
+});
+
+const menuAboutBtn = document.getElementById('menu-about');
+if (menuAboutBtn) {
+  menuAboutBtn.addEventListener('click', () => {
+    closeLobbyMenu();
+    showScreen('screen-about');
+  });
+}
+
+const menuScoreSheetBtn = document.getElementById('menu-score-sheet');
+if (menuScoreSheetBtn) {
+  menuScoreSheetBtn.addEventListener('click', () => {
+    closeLobbyMenu();
+    window.location.href = 'Score/';
+  });
+}
+
+const aboutBackBtn = document.getElementById('btn-back-lobby-about');
+if (aboutBackBtn) {
+  aboutBackBtn.addEventListener('click', () => showScreen('screen-lobby'));
+}
+
 // --- SETTINGS UI ---
 
-document.getElementById('btn-settings').addEventListener('click', () => {
+const openSettings = () => {
+  closeLobbyMenu();
+  const backArrow = document.getElementById('btn-back-lobby-settings');
+  if (backArrow) backArrow.style.display = '';
   document.getElementById('global-player-name').value = myName;
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = myName ? "Back to Lobby" : "Save & Return";
@@ -400,7 +460,10 @@ document.getElementById('btn-settings').addEventListener('click', () => {
   }
 
   showScreen('screen-settings');
-});
+};
+
+const menuSettingsBtn = document.getElementById('menu-settings');
+if (menuSettingsBtn) menuSettingsBtn.addEventListener('click', openSettings);
 
 document.getElementById('global-player-name').addEventListener('input', (e) => {
   const newName = e.target.value.trim();
@@ -413,6 +476,11 @@ document.getElementById('global-player-name').addEventListener('input', (e) => {
     btn.innerText = isChanged ? "Save & Return" : "Back to Lobby";
     btn.style.backgroundColor = isChanged ? "#4a90e2" : "#28a745";
   }
+});
+
+const settingsBackBtn = document.getElementById('btn-back-lobby-settings');
+if (settingsBackBtn) settingsBackBtn.addEventListener('click', () => {
+  document.getElementById('btn-save-settings').click();
 });
 
 document.getElementById('btn-save-settings').addEventListener('click', () => {
@@ -1392,6 +1460,9 @@ setInterval(() => {
 }, 60000);
 if (!myName) {
   document.getElementById('settings-player-id-section').style.display = 'none';
+  // No lobby to go back to until a name is set — hide the back arrow.
+  const firstRunBack = document.getElementById('btn-back-lobby-settings');
+  if (firstRunBack) firstRunBack.style.display = 'none';
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = "Head to Lobby";
   btn.style.backgroundColor = "#28a745";
