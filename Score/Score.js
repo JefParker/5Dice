@@ -205,11 +205,12 @@ const ShowEnterID = () => {
 
     sPage += "</div>";
 
-    // Menu here too, so this screen is never a dead end. No Settings item — this
-    // screen IS the settings.
+    // Menu here too, so this screen is never a dead end. No Room item — this
+    // screen IS the Room screen.
     sPage += "<button id='MenuBtn' class='MenuBtn' onclick='ToggleScoreMenu(event)' title='Menu' aria-label='Menu' aria-haspopup='true' aria-expanded='false'>&#9776;</button>";
     sPage += "<nav id='ScoreMenu' class='ScoreMenu hidden' role='menu'>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToLobby()'><span class='ScoreMenuIc'>&#127968;</span>Lobby</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToSettings()'><span class='ScoreMenuIc'>&#9881;&#65039;</span>Settings</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToAbout()'><span class='ScoreMenuIc'>&#8505;&#65039;</span>About</button>";
     sPage += "</nav>";
 
@@ -293,9 +294,14 @@ const GoToLobby = () => {
     window.location.href = "../";
 };
 
-// The About page lives in the main app; #about opens it directly.
+// About and Settings live in the main app; the hash opens that screen directly.
+// (The score sheet's own room/name/color screen is "Room", see ShowEnterID.)
 const GoToAbout = () => {
     window.location.href = "../#about";
+};
+
+const GoToSettings = () => {
+    window.location.href = "../#settings";
 };
 
 // --- HAMBURGER MENU ---
@@ -506,6 +512,7 @@ const ShowScoreMain = () => {
     sPage += "<nav id='ScoreMenu' class='ScoreMenu hidden' role='menu'>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToLobby()'><span class='ScoreMenuIc'>&#127968;</span>Lobby</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='CloseScoreMenu(); ShowEnterID();'><span class='ScoreMenuIc'>&#128290;</span>Room</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToSettings()'><span class='ScoreMenuIc'>&#9881;&#65039;</span>Settings</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToAbout()'><span class='ScoreMenuIc'>&#8505;&#65039;</span>About</button>";
     sPage += "</nav>";
 
