@@ -95,6 +95,25 @@ input.capsule-input {
   transform: scale(0.98);
 }
 
+/* Button roles. These were inline styles; they live here so skins can reach them. */
+.btn-success { background-color: #28a745; color: #ffffff; }
+.btn-primary { background-color: #4a90e2; color: #ffffff; }
+.btn-danger  { background-color: #dc3545; color: #ffffff; }
+.btn-play    { background-color: darkgreen; color: #ffffff; }
+
+.icon-btn-solid {
+  padding: 10px;
+  background: #3a3a3a;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.hint-inline { font-size: 0.9rem; color: #ccc; }
+.dlg-danger { color: #dc3545; }
+.dlg-strong { color: #fff; }
+
 /* Specific UI Elements */
 .content-layout {
   flex: 1;
@@ -263,6 +282,23 @@ input.capsule-input {
   color: #ffffff;
   border-color: #dc3545;
   transform: scale(1.1);
+}
+
+/* Room card states. Were inline styles; classed so skins can reach them. */
+.room-card-returning { border: 2px solid #00ffcc; }
+
+.room-seats {
+  font-size: 0.85rem;
+  margin-top: 4px;
+  font-weight: bold;
+}
+.seats-playing { color: #00ffcc; }
+.seats-full { color: #ff4444; }
+.seats-open { color: #44ff44; }
+
+.btn-rejoin {
+  background-color: #0088cc;
+  font-weight: bold;
 }
 
 .room-card-title {

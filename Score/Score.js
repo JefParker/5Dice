@@ -505,7 +505,7 @@ const ShowScoreMain = () => {
     sPage += "<button id='MenuBtn' class='MenuBtn' onclick='ToggleScoreMenu(event)' title='Menu' aria-label='Menu' aria-haspopup='true' aria-expanded='false'>&#9776;</button>";
     sPage += "<nav id='ScoreMenu' class='ScoreMenu hidden' role='menu'>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToLobby()'><span class='ScoreMenuIc'>&#127968;</span>Lobby</button>";
-    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='CloseScoreMenu(); ShowEnterID();'><span class='ScoreMenuIc'>&#9881;&#65039;</span>Settings</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='CloseScoreMenu(); ShowEnterID();'><span class='ScoreMenuIc'>&#128290;</span>Room</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToAbout()'><span class='ScoreMenuIc'>&#8505;&#65039;</span>About</button>";
     sPage += "</nav>";
 
@@ -1755,7 +1755,7 @@ const MakeContextMenuHTML = (sWindowShowing) => {
     let sPage = "";
     sPage += "<ul class='context' id='context'>";
     sPage += "<li class='context-link' id='GameID'>";
-    sPage += "<span class='context-label'>Settings</span>";
+    sPage += "<span class='context-label'>Room</span>";
     sPage += "</li>";
     sPage += "<li class='context-link' id='Share'>";
     sPage += "<span class='context-label'>Share</span>";
@@ -1892,7 +1892,7 @@ window.ShowRoomListModal = async () => {
     const containerEl = document.getElementById('room-list-container');
     if (!modalEl || !containerEl) return;
 
-    containerEl.innerHTML = `<p style="color: #aaaaaa; text-align: center;">Loading active rooms...</p>`;
+    containerEl.innerHTML = `<p class="room-list-note" style="text-align: center;">Loading active rooms...</p>`;
     modalEl.classList.remove('hidden');
     modalEl.style.display = 'flex';
 
@@ -1905,8 +1905,8 @@ window.ShowRoomListModal = async () => {
         if (!rooms || rooms.length === 0) {
             containerEl.innerHTML = `
                 <div style="text-align: center; padding: 15px 0;">
-                    <p style="color: #dddddd; margin-bottom: 12px;">No active game rooms found.</p>
-                    <button style="background: #00ffcc; color: #0f0f1b; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer;" onclick="hideRoomListModal(); ShowEnterID();">Set Up New Room</button>
+                    <p class="room-list-note" style="margin-bottom: 12px;">No active game rooms found.</p>
+                    <button class="room-setup-btn" onclick="hideRoomListModal(); ShowEnterID();">Set Up New Room</button>
                 </div>
             `;
             return;
@@ -1924,7 +1924,7 @@ window.ShowRoomListModal = async () => {
                     <span class="room-link">Room #${r.id}</span>
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
                         <span class="room-players">👥 ${playerStr}</span>
-                        <span class="room-lastplayed" style="color: #7a7f9a; font-size: 0.72rem;">🕐 ${lastPlayed}</span>
+                        <span class="room-lastplayed" style="font-size: 0.72rem;">🕐 ${lastPlayed}</span>
                     </div>
                 </div>
             `;
@@ -1932,7 +1932,7 @@ window.ShowRoomListModal = async () => {
         containerEl.innerHTML = html;
     } catch (err) {
         console.error("Error fetching rooms:", err);
-        containerEl.innerHTML = `<p style="color: #ff5555; text-align: center;">Failed to load rooms.</p>`;
+        containerEl.innerHTML = `<p class="room-list-error" style="text-align: center;">Failed to load rooms.</p>`;
     }
 };
 

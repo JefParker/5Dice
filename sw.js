@@ -1,8 +1,10 @@
-const CACHE_NAME = '5dice-cache-v91';
+const CACHE_NAME = '5dice-cache-v93';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
+  './skins.css',
+  './skins.js',
   './app.js',
   './five-dice.js',
   './dice3d.js',

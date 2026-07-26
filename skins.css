@@ -1,0 +1,744 @@
+/* ============================================================================
+   SKINS — shared by the lobby app (/) and the Score Sheet app (/Score/)
+   ============================================================================
+
+   "Original" is the absence of a skin. skins.js sets data-skin on <html> only
+   for Glass Dark and Steampunk, so with Original selected NOTHING in this file
+   matches and the apps render exactly as they always have.
+
+   Each skin defines a set of --sk-* variables; the rules below are written once
+   against [data-skin] and consume those variables.
+
+   Deliberately NOT reskinned:
+     - player-chosen colors (chat color, --pc on the 5 Dice board, the Score
+       Sheet page background, per-player toast colors)
+     - the 3D dice and confetti / win effects
+     - connection status dots and share-service brand buttons
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- GLASS DARK */
+[data-skin="glass-dark"] {
+  --sk-bg:            #0d0f12;
+  --sk-bg-2:          #14171c;
+  --sk-panel:         rgba(255, 255, 255, 0.06);
+  --sk-panel-2:       rgba(255, 255, 255, 0.09);
+  --sk-panel-3:       rgba(255, 255, 255, 0.12);
+  --sk-border:        rgba(255, 255, 255, 0.12);
+  --sk-border-strong: rgba(255, 255, 255, 0.22);
+
+  --sk-header:        rgba(255, 255, 255, 0.05);
+  --sk-header-text:   #f2f4f7;
+
+  --sk-text:          #f2f4f7;
+  --sk-text-muted:    #98a2b3;
+  --sk-text-dim:      #6b7480;
+
+  --sk-accent:        #4a90e2;
+  --sk-accent-text:   #ffffff;
+  --sk-success:       #2f9e5e;
+  --sk-danger:        #e05260;
+
+  --sk-input-bg:      rgba(255, 255, 255, 0.10);
+  --sk-input-text:    #f2f4f7;
+  --sk-input-border:  rgba(255, 255, 255, 0.20);
+  --sk-placeholder:   #7d8794;
+
+  --sk-menu-bg:       rgba(22, 25, 31, 0.88);
+  --sk-menu-hover:    rgba(255, 255, 255, 0.10);
+
+  --sk-scrim:         rgba(3, 5, 8, 0.72);
+  --sk-dialog-bg:     rgba(26, 30, 36, 0.92);
+
+  --sk-radius:        14px;
+  --sk-blur:          blur(14px) saturate(1.2);
+  --sk-shadow:        0 10px 30px rgba(0, 0, 0, 0.55);
+  --sk-heading-font:  inherit;
+  --sk-heading-spacing: 0;
+  --sk-veil:          rgba(13, 15, 18, 0.74);
+}
+
+/* ---------------------------------------------------------------- STEAMPUNK */
+[data-skin="steampunk"] {
+  --sk-bg:            #2b1d16;
+  --sk-bg-2:          #241009;
+  --sk-panel:         #3d2a1f;
+  --sk-panel-2:       #4a3427;
+  --sk-panel-3:       #573d2d;
+  --sk-border:        #7a5f1c;
+  --sk-border-strong: #c9a227;
+
+  --sk-header:        #241009;
+  --sk-header-text:   #e9c96a;
+
+  --sk-text:          #f0e2c4;
+  --sk-text-muted:    #b9a683;
+  --sk-text-dim:      #8b7a5e;
+
+  --sk-accent:        #c9a227;
+  --sk-accent-text:   #2b1d16;
+  --sk-success:       #7d8a2e;
+  --sk-danger:        #a33529;
+
+  --sk-input-bg:      #e8d9b5;
+  --sk-input-text:    #2f2418;
+  --sk-input-border:  #8a6d1f;
+  --sk-placeholder:   #8a7a5c;
+
+  --sk-menu-bg:       #3d2a1f;
+  --sk-menu-hover:    #573d2d;
+
+  --sk-scrim:         rgba(20, 11, 6, 0.82);
+  --sk-dialog-bg:     #3d2a1f;
+
+  --sk-brass:         #c9a227;
+  --sk-brass-deep:    #8a6d1f;
+  --sk-copper:        #b87333;
+
+  --sk-radius:        6px;
+  --sk-blur:          none;
+  --sk-shadow:        0 8px 20px rgba(0, 0, 0, 0.6);
+  --sk-heading-font:  Georgia, "Times New Roman", serif;
+  --sk-heading-spacing: 0.02em;
+  --sk-veil:          rgba(43, 29, 22, 0.80);
+}
+
+/* ============================================================================
+   MAIN APP
+   ========================================================================= */
+
+html[data-skin],
+[data-skin] body,
+[data-skin] .screen {
+  background-color: var(--sk-bg);
+  color: var(--sk-text);
+}
+
+[data-skin] .top-header {
+  background-color: var(--sk-header);
+  border-bottom: 1px solid var(--sk-border);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+
+[data-skin] .top-header h1 {
+  color: var(--sk-header-text);
+  font-family: var(--sk-heading-font);
+  letter-spacing: var(--sk-heading-spacing);
+}
+
+/* ---- Form controls ---- */
+[data-skin] .capsule-input,
+[data-skin] .chat-textarea {
+  background-color: var(--sk-input-bg);
+  color: var(--sk-input-text);
+  border: 1px solid var(--sk-input-border);
+}
+
+[data-skin] .capsule-input::placeholder,
+[data-skin] .chat-textarea::placeholder { color: var(--sk-placeholder); }
+
+[data-skin] select.capsule-input option {
+  background-color: var(--sk-bg-2);
+  color: var(--sk-text);
+}
+
+[data-skin] .capsule-button {
+  background-color: var(--sk-panel-2);
+  color: var(--sk-text);
+  border: 1px solid var(--sk-border);
+  border-radius: 9999px;
+}
+
+[data-skin] .btn-success { background-color: var(--sk-success); color: #fff; border-color: var(--sk-border-strong); }
+[data-skin] .btn-primary { background-color: var(--sk-accent); color: var(--sk-accent-text); border-color: var(--sk-border-strong); }
+[data-skin] .btn-danger  { background-color: var(--sk-danger); color: #fff; border-color: var(--sk-border-strong); }
+[data-skin] .btn-play    { background-color: var(--sk-success); color: #fff; border-color: var(--sk-border-strong); }
+
+[data-skin] .icon-btn-solid {
+  background: var(--sk-panel-2);
+  color: var(--sk-text);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+
+[data-skin] label,
+[data-skin] .hint-inline { color: var(--sk-text-muted); }
+[data-skin] .small-hint  { color: var(--sk-text-dim); }
+[data-skin] .dlg-danger  { color: var(--sk-danger); }
+[data-skin] .dlg-strong  { color: var(--sk-text); }
+
+/* ---- Lobby: sidebar + chat ---- */
+[data-skin] .sidebar {
+  background-color: var(--sk-bg-2);
+  border-right: 1px solid var(--sk-border);
+}
+
+[data-skin] .chat-history   { color: var(--sk-text-muted); }
+[data-skin] .mobile-back-btn { color: var(--sk-accent); }
+
+[data-skin] .chat-msg {
+  background: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+
+[data-skin] .chat-send-btn {
+  background-color: var(--sk-accent);
+  color: var(--sk-accent-text);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .chat-send-btn:active { background-color: var(--sk-accent); filter: brightness(0.85); }
+
+/* ---- Lobby: room cards ---- */
+/* No background here — a room card is painted with the host's player color. */
+[data-skin] .room-card {
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+  box-shadow: var(--sk-shadow);
+}
+
+[data-skin] .room-card-status { color: var(--sk-text-muted); }
+
+[data-skin] .join-button {
+  background-color: var(--sk-success);
+  color: #fff;
+  border: 1px solid var(--sk-border-strong);
+}
+
+/* Seat text and the Rejoin button sit on the HOST'S player color, which is set
+   inline and deliberately not skinned. Original's loud foregrounds are chosen to
+   stay legible on any hue, so they're left alone here on purpose — a muted skin
+   color could vanish against a similar host color. */
+
+[data-skin] .delete-room-btn {
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--sk-danger);
+  border: 1px solid var(--sk-danger);
+}
+[data-skin] .delete-room-btn:hover {
+  background: var(--sk-danger);
+  color: #fff;
+  border-color: var(--sk-danger);
+}
+
+[data-skin] .app-footer {
+  background-color: var(--sk-bg-2);
+  border-top: 1px solid var(--sk-border);
+  color: var(--sk-text-muted);
+}
+
+/* ---- Hamburger menu ---- */
+[data-skin] .menu-btn { color: var(--sk-header-text); }
+
+[data-skin] .app-menu {
+  background-color: var(--sk-menu-bg);
+  border: 1px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+  box-shadow: var(--sk-shadow);
+}
+
+[data-skin] .app-menu-item { color: var(--sk-text); border-radius: calc(var(--sk-radius) - 4px); }
+[data-skin] .app-menu-item:hover,
+[data-skin] .app-menu-item:focus { background-color: var(--sk-menu-hover); }
+[data-skin] .app-menu-item:active { background-color: var(--sk-panel-3); }
+
+/* ---- Overlays, dialogs, sheets, toast ---- */
+[data-skin] .overlay { background-color: var(--sk-scrim); }
+
+[data-skin] .overlay-content {
+  background-color: var(--sk-dialog-bg);
+  border: 1px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+  box-shadow: var(--sk-shadow);
+  color: var(--sk-text);
+}
+
+[data-skin] .overlay-content h2 { font-family: var(--sk-heading-font); }
+
+[data-skin] .bottom-sheet {
+  background-color: var(--sk-dialog-bg);
+  border-top: 1px solid var(--sk-border-strong);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+[data-skin] .sheet-content h3 { font-family: var(--sk-heading-font); color: var(--sk-text); }
+[data-skin] .sheet-content p  { color: var(--sk-text-muted); }
+
+[data-skin] .toast {
+  background-color: var(--sk-dialog-bg);
+  color: var(--sk-text);
+  border: 2px solid var(--sk-border-strong);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+
+/* ---- Hints toggle ---- */
+[data-skin] .switch .slider { background-color: var(--sk-panel-3); }
+[data-skin] .switch input:checked + .slider { background-color: var(--sk-success); }
+[data-skin] .switch .slider::before { background: var(--sk-text); }
+
+/* ---- About screen ---- */
+[data-skin] .about-intro { color: var(--sk-text-muted); }
+[data-skin] .about-intro strong { color: var(--sk-text); }
+
+[data-skin] .about-sec {
+  background-color: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+[data-skin] .about-sec > summary {
+  color: var(--sk-text);
+  font-family: var(--sk-heading-font);
+  letter-spacing: var(--sk-heading-spacing);
+}
+[data-skin] .about-sec > summary::after { color: var(--sk-accent); }
+
+[data-skin] .about-body { color: var(--sk-text-muted); }
+[data-skin] .about-body h4 { color: var(--sk-accent); }
+[data-skin] .about-body strong { color: var(--sk-text); }
+[data-skin] .about-table th { color: var(--sk-accent); }
+[data-skin] .about-table th,
+[data-skin] .about-table td { border-bottom: 1px solid var(--sk-border); }
+[data-skin] .about-dim { color: var(--sk-text-dim); }
+
+[data-skin] .about-tip {
+  background-color: var(--sk-panel-2);
+  border-left: 3px solid var(--sk-accent);
+  color: var(--sk-text);
+}
+[data-skin] .about-tip strong { color: var(--sk-text); }
+[data-skin] .about-footer { color: var(--sk-text-dim); }
+
+/* ---- Tic-Tac-Toe ---- */
+[data-skin] .cell {
+  background-color: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+  color: var(--sk-text);
+}
+[data-skin] .cell:active { background-color: var(--sk-panel-2); }
+
+[data-skin="glass-dark"] .cell.cell-x {
+  color: #6fe3ff !important;
+  background-color: rgba(111, 227, 255, 0.07) !important;
+  text-shadow: 0 0 14px rgba(111, 227, 255, 0.5);
+}
+[data-skin="glass-dark"] .cell.cell-o {
+  color: #ffb570 !important;
+  background-color: rgba(255, 181, 112, 0.07) !important;
+  text-shadow: 0 0 14px rgba(255, 181, 112, 0.5);
+}
+[data-skin="steampunk"] .cell.cell-x {
+  color: #e9c96a !important;
+  background-color: #33231a !important;
+  text-shadow: 0 1px 0 #1a1008;
+}
+[data-skin="steampunk"] .cell.cell-o {
+  color: #d08a4f !important;
+  background-color: #33231a !important;
+  text-shadow: 0 1px 0 #1a1008;
+}
+
+/* ---- Audio buttons ---- */
+[data-skin] .audio-btn {
+  background: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  color: var(--sk-text);
+}
+[data-skin] .audio-btn:hover { background: var(--sk-panel-2); }
+[data-skin] .audio-btn.off {
+  color: var(--sk-danger);
+  background: var(--sk-panel);
+  border-color: var(--sk-border);
+}
+
+/* ============================================================================
+   5 DICE BOARD  (player colors via --pc are intentionally left alone)
+   ========================================================================= */
+
+[data-skin] body.bg-five-dice { background-color: var(--sk-bg); }
+[data-skin] .fd-board { color: var(--sk-text); }
+[data-skin] .fd-sec-label,
+[data-skin] .fd-wins-title,
+[data-skin] .fd-win-head .fd-win-count { color: var(--sk-text-muted); }
+
+/* :not(.avail) so the "tap here" highlight keeps its bright accent — that's a
+   readability cue, not decoration. */
+[data-skin] .fd-cat:not(.avail) {
+  background: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .fd-cat.avail { border-radius: var(--sk-radius); }
+[data-skin] .fd-cat-ic   { color: var(--sk-text-muted); }
+/* Keep the accent icons meaningful */
+[data-skin] .fd-cat-ic.fd-q,
+[data-skin] .fd-q  { color: var(--sk-accent); }
+[data-skin] .fd-cat-ic.fd-star,
+[data-skin] .fd-star { color: #ffd76a; }
+[data-skin] .fd-cat-name { color: var(--sk-text); }
+[data-skin] .fd-cat-score {
+  color: var(--sk-text);
+  background: rgba(0, 0, 0, 0.28);
+}
+[data-skin] .fd-cat.scored { background: var(--sk-panel); border-color: var(--sk-border); }
+[data-skin] .fd-cat.scored .fd-cat-ic,
+[data-skin] .fd-cat.scored .fd-cat-name { color: var(--sk-text-dim); }
+[data-skin] .fd-cat.scored .fd-cat-score { color: var(--sk-text-muted); }
+
+[data-skin] .fd-upper-totals,
+[data-skin] .fd-turns-left { color: var(--sk-text-muted); }
+
+[data-skin] .fd-totrow {
+  background: var(--sk-panel);
+  color: var(--sk-text);
+  border-radius: var(--sk-radius);
+}
+/* The Grand Total row is tinted with the player's own color — leave it. */
+[data-skin] .fd-grandrow {
+  background: linear-gradient(180deg, rgba(var(--pc), .30), rgba(var(--pc), .12));
+  border: 1px solid rgba(var(--pc), .6);
+}
+
+[data-skin] .fd-wins {
+  background: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .fd-win-name  { color: var(--sk-text); }
+[data-skin] .fd-win-count { color: var(--sk-text); }
+[data-skin] .fd-win-tie .fd-win-name { color: var(--sk-text-muted); }
+[data-skin] .fd-win-row { border-top: 1px solid var(--sk-border); }
+[data-skin] .fd-win-row:first-of-type,
+[data-skin] .fd-win-head { border-top: none; }
+
+[data-skin] .fd-commit-overlay {
+  background: var(--sk-dialog-bg);
+  border: 1px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  color: var(--sk-text);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+
+[data-skin] #fd-scorecard {
+  color: var(--sk-text);
+  background: var(--sk-bg-2);
+  background-color: var(--sk-bg-2);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .fd-sc-cat { color: var(--sk-text); }
+[data-skin] .fd-ic     { color: var(--sk-text-muted); }
+[data-skin] .fd-sub    { color: var(--sk-text-muted); }
+[data-skin] .fd-sc-score.empty {
+  color: var(--sk-text-dim);
+  background: var(--sk-panel);
+  border-color: var(--sk-border);
+}
+
+/* Dice tray shelf + flat dice */
+[data-skin="glass-dark"] .fd-dice-row::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
+}
+[data-skin="steampunk"] .fd-dice-row::before {
+  background: linear-gradient(180deg, #6b4a22, #35210f);
+}
+[data-skin="steampunk"] .fd-die { border-color: rgba(233, 201, 106, 0.85); }
+
+/* ============================================================================
+   SCORE SHEET APP
+   ========================================================================= */
+
+/* The page background is the player's chosen color and stays that way (it's set
+   inline by Score.js, so CSS couldn't override it even if we wanted to). A veil
+   on #Body — which only exists in the Score app — pulls that color toward the
+   skin so the panels sitting on top of it read correctly. */
+/* isolation makes #Body a stacking context, so the z-index:-1 veil paints above
+   its own background but below all content. Without it the veil would fall into
+   the root stacking context and be painted OVER by the body's player color. */
+[data-skin] #Body { isolation: isolate; }
+[data-skin] #Body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--sk-veil);
+  pointer-events: none;
+  /* Behind every positioned element, so it can't cover the menu, toasts,
+     dialogs or the 3D dice canvas. */
+  z-index: -1;
+}
+
+[data-skin] .TitleBar {
+  background-color: var(--sk-header);
+  color: var(--sk-header-text);
+  font-family: var(--sk-heading-font);
+  border-bottom: 1px solid var(--sk-border);
+}
+
+[data-skin] .EighthRow,
+[data-skin] .TwentiethRow,
+[data-skin] .LockSheetRow,
+[data-skin] .GrandTotalRow,
+[data-skin] .LeaderBoard,
+[data-skin] .LeaderBoardEntry,
+[data-skin] .GameInfoBoxL,
+[data-skin] .GameInfoBoxR,
+[data-skin] .WhosHere,
+[data-skin] .PlayerName,
+[data-skin] .IDReadout,
+[data-skin] .Lobby,
+[data-skin] .Game,
+[data-skin] .Chat,
+[data-skin] .Instructions { color: var(--sk-text); }
+
+[data-skin] .Instructions:hover { color: var(--sk-accent); }
+
+[data-skin] .HalfRow,
+[data-skin] .WholeRow,
+[data-skin] .DiceBox,
+[data-skin] .HalfRowLeft,
+[data-skin] .LowerLineBoxL,
+[data-skin] .LowerLineBoxR {
+  color: var(--sk-text);
+  border-color: var(--sk-border);
+}
+
+[data-skin] .DiceBox {
+  background-color: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+}
+
+[data-skin] .ClearBtn {
+  color: var(--sk-text);
+  background-color: var(--sk-panel-2);
+  border-color: var(--sk-border);
+}
+
+[data-skin] .DialogBoxMsg {
+  background-color: var(--sk-dialog-bg);
+  color: var(--sk-text);
+  border: 1px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+
+[data-skin] .DiceCommitBtn {
+  color: var(--sk-text);
+  background: var(--sk-panel-2);
+  border: 1px solid var(--sk-border-strong);
+}
+[data-skin] .DiceCommitBtn.DiceCommitCancel { background: var(--sk-panel); }
+[data-skin] .DiceCommitBtn.DiceCommitManual { background: var(--sk-accent); color: var(--sk-accent-text); }
+
+/* Score Sheet hamburger */
+[data-skin] .MenuBtn { color: var(--sk-header-text); }
+[data-skin] .ScoreMenu {
+  background-color: var(--sk-menu-bg);
+  border: 1px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+  box-shadow: var(--sk-shadow);
+}
+[data-skin] .ScoreMenuItem { color: var(--sk-text); }
+[data-skin] .ScoreMenuItem:hover,
+[data-skin] .ScoreMenuItem:focus { background-color: var(--sk-menu-hover); }
+[data-skin] .ScoreMenuItem:active { background-color: var(--sk-panel-3); }
+
+/* Dice tray */
+[data-skin] .DiceTray {
+  background: var(--sk-panel-2);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .ScoreDie { border-color: var(--sk-border-strong); color: var(--sk-text); }
+[data-skin] .ScoreDie.held { outline-color: var(--sk-accent); border-color: var(--sk-accent); }
+[data-skin] .RollBtn {
+  color: #fff;
+  background: var(--sk-success);
+  border: 1px solid var(--sk-border-strong);
+}
+[data-skin="steampunk"] .RollBtn { color: var(--sk-accent-text); background: var(--sk-brass); }
+[data-skin] .DiceHint { color: var(--sk-text-muted); }
+
+/* Room entry screen */
+[data-skin] .GameSetupInputs,
+[data-skin] .Input {
+  background-color: var(--sk-input-bg);
+  color: var(--sk-input-text);
+  border: 2px solid var(--sk-input-border);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .GameSetupInputs::placeholder { color: var(--sk-placeholder); }
+[data-skin] .ColorBtn {
+  color: var(--sk-text);
+  background-color: var(--sk-panel-2);
+  border-color: var(--sk-border);
+}
+
+/* Lock switch (forms.css) */
+[data-skin] .p-form-switch > span {
+  background: var(--sk-panel-3);
+  border: 1px solid var(--sk-border);
+}
+[data-skin] .p-form-switch > input:checked + span { background: var(--sk-success); }
+[data-skin] .p-form-switch > span::after { background: var(--sk-text); }
+
+/* Long-press context menu */
+[data-skin] .context {
+  background: var(--sk-menu-bg);
+  color: var(--sk-text);
+  border: 1px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+  box-shadow: var(--sk-shadow);
+}
+[data-skin] .context-link:hover { background: var(--sk-menu-hover); }
+@media (prefers-color-scheme: dark) {
+  [data-skin] .context { background: var(--sk-menu-bg); color: var(--sk-text); }
+  [data-skin] .context-link:hover { background: var(--sk-menu-hover); }
+}
+
+/* Share + room list modals (service brand buttons keep their own colors) */
+[data-skin] .share-overlay { background: var(--sk-scrim); }
+[data-skin] .share-modal-content {
+  background: var(--sk-dialog-bg);
+  color: var(--sk-text);
+  border: 2px solid var(--sk-border-strong);
+  border-radius: var(--sk-radius);
+  -webkit-backdrop-filter: var(--sk-blur);
+  backdrop-filter: var(--sk-blur);
+}
+[data-skin] .share-modal-content h3 { font-family: var(--sk-heading-font); color: var(--sk-text) !important; }
+[data-skin] .share-url-box input {
+  background: var(--sk-input-bg);
+  border: 1px solid var(--sk-input-border);
+  color: var(--sk-input-text);
+}
+[data-skin] .share-url-box button {
+  background: var(--sk-accent);
+  color: var(--sk-accent-text);
+}
+[data-skin] .share-url-box button:hover { filter: brightness(1.1); }
+[data-skin] .share-close-btn {
+  border: 1px solid var(--sk-border);
+  color: var(--sk-text-muted);
+  background: transparent;
+}
+[data-skin] .share-close-btn:hover { background: var(--sk-menu-hover); color: var(--sk-text); }
+
+[data-skin] .room-list-item {
+  background: var(--sk-panel);
+  border: 1px solid var(--sk-border);
+  border-radius: var(--sk-radius);
+}
+[data-skin] .room-list-item:hover { background: var(--sk-panel-2); border-color: var(--sk-accent); }
+[data-skin] .room-link    { color: var(--sk-accent); }
+[data-skin] .room-players,
+[data-skin] .room-lastplayed,
+[data-skin] .room-list-note { color: var(--sk-text-muted) !important; }
+[data-skin] .room-list-error { color: var(--sk-danger) !important; }
+[data-skin] .share-room-id { color: var(--sk-accent) !important; }
+[data-skin] .share-modal-note { color: var(--sk-text-muted) !important; }
+[data-skin] .room-setup-btn {
+  background: var(--sk-accent) !important;
+  color: var(--sk-accent-text) !important;
+}
+
+/* ============================================================================
+   SKIN-SPECIFIC FLOURISHES
+   ========================================================================= */
+
+/* Steampunk: a brass rule with rivets under the headers */
+[data-skin="steampunk"] .top-header,
+[data-skin="steampunk"] .TitleBar {
+  border-bottom: 3px double var(--sk-brass);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.25));
+}
+
+[data-skin="steampunk"] .capsule-button,
+[data-skin="steampunk"] .join-button,
+[data-skin="steampunk"] .DiceCommitBtn {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 0 rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+}
+
+[data-skin="steampunk"] .room-card,
+[data-skin="steampunk"] .about-sec,
+[data-skin="steampunk"] .overlay-content {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.18));
+}
+
+/* Glass Dark: a soft top highlight on panels */
+[data-skin="glass-dark"] .room-card,
+[data-skin="glass-dark"] .about-sec,
+[data-skin="glass-dark"] .overlay-content,
+[data-skin="glass-dark"] .app-menu,
+[data-skin="glass-dark"] .ScoreMenu {
+  box-shadow: var(--sk-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* ============================================================================
+   SKIN PICKER (Settings screen)
+   ========================================================================= */
+
+.skin-options {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.skin-option {
+  flex: 1;
+  padding: 10px 6px 12px;
+  border-radius: 12px;
+  border: 2px solid #4a4a4a;
+  background: #333;
+  color: #ccc;
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.skin-option[aria-pressed="true"] {
+  border-color: #4a90e2;
+  color: #fff;
+  background: #3d3d3d;
+}
+
+.skin-swatch {
+  width: 100%;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: block;
+}
+
+.skin-swatch.sw-original  { background: linear-gradient(135deg, #1a2a40 0 50%, #2a2a2a 50% 100%); }
+.skin-swatch.sw-glass-dark { background: linear-gradient(135deg, #23262c 0 50%, #0d0f12 50% 100%); }
+.skin-swatch.sw-steampunk  { background: linear-gradient(135deg, #c9a227 0 50%, #2b1d16 50% 100%); }
+
+[data-skin] .skin-option {
+  background: var(--sk-panel);
+  border-color: var(--sk-border);
+  color: var(--sk-text-muted);
+}
+[data-skin] .skin-option[aria-pressed="true"] {
+  border-color: var(--sk-accent);
+  color: var(--sk-text);
+  background: var(--sk-panel-2);
+}

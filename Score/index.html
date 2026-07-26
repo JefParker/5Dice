@@ -2,9 +2,14 @@
 <!DOCTYPE html>
 <html>
 <head>
- <link rel='stylesheet' href='Score.css?v=6' />
+ <link rel='stylesheet' href='Score.css?v=8' />
  <link rel='stylesheet' href='forms.css' />
+ <link rel='stylesheet' href='../skins.css?v=2' />
  <link rel="manifest" href="Score.json">
+ <meta name="theme-color" content="#000000">
+ <!-- After theme-color so the skin can recolor it; not deferred, so the skin
+      is applied before first paint. -->
+ <script src='../skins.js?v=1'></script>
  <title>5 Dice Score Sheet</title>
  <meta http-equiv="refresh" content="86400">
  <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
@@ -22,7 +27,6 @@
  <meta property="twitter:domain" content="https://5Dice.app/Score/">
  <meta name="twitter:title" content="Score">
  <meta name="twitter:image" content="https://5Dice.app/Score/img/SummeryCard.png">
- <meta name="theme-color" content="#000000">
  <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1'>
  <meta name="Description" content="Score">
  <meta name="Keywords" content="5 Dice Score Sheet">
@@ -36,7 +40,7 @@
  <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
  <script src="../dice3d.js?v=21"></script>
  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
- <script src='Score.js?v=17' defer></script>
+ <script src='Score.js?v=18' defer></script>
 </head>
 
 <body id='Body'>
@@ -46,7 +50,7 @@
 <div id="share-modal" class="share-overlay hidden" style="display: none;">
   <div class="share-modal-content">
     <h3 style="margin-top: 0; margin-bottom: 8px; color: #ffffff;">Share Game Room</h3>
-    <p style="margin-bottom: 14px; font-size: 0.95rem; color: #dddddd;">Invite players to join Room <strong id="share-room-id" style="color: #00ffcc;"></strong>:</p>
+    <p class="share-modal-note" style="margin-bottom: 14px; font-size: 0.95rem;">Invite players to join Room <strong id="share-room-id" class="share-room-id"></strong>:</p>
     
     <div class="share-url-box">
       <input type="text" id="share-url-input" readonly />
@@ -80,7 +84,7 @@
   <div class="share-modal-content" style="max-width: 420px; text-align: left;">
     <h3 style="margin-top: 0; margin-bottom: 12px; color: #ffffff; text-align: center;">Active Game Rooms</h3>
     <div id="room-list-container" style="max-height: 260px; overflow-y: auto; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
-      <p style="color: #aaaaaa; text-align: center;">Loading rooms...</p>
+      <p class="room-list-note" style="text-align: center;">Loading rooms...</p>
     </div>
     <div style="text-align: center;">
       <button class="share-close-btn" onclick="hideRoomListModal()">Close</button>

@@ -960,6 +960,23 @@ only screen and (max-device-height: 320px) {
     font-size: 1rem;
 }
 
+/* Room-list text/buttons. Were inline styles; classed so skins can reach them. */
+.room-list-note { color: #cccccc; }
+.share-modal-note { color: #dddddd; }
+.share-room-id { color: #00ffcc; }
+.room-list-error { color: #ff5555; }
+.room-lastplayed { color: #7a7f9a; }
+.room-setup-btn {
+    background: #00ffcc;
+    color: #0f0f1b;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+}
+
 .room-players {
     color: #aaaaaa;
     font-size: 0.85rem;

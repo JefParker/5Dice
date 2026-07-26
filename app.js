@@ -287,7 +287,7 @@ function startLobbyFirebase() {
 
 // --- GLOBAL CHAT ---
 
-function appendChatMessage(author, text, id = null, timestamp = null, color = '#333') {
+function appendChatMessage(author, text, id = null, timestamp = null, color = null) {
   if (!id) id = Math.random().toString(36).substring(2);
   if (!timestamp) timestamp = Date.now();
 
@@ -307,7 +307,9 @@ function appendChatMessage(author, text, id = null, timestamp = null, color = '#
 
   const div = document.createElement('div');
   div.className = 'chat-msg';
-  div.style.backgroundColor = color || '#333';
+  // Empty string, not a literal — lets the stylesheet (and the active skin) win
+  // when the sender has no color, e.g. System notices.
+  div.style.backgroundColor = color || '';
   div.innerHTML = `<strong>${escapeHtml(author)}:</strong> ${escapeHtml(text)}`;
   chatHistory.appendChild(div);
   chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -511,6 +513,13 @@ document.addEventListener('keydown', (e) => {
 
 // --- SETTINGS UI ---
 
+// The save button changes color with its meaning. Classes rather than inline
+// styles, so skins can restyle it.
+function setSaveBtnRole(btn, role) {
+  btn.classList.toggle('btn-success', role === 'success');
+  btn.classList.toggle('btn-primary', role === 'primary');
+}
+
 const openSettings = () => {
   closeAppMenu();
   rememberMenuOrigin();
@@ -520,7 +529,7 @@ const openSettings = () => {
   const btn = document.getElementById('btn-save-settings');
   const backLabel = (menuReturnScreen === 'screen-game') ? "Back to Game" : "Back to Lobby";
   btn.innerText = myName ? backLabel : "Save & Return";
-  btn.style.backgroundColor = myName ? "#28a745" : "#4a90e2";
+  setSaveBtnRole(btn, myName ? 'success' : 'primary');
   document.getElementById('settings-player-id-section').style.display = 'block';
 
   const colorPicker = document.getElementById('player-color-picker');
@@ -528,6 +537,8 @@ const openSettings = () => {
 
   const hintsToggle = document.getElementById('hints-toggle');
   if (hintsToggle) hintsToggle.checked = hintsEnabled;
+
+  syncSkinPicker();
 
   if (document.getElementById('settings-uuid')) {
     document.getElementById('settings-uuid').value = myUuid;
@@ -542,12 +553,12 @@ document.getElementById('global-player-name').addEventListener('input', (e) => {
   const btn = document.getElementById('btn-save-settings');
   if (!myName) {
     btn.innerText = "Head to Lobby";
-    btn.style.backgroundColor = "#28a745";
+    setSaveBtnRole(btn, 'success');
   } else {
     const isChanged = (newName && newName !== myName);
     const backLabel = (menuReturnScreen === 'screen-game') ? "Back to Game" : "Back to Lobby";
     btn.innerText = isChanged ? "Save & Return" : backLabel;
-    btn.style.backgroundColor = isChanged ? "#4a90e2" : "#28a745";
+    setSaveBtnRole(btn, isChanged ? 'primary' : 'success');
   }
 });
 
@@ -586,6 +597,31 @@ if (colorPickerEl) {
     saveSharedProfile(myName, e.target.value);
   });
 }
+
+// --- SKIN PICKER ---
+// window.Skins comes from skins.js, which runs in <head> before this file.
+function syncSkinPicker() {
+  if (!window.Skins) return;
+  const current = window.Skins.get();
+  document.querySelectorAll('.skin-option').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.skinValue === current));
+  });
+}
+
+document.querySelectorAll('.skin-option').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!window.Skins) return;
+    window.Skins.set(btn.dataset.skinValue);
+    syncSkinPicker();
+  });
+});
+
+// Another tab or the Score Sheet changed it — keep the picker honest.
+window.addEventListener('storage', (e) => {
+  if (e.key === 'skin') syncSkinPicker();
+});
+
+syncSkinPicker();
 
 const hintsToggleEl = document.getElementById('hints-toggle');
 if (hintsToggleEl) {
@@ -746,7 +782,7 @@ function renderRooms() {
     const div = document.createElement('div');
     div.className = 'room-card';
     if (isReturning) {
-      div.style.border = '2px solid #00ffcc';
+      div.classList.add('room-card-returning');
     }
     
     const hostColor = r.hostColor || '#28a745';
@@ -756,12 +792,12 @@ function renderRooms() {
     let seatText = '';
     let isFull = false;
     if (isReturning) {
-      seatText = `<p style="font-size: 0.85rem; margin-top: 4px; font-weight: bold; color: #00ffcc;">🎮 Game In Progress (You are playing)</p>`;
+      seatText = `<p class="room-seats seats-playing">🎮 Game In Progress (You are playing)</p>`;
     } else if (r.maxPlayers && r.status === 'open') {
       const currentCount = playerList.length;
       const emptySeats = Math.max(0, r.maxPlayers - currentCount);
       isFull = emptySeats === 0;
-      seatText = `<p style="font-size: 0.85rem; margin-top: 4px; font-weight: bold; color: ${isFull ? '#ff4444' : '#44ff44'};">` + 
+      seatText = `<p class="room-seats ${isFull ? 'seats-full' : 'seats-open'}">` +
                  (isFull ? 'Game Full' : `${emptySeats} Seat${emptySeats === 1 ? '' : 's'} Remaining`) + 
                  `</p>`;
     }
@@ -773,7 +809,7 @@ function renderRooms() {
       <h3>${escapeHtml(r.name)} - ${escapeHtml(displayGameType)}</h3>
       <p>Host: ${escapeHtml(r.hostName || 'Host')}</p>
       ${seatText}
-      <button class="capsule-button small" onclick="joinRoom('${r.id}')" ${isFull && !isReturning ? 'disabled' : ''} style="${isReturning ? 'background-color: #0088cc; font-weight: bold;' : ''}">${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
+      <button class="capsule-button small${isReturning ? ' btn-rejoin' : ''}" onclick="joinRoom('${r.id}')" ${isFull && !isReturning ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
     `;
     list.appendChild(div);
   });
@@ -1333,7 +1369,7 @@ function checkWin() {
 const handleLeaveGame = async () => {
   const gameScreen = document.getElementById('screen-game');
   if (gameScreen) {
-    gameScreen.style.backgroundColor = '#2a2a2a';
+    gameScreen.style.backgroundColor = '';
     gameScreen.classList.remove('tie-background');
   }
 
@@ -1406,7 +1442,7 @@ let toastTimeoutId = null;
 function showToast(msg, bgColor = null) {
   if (!toastEl) return;
   toastEl.innerText = msg;
-  toastEl.style.backgroundColor = bgColor || '#333';
+  toastEl.style.backgroundColor = bgColor || '';
   toastEl.classList.remove('hidden');
   if (toastTimeoutId) clearTimeout(toastTimeoutId);
   toastTimeoutId = setTimeout(() => { toastEl.classList.add('hidden'); }, 3000);
@@ -1548,7 +1584,7 @@ if (!myName) {
   if (firstRunMenuBtn) firstRunMenuBtn.style.display = 'none';
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = "Head to Lobby";
-  btn.style.backgroundColor = "#28a745";
+  setSaveBtnRole(btn, 'success');
   const colorPicker = document.getElementById('player-color-picker');
   if (colorPicker) colorPicker.value = myColor;
   showScreen('screen-settings');
