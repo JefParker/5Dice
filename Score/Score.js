@@ -1767,9 +1767,6 @@ const MakeContextMenuHTML = (sWindowShowing) => {
     sPage += "<li class='context-link' id='Share'>";
     sPage += "<span class='context-label'>Share</span>";
     sPage += "</li>";
-    sPage += "<li class='context-link' id='About'>";
-    sPage += "<span class='context-label'>About</span>";
-    sPage += "</li>";
     sPage += "<li class='context-link' id='ToggleDice'>";
     sPage += "<span class='context-label'>Dice</span>";
     sPage += "</li>";
@@ -1999,13 +1996,6 @@ const InitializeContextMenu = (sWindowShowing) => {
     if (gameIdBtn) {
         gameIdBtn.addEventListener("click", () => {
             ShowEnterID();
-        });
-    }
-
-    const aboutBtn = document.querySelector("#About");
-    if (aboutBtn) {
-        aboutBtn.addEventListener("click", () => {
-            alert("Score Sheet rev. v240225k");
         });
     }
 
