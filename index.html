@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=26">
+  <link rel="stylesheet" href="styles.css?v=27">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -15,12 +15,7 @@
     <div id="screen-lobby" class="screen active">
       <header class="top-header" style="position: relative;">
         <h1>🎲 Lobby 🎲</h1>
-        <button id="btn-menu" class="menu-btn" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
-        <nav id="lobby-menu" class="app-menu hidden" role="menu" aria-labelledby="btn-menu">
-          <button type="button" role="menuitem" class="app-menu-item" id="menu-settings"><span class="app-menu-ic">⚙️</span>Settings</button>
-          <button type="button" role="menuitem" class="app-menu-item" id="menu-about"><span class="app-menu-ic">ℹ️</span>About</button>
-          <button type="button" role="menuitem" class="app-menu-item" id="menu-score-sheet"><span class="app-menu-ic">📋</span>5Dice Score Sheet</button>
-        </nav>
+        <button class="menu-btn" data-menu="lobby" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
       </header>
       <div class="content-layout">
         <aside id="chat-sidebar" class="sidebar">
@@ -54,8 +49,8 @@
     <!-- Screen C: Settings -->
     <div id="screen-settings" class="screen hidden">
       <header class="top-header" style="position: relative;">
-        <button id="btn-back-lobby-settings" class="icon-btn" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; border: none; background: transparent; cursor: pointer;" aria-label="Back to lobby" title="Back to lobby">⬅️</button>
         <h1>⚙️ Settings</h1>
+        <button class="menu-btn" data-menu="settings" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
       </header>
       <div class="setup-container">
         <label for="global-player-name">Your Display Name</label>
@@ -104,8 +99,8 @@
     <!-- Screen D: About -->
     <div id="screen-about" class="screen hidden">
       <header class="top-header" style="position: relative;">
-        <button id="btn-back-lobby-about" class="icon-btn" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; border: none; background: transparent; cursor: pointer;" aria-label="Back to lobby" title="Back to lobby">⬅️</button>
         <h1>ℹ️ About</h1>
+        <button class="menu-btn" data-menu="about" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
       </header>
       <div class="about-container">
         <p class="about-intro">
@@ -343,9 +338,8 @@
     <!-- Screen C: Game Area (Tic-Tac-Toe) -->
     <div id="screen-game" class="screen hidden">
       <header class="top-header" style="position: relative;">
-        <button id="btn-back-lobby-header" class="icon-btn" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; border: none; background: transparent; cursor: pointer;">⬅️</button>
         <h1 id="game-room-name">🎲 5Dice 🎲</h1>
-        <div class="audio-controls" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; z-index: 100;">
+        <div class="audio-controls" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; z-index: 100;">
           <button id="btn-toggle-speaker" class="audio-btn off" aria-label="Toggle Speaker" title="Toggle Speaker">
             <svg id="icon-speaker-on" class="hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
             <svg id="icon-speaker-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
@@ -355,6 +349,7 @@
             <svg id="icon-mic-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M19 11h-2c0 .91-.26 1.75-.69 2.48l1.46 1.46C18.54 13.82 19 12.46 19 11zM14.98 11.17c.02-.38.02-.77.02-1.17V5c0-1.66-1.34-3-3-3-.91 0-1.73.41-2.29 1.05l5.27 5.27v-2.15zM4.27 3L3 4.27l6 6V11c0 1.66 1.34 3 3 3 .23 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c1.39-.2 2.65-.79 3.69-1.61l2.04 2.04 1.27-1.27L4.27 3z"/></svg>
           </button>
         </div>
+        <button class="menu-btn" data-menu="game" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
       </header>
       <audio id="remote-audio" autoplay></audio>
       <div class="game-container">
@@ -511,6 +506,6 @@
   <script src="dice3d.js?v=21"></script>
   <script src="five-dice.js?v=34"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=36"></script>
 </body>
 </html>

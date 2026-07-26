@@ -327,21 +327,71 @@ body {
     height: 1px;
 }
 
-.LobbyLink {
+/* Hamburger menu (the long-press context menu keeps the score-sheet extras) */
+.MenuBtn {
     position: fixed;
     top: 6px;
-    left: 10px;
+    right: 10px;
     z-index: 1600;
     font-size: 1.6rem;
     line-height: 1;
-    padding: 4px 6px;
+    padding: 4px 8px;
+    border: none;
+    color: #fff;
     cursor: pointer;
     background: transparent;
     -webkit-tap-highlight-color: transparent;
 }
 
-.LobbyLink:active {
+.MenuBtn:active {
     transform: scale(0.92);
+}
+
+.ScoreMenu {
+    position: fixed;
+    top: 44px;
+    right: 10px;
+    z-index: 1601;
+    min-width: 200px;
+    padding: 6px;
+    background-color: #243447;
+    border: 1px solid #3d4f66;
+    border-radius: 12px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+    text-align: left;
+}
+
+.ScoreMenuItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 14px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.95rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ScoreMenuItem:hover,
+.ScoreMenuItem:focus {
+    background-color: #33475f;
+    outline: none;
+}
+
+.ScoreMenuItem:active {
+    background-color: #3d5470;
+}
+
+.ScoreMenuIc {
+    font-size: 1.1rem;
+    width: 1.4rem;
+    text-align: center;
+    flex-shrink: 0;
 }
 
 .DiceRack {
@@ -785,7 +835,7 @@ only screen and (max-device-height: 320px) {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 1700; /* above the hamburger (1600/1601) so modals aren't clickable-through */
     padding: 16px;
     box-sizing: border-box;
 }

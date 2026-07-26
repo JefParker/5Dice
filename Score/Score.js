@@ -204,6 +204,15 @@ const ShowEnterID = () => {
     sPage += "<datalist id='presetColors'><option value='#235880'/><option value='#3F1F74'/><option value='#6F4F1F'/><option value='#2E2B53'/><option value='#264C1C'/><option value='#533A51'/><option value='#220066'/><option value='#181B59'/><option value='RebeccaPurple'/><option value='#404040'/></datalist>";
 
     sPage += "</div>";
+
+    // Menu here too, so this screen is never a dead end. No Settings item — this
+    // screen IS the settings.
+    sPage += "<button id='MenuBtn' class='MenuBtn' onclick='ToggleScoreMenu(event)' title='Menu' aria-label='Menu' aria-haspopup='true' aria-expanded='false'>&#9776;</button>";
+    sPage += "<nav id='ScoreMenu' class='ScoreMenu hidden' role='menu'>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToLobby()'><span class='ScoreMenuIc'>&#127968;</span>Lobby</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToAbout()'><span class='ScoreMenuIc'>&#8505;&#65039;</span>About</button>";
+    sPage += "</nav>";
+
     document.getElementById('Main').innerHTML = sPage;
 
     document.getElementById('GameID').value = g_objUserData.GameID;
@@ -283,6 +292,44 @@ const IDGo = () => {
 const GoToLobby = () => {
     window.location.href = "../";
 };
+
+// The About page lives in the main app; #about opens it directly.
+const GoToAbout = () => {
+    window.location.href = "../#about";
+};
+
+// --- HAMBURGER MENU ---
+// The long-press context menu still holds the score-sheet-specific items
+// (Share, Dice, Refresh Leaders, Clear Room, Get Room List).
+
+const CloseScoreMenu = () => {
+    const menu = document.getElementById('ScoreMenu');
+    const btn = document.getElementById('MenuBtn');
+    if (menu) menu.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+};
+
+const ToggleScoreMenu = (ev) => {
+    if (ev) ev.stopPropagation();
+    const menu = document.getElementById('ScoreMenu');
+    const btn = document.getElementById('MenuBtn');
+    if (!menu) return;
+    const isOpen = !menu.classList.contains('hidden');
+    if (isOpen) {
+        CloseScoreMenu();
+    } else {
+        // ev.stopPropagation() above also stops the context menu's own document
+        // click-closer, so dismiss it here.
+        if (typeof contextMenu !== 'undefined' && contextMenu) contextMenu.style.visibility = null;
+        menu.classList.remove('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+    }
+};
+
+document.addEventListener('click', () => CloseScoreMenu());
+document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') CloseScoreMenu();
+});
 
 const ShowScoreMain = () => {
     let sPage = "";
@@ -455,7 +502,12 @@ const ShowScoreMain = () => {
 
     sPage += "</div>"; // end Summary third
 
-    sPage += "<div id='LobbyLink' class='LobbyLink' onclick='GoToLobby()' title='Back to the game lobby' aria-label='Back to lobby'>⬅️</div>";
+    sPage += "<button id='MenuBtn' class='MenuBtn' onclick='ToggleScoreMenu(event)' title='Menu' aria-label='Menu' aria-haspopup='true' aria-expanded='false'>&#9776;</button>";
+    sPage += "<nav id='ScoreMenu' class='ScoreMenu hidden' role='menu'>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToLobby()'><span class='ScoreMenuIc'>&#127968;</span>Lobby</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='CloseScoreMenu(); ShowEnterID();'><span class='ScoreMenuIc'>&#9881;&#65039;</span>Settings</button>";
+    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem' onclick='GoToAbout()'><span class='ScoreMenuIc'>&#8505;&#65039;</span>About</button>";
+    sPage += "</nav>";
 
     sPage += MakeContextMenuHTML("");
 
@@ -1974,6 +2026,7 @@ const InitializeContextMenu = (sWindowShowing) => {
 
         document.addEventListener("contextmenu", (ev) => {
             ev.preventDefault();
+            CloseScoreMenu(); // never show both menus at once
             updateMenuPositon(ev.clientX, ev.clientY);
             if (contextMenu) contextMenu.style.visibility = "visible";
         });

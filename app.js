@@ -379,75 +379,150 @@ document.querySelector('.main-content').addEventListener('click', () => {
   }
 });
 
-// --- LOBBY MENU ---
+// --- APP MENU ---
+// One ☰ per screen. The items are generated per screen so the menu never offers
+// you the page you're already on.
 
-const menuBtn = document.getElementById('btn-menu');
-const lobbyMenu = document.getElementById('lobby-menu');
+// Where Settings/About were opened from, so we can send you back to it.
+let menuReturnScreen = 'screen-lobby';
 
-const closeLobbyMenu = () => {
-  if (!lobbyMenu) return;
-  lobbyMenu.classList.add('hidden');
-  if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+const MENU_ACTIONS = {
+  lobby:      { icon: '🏠',  label: 'Lobby' },
+  game:       { icon: '🎲',  label: 'Back to Game' },
+  leaveGame:  { icon: '🚪',  label: 'Leave Game' },
+  settings:   { icon: '⚙️', label: 'Settings' },
+  about:      { icon: 'ℹ️', label: 'About' },
+  scoreSheet: { icon: '📋',  label: '5Dice Score Sheet' }
 };
 
-const toggleLobbyMenu = () => {
-  if (!lobbyMenu) return;
-  const isOpen = !lobbyMenu.classList.contains('hidden');
-  if (isOpen) {
-    closeLobbyMenu();
-  } else {
-    lobbyMenu.classList.remove('hidden');
-    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+function menuItemsFor(menuName) {
+  // From Settings/About the "go back" item points wherever you came from.
+  const backItem = (menuReturnScreen === 'screen-game') ? 'game' : 'lobby';
+  switch (menuName) {
+    case 'lobby':    return ['settings', 'about', 'scoreSheet'];
+    case 'settings': return [backItem, 'about', 'scoreSheet'];
+    case 'about':    return [backItem, 'settings', 'scoreSheet'];
+    case 'game':     return ['leaveGame', 'settings', 'about', 'scoreSheet'];
+    default:         return ['lobby'];
   }
-};
-
-if (menuBtn) {
-  menuBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleLobbyMenu();
-  });
 }
 
-if (lobbyMenu) lobbyMenu.addEventListener('click', (e) => e.stopPropagation());
+// Remember the screen a Settings/About visit started from. Hopping between
+// Settings and About preserves the original origin.
+function rememberMenuOrigin() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return;
+  if (active.id === 'screen-game') menuReturnScreen = 'screen-game';
+  else if (active.id === 'screen-lobby') menuReturnScreen = 'screen-lobby';
+}
 
-document.addEventListener('click', () => closeLobbyMenu());
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeLobbyMenu();
+function closeAppMenu() {
+  document.querySelectorAll('.app-menu').forEach(nav => nav.classList.add('hidden'));
+  document.querySelectorAll('.menu-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+}
+
+// Navigating away from Settings by any route shouldn't silently drop a name the
+// user just typed.
+function commitSettingsName() {
+  const settingsScreen = document.getElementById('screen-settings');
+  if (!settingsScreen || !settingsScreen.classList.contains('active')) return;
+  const newName = document.getElementById('global-player-name').value.trim();
+  if (newName && newName !== myName) saveSharedProfile(newName, myColor);
+}
+
+function runMenuAction(key) {
+  closeAppMenu();
+  const settingsScreen = document.getElementById('screen-settings');
+  const onSettings = settingsScreen && settingsScreen.classList.contains('active');
+
+  switch (key) {
+    case 'lobby':
+    case 'game':
+      // Leaving Settings goes through the save button so a changed name sticks.
+      if (onSettings) {
+        document.getElementById('btn-save-settings').click();
+      } else {
+        if (key === 'lobby') menuReturnScreen = 'screen-lobby';
+        showScreen(key === 'game' ? 'screen-game' : 'screen-lobby');
+      }
+      break;
+    case 'leaveGame':
+      menuReturnScreen = 'screen-lobby';
+      handleLeaveGame();
+      break;
+    case 'settings':
+      openSettings();
+      break;
+    case 'about':
+      commitSettingsName();
+      rememberMenuOrigin();
+      showScreen('screen-about');
+      break;
+    case 'scoreSheet':
+      commitSettingsName();
+      window.location.href = 'Score/';
+      break;
+  }
+}
+
+function toggleAppMenu(btn, nav) {
+  const wasOpen = !nav.classList.contains('hidden');
+  closeAppMenu();
+  if (wasOpen) return;
+
+  nav.innerHTML = '';
+  menuItemsFor(btn.dataset.menu).forEach(key => {
+    const spec = MENU_ACTIONS[key];
+    if (!spec) return;
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'app-menu-item';
+    item.setAttribute('role', 'menuitem');
+    const ic = document.createElement('span');
+    ic.className = 'app-menu-ic';
+    ic.textContent = spec.icon;
+    item.appendChild(ic);
+    item.appendChild(document.createTextNode(spec.label));
+    item.addEventListener('click', () => runMenuAction(key));
+    nav.appendChild(item);
+  });
+
+  nav.classList.remove('hidden');
+  btn.setAttribute('aria-expanded', 'true');
+}
+
+document.querySelectorAll('.menu-btn').forEach(btn => {
+  const nav = document.createElement('nav');
+  nav.className = 'app-menu hidden';
+  nav.setAttribute('role', 'menu');
+  btn.parentElement.appendChild(nav);
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleAppMenu(btn, nav);
+  });
+  nav.addEventListener('click', (e) => e.stopPropagation());
 });
 
-const menuAboutBtn = document.getElementById('menu-about');
-if (menuAboutBtn) {
-  menuAboutBtn.addEventListener('click', () => {
-    closeLobbyMenu();
-    showScreen('screen-about');
-  });
-}
-
-const menuScoreSheetBtn = document.getElementById('menu-score-sheet');
-if (menuScoreSheetBtn) {
-  menuScoreSheetBtn.addEventListener('click', () => {
-    closeLobbyMenu();
-    window.location.href = 'Score/';
-  });
-}
-
-const aboutBackBtn = document.getElementById('btn-back-lobby-about');
-if (aboutBackBtn) {
-  aboutBackBtn.addEventListener('click', () => showScreen('screen-lobby'));
-}
+document.addEventListener('click', () => closeAppMenu());
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAppMenu();
+});
 
 // --- SETTINGS UI ---
 
 const openSettings = () => {
-  closeLobbyMenu();
-  const backArrow = document.getElementById('btn-back-lobby-settings');
-  if (backArrow) backArrow.style.display = '';
+  closeAppMenu();
+  rememberMenuOrigin();
+  const settingsMenuBtn = document.querySelector('.menu-btn[data-menu="settings"]');
+  if (settingsMenuBtn) settingsMenuBtn.style.display = '';
   document.getElementById('global-player-name').value = myName;
   const btn = document.getElementById('btn-save-settings');
-  btn.innerText = myName ? "Back to Lobby" : "Save & Return";
+  const backLabel = (menuReturnScreen === 'screen-game') ? "Back to Game" : "Back to Lobby";
+  btn.innerText = myName ? backLabel : "Save & Return";
   btn.style.backgroundColor = myName ? "#28a745" : "#4a90e2";
   document.getElementById('settings-player-id-section').style.display = 'block';
-  
+
   const colorPicker = document.getElementById('player-color-picker');
   if (colorPicker) colorPicker.value = myColor;
 
@@ -462,9 +537,6 @@ const openSettings = () => {
   showScreen('screen-settings');
 };
 
-const menuSettingsBtn = document.getElementById('menu-settings');
-if (menuSettingsBtn) menuSettingsBtn.addEventListener('click', openSettings);
-
 document.getElementById('global-player-name').addEventListener('input', (e) => {
   const newName = e.target.value.trim();
   const btn = document.getElementById('btn-save-settings');
@@ -473,24 +545,38 @@ document.getElementById('global-player-name').addEventListener('input', (e) => {
     btn.style.backgroundColor = "#28a745";
   } else {
     const isChanged = (newName && newName !== myName);
-    btn.innerText = isChanged ? "Save & Return" : "Back to Lobby";
+    const backLabel = (menuReturnScreen === 'screen-game') ? "Back to Game" : "Back to Lobby";
+    btn.innerText = isChanged ? "Save & Return" : backLabel;
     btn.style.backgroundColor = isChanged ? "#4a90e2" : "#28a745";
   }
 });
 
-const settingsBackBtn = document.getElementById('btn-back-lobby-settings');
-if (settingsBackBtn) settingsBackBtn.addEventListener('click', () => {
-  document.getElementById('btn-save-settings').click();
-});
-
 document.getElementById('btn-save-settings').addEventListener('click', () => {
-  const newName = document.getElementById('global-player-name').value.trim();
-  if (newName) {
-    saveSharedProfile(newName, myColor);
+  const nameField = document.getElementById('global-player-name');
+  let newName = nameField.value.trim();
+
+  if (!newName) {
+    if (!myName) {
+      // First run — a name is required before there's a lobby to go to.
+      alert("Please enter a display name to continue.");
+      return;
+    }
+    // Field was cleared but a name already exists. Keep the old one instead of
+    // trapping the user on this screen with no way out.
+    newName = myName;
+    nameField.value = myName;
+  }
+
+  saveSharedProfile(newName, myColor);
+
+  // If Settings was opened mid-game, drop straight back into the game rather
+  // than the lobby — the seat was never given up.
+  if (menuReturnScreen === 'screen-game' && currentRoomId) {
+    showScreen('screen-game');
+  } else {
+    menuReturnScreen = 'screen-lobby';
     showScreen('screen-lobby');
     startLobbyFirebase();
-  } else {
-    alert("Please enter a display name to continue.");
   }
 });
 
@@ -1303,9 +1389,6 @@ const handleLeaveGame = async () => {
   }
 };
 
-const headerBackBtn = document.getElementById('btn-back-lobby-header');
-if (headerBackBtn) headerBackBtn.addEventListener('click', handleLeaveGame);
-
 // --- PLAYER ID SYNC LOGIC ---
 const settingsUuidInput = document.getElementById('settings-uuid');
 const updateUuidBtn = document.getElementById('update-uuid-btn');
@@ -1460,9 +1543,9 @@ setInterval(() => {
 }, 60000);
 if (!myName) {
   document.getElementById('settings-player-id-section').style.display = 'none';
-  // No lobby to go back to until a name is set — hide the back arrow.
-  const firstRunBack = document.getElementById('btn-back-lobby-settings');
-  if (firstRunBack) firstRunBack.style.display = 'none';
+  // No lobby to go back to until a name is set — hide the menu on first run.
+  const firstRunMenuBtn = document.querySelector('.menu-btn[data-menu="settings"]');
+  if (firstRunMenuBtn) firstRunMenuBtn.style.display = 'none';
   const btn = document.getElementById('btn-save-settings');
   btn.innerText = "Head to Lobby";
   btn.style.backgroundColor = "#28a745";
@@ -1471,4 +1554,13 @@ if (!myName) {
   showScreen('screen-settings');
 } else {
   startLobbyFirebase();
+
+  // Deep links, so the Score Sheet (a separate page) can jump straight here.
+  const landingHash = (window.location.hash || '').toLowerCase();
+  if (landingHash === '#about' || landingHash === '#settings') {
+    // Drop the hash so a later refresh lands on the lobby as usual.
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (landingHash === '#about') showScreen('screen-about');
+    else openSettings();
+  }
 }

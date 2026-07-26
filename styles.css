@@ -699,7 +699,7 @@ body.bg-five-dice {
 .fd-cat.avail.zero .fd-cat-name { color: #dbe7f4; }
 .fd-cat.avail.zero .fd-cat-score { color: #7a93ab; background: rgba(0,0,0,.28); }
 
-/* Lobby hamburger menu */
+/* Hamburger menu (lobby, settings, about, game) */
 .menu-btn {
   position: absolute;
   right: 12px;
