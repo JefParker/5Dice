@@ -30,7 +30,7 @@
     },
     {
       "src": "img/Score.ico",
-      "type": "image/ico",
+      "type": "image/x-icon",
       "sizes": "231x231"
     },
     {
@@ -44,7 +44,7 @@
       "name": "Score",
       "short_name": "Score",
       "description": "5 Dice Score Sheet",
-      "url": "Score/",
+      "url": "/Score/",
       "icons": [
         {
           "src": "img/Score192.png",

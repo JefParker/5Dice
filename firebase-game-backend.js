@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, orderByChild, endAt, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -38,6 +38,7 @@ async function requireAuth() {
 }
 
 let roomsUnsubscribe = null;
+let connectedUnsubscribe = null;
 
 // A lobby room nobody has entered for this long is deleted. There is no server
 // cron, so clients sweep: on lobby start, on room creation, and periodically
@@ -50,14 +51,40 @@ let chatUnsubscribe = null;
 let gameStateUnsubscribe = null;
 let gameEventsUnsubscribe = null;
 
+// Generation counters for the game listeners. listenGameState/listenGameEvents
+// await async work (auth, serverTimeOffset) before subscribing; if the user
+// leaves the room during that window, stopGameListeners() has nothing to cancel
+// yet and the late subscription would live forever. Every stop/start bumps the
+// generation, and a pending listen that comes back to find a different
+// generation simply doesn't subscribe. One counter per listener so starting
+// one doesn't invalidate the other's in-flight start.
+let gameStateGeneration = 0;
+let gameEventsGeneration = 0;
+
+// Read the client<->server clock offset once (the .info path is synthetic and
+// must be read with a listener, not get()). Falls back to 0 after 3s.
+function getServerTimeOffset() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
+    try {
+      onValue(ref(db, '.info/serverTimeOffset'), (snap) => finish(snap.val() || 0), { onlyOnce: true });
+    } catch (e) { finish(0); }
+    setTimeout(() => finish(0), 3000);
+  });
+}
+
 window.firebaseGameBackend = {
   isConnected: false,
   authPromise: authPromise,
 
   init: async (onStatusChange) => {
     if (!(await requireAuth())) return;
+    // init() runs again every time the lobby restarts (e.g. leaving Settings);
+    // drop the previous connection listener so they don't pile up.
+    if (connectedUnsubscribe) connectedUnsubscribe();
     const connectedRef = ref(db, ".info/connected");
-    onValue(connectedRef, (snap) => {
+    connectedUnsubscribe = onValue(connectedRef, (snap) => {
       window.firebaseGameBackend.isConnected = snap.val() === true;
       if (typeof onStatusChange === 'function') {
         onStatusChange(window.firebaseGameBackend.isConnected);
@@ -81,8 +108,10 @@ window.firebaseGameBackend = {
   },
 
   createRoom: async (room) => {
-    if (!(await requireAuth())) return;
-    if (!room || !room.id) return;
+    // Throw instead of silently no-opping so the caller's try/catch can show an
+    // error and dismiss the loading overlay instead of leaving a phantom room.
+    if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
+    if (!room || !room.id) throw new Error('Invalid room');
     const roomRef = ref(db, `lobby/rooms/${room.id}`);
     await set(roomRef, {
       ...room,
@@ -91,7 +120,7 @@ window.firebaseGameBackend = {
 
     // Cleanup old rooms (>48h idle). Awaited so a rejection can't become an
     // unhandled promise rejection; runs after the fresh lastActive write above.
-    await window.firebaseGameBackend.cleanupOldRooms();
+    await window.firebaseGameBackend.cleanupOldRooms().catch(() => {});
   },
 
   updateRoom: async (roomId, updates) => {
@@ -109,13 +138,14 @@ window.firebaseGameBackend = {
     if (!roomId) return;
     await remove(ref(db, `lobby/rooms/${roomId}`));
     await remove(ref(db, `games/${roomId}`));
+    await remove(ref(db, `gameEvents/${roomId}`)).catch(() => {});
   },
 
   // Atomically add/refresh a player in a room. Uses a transaction so two people
   // joining the same room at once can't clobber each other (the old read-modify-write
   // of a cached array was last-writer-wins). Returns a result object describing the
   // outcome so the caller can distinguish full/gone/error from success.
-  addPlayerToRoom: async (roomId, player, maxPlayers) => {
+  addPlayerToRoom: async (roomId, player, maxPlayersHint) => {
     if (!(await requireAuth())) return { ok: false, reason: 'auth' };
     if (!roomId || !player) return { ok: false, reason: 'error' };
     const roomRef = ref(db, `lobby/rooms/${roomId}`);
@@ -124,17 +154,23 @@ window.firebaseGameBackend = {
       const result = await runTransaction(roomRef, (room) => {
         if (!room) { reason = 'gone'; return room; }
         reason = null;
+        // Trust the room the transaction just read, not the caller's cached
+        // lobby snapshot: the host may have locked the roster ("Start now")
+        // or changed maxPlayers since the caller last looked.
+        const maxPlayers = room.maxPlayers || maxPlayersHint || 2;
         const players = Array.isArray(room.players) ? room.players.slice() : [];
         const idx = players.findIndex(p => p && (p.uuid === player.uuid || p.peerId === player.peerId));
         if (idx >= 0) {
           players[idx] = player; // reconnect: refresh this player's entry
         } else {
-          if (maxPlayers && players.length >= maxPlayers) { reason = 'full'; return; }
+          // New joiner: rejected if the room is full or already underway.
+          if (room.status === 'in-progress') { reason = 'full'; return; }
+          if (players.length >= maxPlayers) { reason = 'full'; return; }
           players.push(player);
         }
         room.players = players;
         room.lastActive = Date.now();
-        if (maxPlayers && players.length >= maxPlayers) room.status = 'in-progress';
+        if (players.length >= maxPlayers) room.status = 'in-progress';
         else if (!room.status) room.status = 'open';
         return room;
       });
@@ -149,6 +185,78 @@ window.firebaseGameBackend = {
     }
   },
 
+  // Atomically remove a player from a lobby room, migrating the host (including
+  // hostUuid) if the departing player was hosting, and deleting the room + game
+  // when it empties. A transaction, so it works even when the caller's lobby
+  // cache hasn't arrived, and it can never resurrect an already-deleted room.
+  // Returns { ok, removed, players, deleted }.
+  removePlayerFromRoom: async (roomId, player) => {
+    if (!(await requireAuth())) return { ok: false, reason: 'auth' };
+    if (!roomId || !player) return { ok: false, reason: 'error' };
+    const roomRef = ref(db, `lobby/rooms/${roomId}`);
+    try {
+      const result = await runTransaction(roomRef, (room) => {
+        if (!room) return room; // already gone — nothing to do, don't recreate
+        const players = (Array.isArray(room.players) ? room.players : [])
+          .filter(p => p && p.peerId !== player.peerId && p.uuid !== player.uuid);
+        if (players.length === 0) return null; // last player out → delete the room
+        room.players = players;
+        room.lastActive = Date.now();
+        if (room.host === player.peerId || room.hostUuid === player.uuid) {
+          const newHost = players[0];
+          room.host = newHost.peerId;
+          room.hostUuid = newHost.uuid || null;
+          room.hostName = newHost.name || '';
+          room.hostColor = newHost.color || null;
+        }
+        return room;
+      });
+      const exists = result && result.snapshot && result.snapshot.exists();
+      if (!exists) {
+        // Room deleted (or never existed): drop the game state too.
+        await remove(ref(db, `games/${roomId}`)).catch(() => {});
+        await remove(ref(db, `gameEvents/${roomId}`)).catch(() => {});
+        return { ok: true, removed: true, players: [], deleted: true };
+      }
+      const val = result.snapshot.val();
+      return { ok: true, removed: true, players: val.players || [], deleted: false, host: val.host };
+    } catch (e) {
+      console.error('removePlayerFromRoom transaction failed:', e);
+      return { ok: false, reason: 'error' };
+    }
+  },
+
+  // Merge a player roster into games/{roomId}.players atomically. Joiners used
+  // to mirror their own lobby snapshot with a plain last-writer-wins update, so
+  // two people joining within a few hundred ms could erase each other from the
+  // game roster. The union keeps everyone.
+  syncGamePlayers: async (roomId, players) => {
+    if (!(await requireAuth())) return;
+    if (!roomId || !Array.isArray(players)) return;
+    try {
+      await runTransaction(ref(db, `games/${roomId}/players`), (cur) => {
+        const merged = Array.isArray(cur) ? cur.slice() : [];
+        for (const p of players) {
+          if (!p) continue;
+          const idx = merged.findIndex(m => m && (m.uuid === p.uuid || m.peerId === p.peerId));
+          if (idx >= 0) merged[idx] = p;
+          else merged.push(p);
+        }
+        return merged;
+      });
+    } catch (e) {
+      console.error('syncGamePlayers transaction failed:', e);
+    }
+  },
+
+  // Overwrite games/{roomId}.players exactly (used when a player leaves and the
+  // roster must shrink — the merge above only ever grows it).
+  setGamePlayers: async (roomId, players) => {
+    if (!(await requireAuth())) return;
+    if (!roomId) return;
+    await set(ref(db, `games/${roomId}/players`), players || []);
+  },
+
   // Delete lobby rooms nobody has entered in 48 hours. lastActive is refreshed
   // whenever the room is created, updated, or someone joins, so it tracks
   // exactly "when did anyone last go in here".
@@ -160,22 +268,21 @@ window.firebaseGameBackend = {
     if (!force && (now - lastCleanupAt) < CLEANUP_THROTTLE_MS) return;
     lastCleanupAt = now;
 
-    const cutoff = now - ROOM_MAX_AGE_MS;
+    // Judge staleness against the SERVER clock, not the local device clock: a
+    // device whose clock runs months ahead would otherwise compute a future
+    // cutoff and delete every room in the lobby, active ones included.
+    const serverNow = Date.now() + (await getServerTimeOffset());
+    const cutoff = serverNow - ROOM_MAX_AGE_MS;
     const roomsRef = ref(db, 'lobby/rooms');
     try {
-      const snapshot = await get(roomsRef);
+      // Query only the stale slice (plus rooms with no lastActive at all, which
+      // sort before any number) instead of downloading the whole lobby.
+      const staleQuery = query(roomsRef, orderByChild('lastActive'), endAt(cutoff));
+      const snapshot = await get(staleQuery);
       if (!snapshot.exists()) return;
 
       const rooms = snapshot.val();
-      const stale = Object.keys(rooms).filter(id => {
-        const room = rooms[id];
-        if (!room) return true;
-        // Rooms written before lastActive existed have nothing to date them by,
-        // which makes them at least as old as that change. Sweep them.
-        if (!room.lastActive) return true;
-        return room.lastActive < cutoff;
-      });
-
+      const stale = Object.keys(rooms);
       if (stale.length === 0) return;
 
       const updates = {};
@@ -185,7 +292,10 @@ window.firebaseGameBackend = {
       // Drop the matching game state too — deleteRoom removes both, and without
       // this the games/ node accumulates orphans forever.
       await Promise.all(
-        stale.map(id => remove(ref(db, `games/${id}`)).catch(() => {}))
+        stale.map(id => Promise.all([
+          remove(ref(db, `games/${id}`)).catch(() => {}),
+          remove(ref(db, `gameEvents/${id}`)).catch(() => {})
+        ]))
       );
 
       console.log(`Cleaned up ${stale.length} stale room(s).`);
@@ -216,8 +326,9 @@ window.firebaseGameBackend = {
 
   // --- GAME SESSION ---
   initGameSession: async (roomId, initialGameData) => {
-    if (!(await requireAuth())) return;
-    if (!roomId) return;
+    // Throws on auth failure so createRoom's caller can surface the error.
+    if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
+    if (!roomId) throw new Error('Invalid room');
     const gameRef = ref(db, `games/${roomId}`);
     await set(gameRef, {
       ...initialGameData,
@@ -226,7 +337,7 @@ window.firebaseGameBackend = {
   },
 
   updateGameState: async (roomId, stateUpdates) => {
-    if (!(await requireAuth())) return;
+    if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
     if (!roomId) return;
     const gameRef = ref(db, `games/${roomId}`);
     await update(gameRef, {
@@ -236,9 +347,11 @@ window.firebaseGameBackend = {
   },
 
   listenGameState: async (roomId, onStateCallback) => {
+    const myGeneration = ++gameStateGeneration;
     if (!(await requireAuth())) return;
-    if (gameStateUnsubscribe) gameStateUnsubscribe();
     if (!roomId) return;
+    if (myGeneration !== gameStateGeneration) return; // stopped/superseded while awaiting
+    if (gameStateUnsubscribe) gameStateUnsubscribe();
     const gameRef = ref(db, `games/${roomId}`);
     gameStateUnsubscribe = onValue(gameRef, (snapshot) => {
       const gameData = snapshot.val();
@@ -268,10 +381,15 @@ window.firebaseGameBackend = {
     }
   },
 
+  // Events live under gameEvents/{roomId}, NOT inside games/{roomId}: the state
+  // listener sits on the whole games/{roomId} node, and when events lived under
+  // it every pushed event re-delivered the entire game node (including the whole
+  // event history) to every client — twice the downloads per action, growing
+  // without bound over a long-lived room.
   sendGameEvent: async (roomId, eventObj) => {
-    if (!(await requireAuth())) return;
+    if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
     if (!roomId) return;
-    const eventsRef = ref(db, `games/${roomId}/events`);
+    const eventsRef = ref(db, `gameEvents/${roomId}`);
     const newEvtRef = push(eventsRef);
     await set(newEvtRef, {
       ...eventObj,
@@ -282,27 +400,24 @@ window.firebaseGameBackend = {
   },
 
   listenGameEvents: async (roomId, onEventCallback) => {
+    const myGeneration = ++gameEventsGeneration;
     if (!(await requireAuth())) return;
-    if (gameEventsUnsubscribe) gameEventsUnsubscribe();
     if (!roomId) return;
-    const eventsRef = ref(db, `games/${roomId}/events`);
+    const eventsRef = ref(db, `gameEvents/${roomId}`);
 
     // Events are stamped with serverTimestamp() (server clock). Compare against the
-    // SERVER's "now" (Date.now() + offset), read from the synthetic .info path via a
-    // listener (a one-time get() rejects that path as "Invalid token in path").
+    // SERVER's "now" (Date.now() + offset).
     let serverTimeOffset = 0;
     try {
-      serverTimeOffset = await new Promise((resolve) => {
-        let settled = false;
-        const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
-        try {
-          onValue(ref(db, '.info/serverTimeOffset'), (snap) => finish(snap.val() || 0), { onlyOnce: true });
-        } catch (e) { finish(0); }
-        setTimeout(() => finish(0), 3000);
-      });
+      serverTimeOffset = await getServerTimeOffset();
     } catch (e) {
       console.error("Failed to read serverTimeOffset, falling back to local clock:", e);
     }
+    // If the user left the room (or joined another) while we were waiting on
+    // auth/offset, do NOT subscribe — the old code registered anyway and the
+    // orphaned listener fed this room's events to the client forever.
+    if (myGeneration !== gameEventsGeneration) return;
+    if (gameEventsUnsubscribe) gameEventsUnsubscribe();
     const startTime = Date.now() + serverTimeOffset;
 
     const q = query(eventsRef, limitToLast(10));
@@ -318,6 +433,9 @@ window.firebaseGameBackend = {
   },
 
   stopGameListeners: () => {
+    // Invalidate any listen calls still in flight (see the generation counters).
+    gameStateGeneration++;
+    gameEventsGeneration++;
     if (gameStateUnsubscribe) {
       gameStateUnsubscribe();
       gameStateUnsubscribe = null;

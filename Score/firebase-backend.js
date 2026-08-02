@@ -1,7 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, orderByChild, endAt, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
+// NOTE: App Check is NOT enforced. The imports were dead weight (imported,
+// never initialized) and have been removed. If abuse ever becomes a problem,
+// wire initializeAppCheck + ReCaptchaV3Provider here AND enable enforcement in
+// the Firebase console — API-key restrictions do NOT restrict RTDB access;
+// only security rules and App Check do.
 
 import { firebaseConfig } from "../firebase-config.js";
 
@@ -44,6 +48,30 @@ async function requireAuth() {
 // entry not seen within this window is treated as gone. Kept comfortably larger than
 // the heartbeat interval so a live-but-slightly-late client is never wrongly pruned.
 const PRESENCE_STALE_MS = 90000;
+
+// Read the client<->server clock offset. The .info path is synthetic and must be
+// read with a listener (onValue), not a one-time get(), which rejects it as an
+// "Invalid token in path". Falls back to 0 after 3s so it never blocks joining.
+function getServerTimeOffset() {
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
+        try {
+            onValue(ref(db, '.info/serverTimeOffset'), (snap) => finish(snap.val() || 0), { onlyOnce: true });
+        } catch (e) {
+            finish(0);
+        }
+        setTimeout(() => finish(0), 3000);
+    });
+}
+
+// Generation guard for initEvents. It awaits auth, a lastEntered write,
+// cleanup, and the server-time offset before subscribing; two overlapping calls
+// in that window used to BOTH attach listeners, with the second overwriting
+// currentUnsubscribe and orphaning the first set for the whole session (every
+// event processed twice). Newest call wins; older calls abort at their next
+// checkpoint. stopWebSocket() bumps the generation to cancel an in-flight init.
+let initEventsGeneration = 0;
 
 // Safely extract a sheet's dLastUpdate (its "last real change" timestamp) from a
 // stored score, which may be a JSON string or an already-parsed object. Returns 0
@@ -152,44 +180,54 @@ window.firebaseBackend = {
 
     clearTable: async () => {
         if (!(await requireAuth())) return;
-        await remove(ref(db, `rooms`));
+        // Delete room-by-room instead of removing the whole `rooms` node: the
+        // security rules no longer grant a single write at the tree root (that
+        // rule let any anonymous visitor wipe the entire database).
+        const snapshot = await get(ref(db, 'rooms'));
+        if (!snapshot.exists()) return;
+        const updates = {};
+        for (let roomId in snapshot.val()) updates[roomId] = null;
+        await update(ref(db, 'rooms'), updates);
     },
     currentUnsubscribe: null,
 
     cleanupOldRooms: async () => {
         if (!(await requireAuth())) return;
-        // 48 hours in milliseconds
-        const cutoff = Date.now() - (48 * 60 * 60 * 1000);
+        // Judge staleness against the SERVER clock. lastEntered is a
+        // serverTimestamp(), and a device whose local clock ran months ahead
+        // used to compute a future cutoff and delete every room in the
+        // database, active ones included.
+        const serverNow = Date.now() + (await getServerTimeOffset());
+        const cutoff = serverNow - (48 * 60 * 60 * 1000);
         const roomsRef = ref(db, 'rooms');
         try {
-            const snapshot = await get(roomsRef);
+            // Fetch only the stale slice (rooms whose lastEntered <= cutoff,
+            // plus rooms with no lastEntered — null sorts first) instead of
+            // downloading every room's full scores/presence on every join.
+            const staleQuery = query(roomsRef, orderByChild('lastEntered'), endAt(cutoff));
+            const snapshot = await get(staleQuery);
             if (snapshot.exists()) {
                 const rooms = snapshot.val();
                 const updates = {};
                 for (let roomId in rooms) {
                     const val = rooms[roomId];
-                    let shouldDelete = false;
-                    if (val && val.lastEntered && val.lastEntered < cutoff) {
-                        shouldDelete = true;
-                    } else if (val && !val.lastEntered) {
-                        let isOld = true;
-                        if (val.scores) {
-                            for (let pid in val.scores) {
-                                if (val.scores[pid].lastdataset && val.scores[pid].lastdataset > cutoff) {
-                                    isOld = false;
-                                    break;
-                                }
+                    if (!val) { updates[roomId] = null; continue; }
+                    // A room with people currently connected is never old — no
+                    // matter how long ago the last score was entered. (This
+                    // guard used to apply only to rooms missing lastEntered, so
+                    // an active-but-quiet room could be deleted out from under
+                    // its players, permanently blanking their sheets.)
+                    if (val.presence && Object.keys(val.presence).length > 0) continue;
+                    let isOld = true;
+                    if (val.scores) {
+                        for (let pid in val.scores) {
+                            if (val.scores[pid].lastdataset && val.scores[pid].lastdataset > cutoff) {
+                                isOld = false;
+                                break;
                             }
                         }
-                        // A room with people currently present is never old.
-                        if (val.presence && Object.keys(val.presence).length > 0) {
-                            isOld = false;
-                        }
-                        if (isOld) shouldDelete = true;
                     }
-                    if (shouldDelete) {
-                        updates[roomId] = null;
-                    }
+                    if (isOld) updates[roomId] = null;
                 }
                 if (Object.keys(updates).length > 0) {
                     await update(roomsRef, updates);
@@ -201,7 +239,18 @@ window.firebaseBackend = {
         }
     },
 
+    // Cancel any initEvents still in flight (called by stopWebSocket so a
+    // half-set-up subscription for the old room can never complete late).
+    cancelPendingInit: () => {
+        initEventsGeneration++;
+    },
+
     initEvents: async (room, onMessageCallback, selfPresence) => {
+        // Newest-call-wins: any older initEvents still awaiting setup aborts at
+        // its next checkpoint instead of attaching a duplicate listener set.
+        const myGen = ++initEventsGeneration;
+        const stale = () => myGen !== initEventsGeneration;
+
         if (!(await requireAuth())) {
             // Don't pretend we're connected if we couldn't authenticate; the
             // client's CheckConnection() will retry initEvents later.
@@ -209,7 +258,7 @@ window.firebaseBackend = {
             console.error("initEvents aborted: not authenticated.");
             return;
         }
-        if (!room) return;
+        if (!room || stale()) return;
         window.firebaseBackend.isConnected = true;
 
         // Mark this room active BEFORE cleanup runs, otherwise the room we just
@@ -223,6 +272,7 @@ window.firebaseBackend = {
         // Clean up any stale rooms (>48h inactive). Awaited so it runs strictly
         // after the lastEntered write above.
         await window.firebaseBackend.cleanupOldRooms();
+        if (stale()) return;
 
         if (window.firebaseBackend.currentUnsubscribe) {
             window.firebaseBackend.currentUnsubscribe();
@@ -235,27 +285,14 @@ window.firebaseBackend = {
 
         // Event timestamps are written with serverTimestamp() (server clock), so we must
         // filter against the SERVER's notion of "now", not the local device clock (which
-        // may be skewed). Firebase exposes the client<->server offset at /.info/serverTimeOffset.
-        // NOTE: .info is a synthetic client-side path — it must be read with a listener
-        // (onValue), not a one-time get(), which rejects it as an "Invalid token in path".
+        // may be skewed).
         let serverTimeOffset = 0;
         try {
-            serverTimeOffset = await new Promise((resolve) => {
-                let settled = false;
-                const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
-                try {
-                    onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
-                        finish(snap.val() || 0);
-                    }, { onlyOnce: true });
-                } catch (e) {
-                    finish(0);
-                }
-                // Never let this hold up joining the room.
-                setTimeout(() => finish(0), 3000);
-            });
+            serverTimeOffset = await getServerTimeOffset();
         } catch (e) {
             console.error("Failed to read serverTimeOffset, falling back to local clock:", e);
         }
+        if (stale()) return;
         const serverStartTime = Date.now() + serverTimeOffset;
 
         // Only listen to the last 20 events to save bandwidth and ignore deep history
@@ -342,6 +379,16 @@ window.firebaseBackend = {
             onMessageCallback(JSON.stringify(evt));
         });
 
+        // Publish the unsubscribe handle NOW, before the presence awaits below:
+        // if a newer initEvents supersedes this one mid-await, it must be able
+        // to tear these listeners down (assigning at the end let a stale call
+        // overwrite the newer call's handle and orphan its listeners).
+        window.firebaseBackend.currentUnsubscribe = () => {
+            if (unsubEvents) unsubEvents();
+            if (unsubScores) unsubScores();
+            if (unsubPresence) unsubPresence();
+        };
+
         // Register our own presence, and arm automatic removal if we disconnect
         // (tab close, crash, network drop) so stale players never linger.
         if (selfPresence && selfPresence.PlayerID) {
@@ -369,12 +416,6 @@ window.firebaseBackend = {
                 console.error("Failed to register presence:", e);
             }
         }
-
-        window.firebaseBackend.currentUnsubscribe = () => {
-            if (unsubEvents) unsubEvents();
-            if (unsubScores) unsubScores();
-            if (unsubPresence) unsubPresence();
-        };
     },
 
     // Explicitly remove our presence node on a graceful leave (e.g. pagehide).
@@ -395,11 +436,15 @@ window.firebaseBackend = {
         }
     },
 
-    // Heartbeat: refresh our presence node's `lastSeen` so other clients keep counting
-    // us as "here", leaving `since` (join time) untouched. We re-arm onDisconnect each
-    // time as cheap insurance. A live client is never pruned (it's always the freshest
-    // entry), so the node reliably exists for this update. Called on an interval by the
-    // client while connected and visible.
+    // Heartbeat: refresh our presence node so other clients keep counting us as
+    // "here". We re-arm onDisconnect each time as cheap insurance.
+    //
+    // The full identity payload is (re)written, not just lastSeen: our node CAN
+    // be missing here — the heartbeat pauses while the tab is hidden, so after
+    // ~90s peers prune us as a ghost, and a lastSeen-only update would then
+    // recreate a skeleton node with no Name/PlayerID ("3 users" with 2 names).
+    // `since` is preserved when the node still exists (update semantics) and
+    // reseeded when it doesn't.
     touchPresence: async (room, playerId) => {
         room = room || window.firebaseBackend._room;
         const selfPresence = window.firebaseBackend._selfPresence;
@@ -408,7 +453,19 @@ window.firebaseBackend = {
         const selfRef = ref(db, `rooms/${room}/presence/${playerId}`);
         try {
             await onDisconnect(selfRef).remove();
-            await update(selfRef, { lastSeen: serverTimestamp() });
+            const snap = await get(selfRef);
+            if (snap.exists()) {
+                await update(selfRef, { lastSeen: serverTimestamp() });
+            } else {
+                await set(selfRef, {
+                    id: (selfPresence.id !== undefined && selfPresence.id !== null) ? selfPresence.id : null,
+                    PlayerID: selfPresence.PlayerID,
+                    Name: selfPresence.Name || "",
+                    Color: selfPresence.Color || "",
+                    since: serverTimestamp(),
+                    lastSeen: serverTimestamp()
+                });
+            }
         } catch (e) {
             console.error("Failed to heartbeat presence:", e);
         }

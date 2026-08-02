@@ -162,6 +162,11 @@ const SetUpData = () => {
         g_objScore = JSON.parse(sData);
         g_objScore.Color = g_objUserData.Color;
         g_objScore.Name = g_objUserData.Name;
+        // The identity may have changed since this sheet was stored (e.g. the
+        // Lobby synced a new Player ID while the sheet was closed). Refresh it,
+        // or writes would go to the new ID with a body claiming the old one —
+        // duplicate leaderboard entries and broken own-sheet adoption.
+        g_objScore.PlayerID = g_objUserData.PlayerID;
         // JSON.parse leaves dLastLoaded as a string; restore a real Date object so
         // the visibilitychange elapsed-time math (valueOf()) works. Preserve the
         // stored dLastUpdate — it reflects the last actual score change and is used
@@ -263,7 +268,11 @@ const IDGo = () => {
     g_objUserData.Name = g_objScore.Name = sName;
 
     if (g_objUserData.GameID != nGameID) {
-        // Room changed: (re)subscribe to the new room.
+        // Room changed: leave the OLD room first (removes our presence node and
+        // announces the exit — otherwise the old room shows us as "here" for
+        // minutes, or forever if its remaining tabs are hidden), then subscribe
+        // to the new room.
+        stopWebSocket();
         g_objUserData.GameID = nGameID;
         g_objGame.LeaderList = [];
         initWebSocket();
@@ -340,6 +349,12 @@ const ApplyDiceRackVisibility = () => {
 
 const ToggleDiceRack = () => {
     g_objGame.DiceRackShowing = !g_objGame.DiceRackShowing;
+    // The 3D dice engine is created lazily, on first use — it owns a WebGL
+    // context and an animation loop, which players who never open the tray
+    // shouldn't pay for.
+    if (g_objGame.DiceRackShowing && !window.dice3d && typeof Dice3D !== 'undefined') {
+        window.dice3d = new Dice3D();
+    }
     ApplyDiceRackVisibility();
     if (g_objGame.DiceRackShowing) {
         ResetDiceTurn();     // fresh turn: 3 rolls, nothing held
@@ -820,22 +835,25 @@ const ComputeDiceScore = (sClicked, dice) => {
     let sum = 0;
     dice.forEach(d => { counts[d]++; sum += d; });
     let hasN = (n) => Object.values(counts).some(c => c >= n);
+    // Joker rule (matches the live game): a five-of-a-kind can fill Full House
+    // or a straight only once the 5 Dice box is already used (50 or zeroed).
+    let jokerOk = hasN(5) && null != g_objScore.Score[12];
     let n = parseInt(sClicked);
     if (n >= 1 && n <= 6) return counts[n] * n;
     switch (sClicked) {
         case "C":  return sum;
         case "TK": return hasN(3) ? sum : 0;
         case "FK": return hasN(4) ? sum : 0;
-        case "FH": return ((Object.values(counts).includes(3) && Object.values(counts).includes(2)) || hasN(5)) ? 25 : 0;
+        case "FH": return ((Object.values(counts).includes(3) && Object.values(counts).includes(2)) || jokerOk) ? 25 : 0;
         case "SS":
             if (counts[1] && counts[2] && counts[3] && counts[4]) return 30;
             if (counts[2] && counts[3] && counts[4] && counts[5]) return 30;
             if (counts[3] && counts[4] && counts[5] && counts[6]) return 30;
-            return 0;
+            return jokerOk ? 30 : 0;
         case "LS":
             if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) return 40;
             if (counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) return 40;
-            return 0;
+            return jokerOk ? 40 : 0;
         case "FD": return hasN(5) ? 50 : 0;
     }
     return 0;
@@ -861,12 +879,13 @@ const CancelDiceScore = () => {
     document.getElementById('DialogBox').innerHTML = "";
 };
 
-// Manual: end the dice turn and reset the dice (ready to roll again). With the
-// dice cleared, tapping the category now runs the normal manual tap-through, just
-// as if the user had rolled physical dice.
+// Manual: keep the rolled dice in the tray but flag THIS category for manual
+// entry, so tapping it again runs the normal tap-through. (It used to reset the
+// whole turn — snapping the dice to 1-1-1-1-1 and forfeiting the rest of the
+// turn, exactly what the player was trying to avoid.)
 const DeclineDiceScore = (sClicked) => {
     document.getElementById('DialogBox').innerHTML = "";
-    ResetDiceTurn();
+    if (g_objGame.Dice) g_objGame.Dice.manualCats[sClicked] = true;
 };
 
 const CommitDiceScore = (sClicked, nScore) => {
@@ -1097,6 +1116,11 @@ const ClearAllRoomsInServerDB = () => {
 }
 
 const DisplayScore = (objData) => {
+
+    // The score view may not be on screen (e.g. the Room/ID screen is up after a
+    // share link, and an async server callback lands). Without this guard the
+    // first missing cell threw and aborted the rest of the caller mid-update.
+    if (!document.getElementById("Ones")) return;
 
     // Keep track of whose scoresheet is being displayed
     g_objGame.ScoreSheetShowing = objData.PlayerID;
@@ -1364,8 +1388,11 @@ let initWebSocket = () => {
                         }
                     }
                     else if ("UpdateScore" == objData.Event) {
+                        // Merge into LeaderList unconditionally; only the DOM write
+                        // needs the element to exist.
+                        let sUpdatedBoard = LeaderList(objData.Player);
                         if (document.getElementById("LeaderBoardEntries"))
-                            document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(objData.Player);
+                            document.getElementById("LeaderBoardEntries").innerHTML = sUpdatedBoard;
                         let objPlayer = JSON.parse(objData.Player);
                         if (objPlayer.PlayerID === g_objUserData.PlayerID) {
                             // Our own sheet, echoed from another tab sharing this UUID.
@@ -1406,13 +1433,22 @@ let initWebSocket = () => {
                         // empty must never wipe us. The backend feed is always "BCast2Game";
                         // peer replies come back as "Msg2ID".
                         let isAuthoritativeFeed = (objData.Message === "BCast2Game");
-                        g_objGame.LeaderList = [];
+                        // Only the authoritative feed may rebuild the whole board from
+                        // scratch. A peer's in-memory reply can be partial (e.g. a
+                        // freshly-joined player knows only itself) and used to clobber
+                        // a full local board down to one entry.
+                        if (isAuthoritativeFeed) g_objGame.LeaderList = [];
                         if (objLeaderBoard.length === 0) {
                             if (isAuthoritativeFeed) {
                                 if (document.getElementById("LeaderBoardEntries"))
                                     document.getElementById("LeaderBoardEntries").innerHTML = "";
                                 // WhosHere/NamesHere are driven by the presence feed.
                                 g_objScore.Score = [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+                                // The wipe must also reset the change timestamp: keeping
+                                // the old one made every later server copy carrying that
+                                // same timestamp fail the strictly-newer check, leaving
+                                // the sheet permanently blank.
+                                g_objScore.dLastUpdate = 0;
                                 localStorage.setItem(g_objUserData.GameID, JSON.stringify(g_objScore));
                                 DisplayScore(g_objScore);
                             }
@@ -1430,8 +1466,12 @@ let initWebSocket = () => {
                                     : (entry ? JSON.stringify(entry) : null);
                                 if (!jsonPlayer) continue;
 
+                                // Always merge into LeaderList, even when the board DOM
+                                // isn't on screen (Room/ID screen), so the list is intact
+                                // when the sheet view returns.
+                                let sBoardHtml = LeaderList(jsonPlayer);
                                 if (document.getElementById("LeaderBoardEntries"))
-                                    document.getElementById("LeaderBoardEntries").innerHTML = LeaderList(jsonPlayer);
+                                    document.getElementById("LeaderBoardEntries").innerHTML = sBoardHtml;
 
                                 // Perfect-sync for tabs sharing our PlayerID (same UUID):
                                 // if this entry is OUR sheet and is newer than what we hold
@@ -1510,6 +1550,10 @@ const stopPresenceHeartbeat = () => {
 let stopWebSocket = () => {
     if (!window.firebaseBackend) return;
     stopPresenceHeartbeat();
+    // Abort any initEvents still setting up, so a half-registered subscription
+    // for this (old) room can't complete after we've moved on.
+    if (window.firebaseBackend.cancelPendingInit)
+        window.firebaseBackend.cancelPendingInit();
     // Tell peers we're leaving (best-effort) and remove our live presence node.
     try {
         let objData = {
@@ -1536,6 +1580,18 @@ let close_socket = () => stopWebSocket();
 window.addEventListener('pagehide', () => {
     if (window.firebaseBackend && window.firebaseBackend.leavePresence)
         window.firebaseBackend.leavePresence(g_objUserData.GameID, g_objUserData.PlayerID);
+});
+
+// Restored from the back/forward cache (e.g. navigated to the Lobby and came
+// back): pagehide removed our presence and paused the heartbeat, so re-announce
+// ourselves — otherwise peers see us gone (or as a nameless skeleton) until the
+// next full reload.
+window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    CheckConnection();
+    if (window.firebaseBackend && window.firebaseBackend.touchPresence)
+        window.firebaseBackend.touchPresence(g_objUserData.GameID, g_objUserData.PlayerID);
+    startPresenceHeartbeat();
 });
 let CheckConnection = () => { if (!window.firebaseBackend || !window.firebaseBackend.isConnected) initWebSocket(); }
 let sendMessage = (jsonData) => {
@@ -2234,7 +2290,7 @@ const postFileFromServer = async (url, sData, doneCallback) => {
     } catch (error) {
         console.error("Firebase Error:", error);
         if (error.code && error.code.includes('permission-denied')) {
-            ColorToast("Firebase Permission Denied! App Check is blocking access (e.g. running on file:// or localhost).", "red");
+            ColorToast("Firebase permission denied — the database security rules rejected the request.", "red");
         } else {
             ColorToast("Firebase Error: " + error.message, "red");
         }

@@ -55,14 +55,19 @@ window.fiveDiceState = {
 };
 
 function init5DiceGame() {
+  window._fd_celebrated = false;
   window.fiveDiceState = {
     dice: [1, 1, 1, 1, 1],
     held: [false, false, false, false, false],
     rollsLeft: 3,
     scores: {},
-    turnsLeft: 13
+    turnsLeft: 13,
+    isGameOver: false,
+    // Persisted turn-order anchor: every client derives the same rotation from
+    // this instead of a local-only variable that a reload would lose.
+    firstTurn: window.currentFirstTurn || window.gameHost || window.myPeerId
   };
-  
+
   const players = window.gamePlayers || [window.myPeerId];
   for (const p of players) {
     window.fiveDiceState.scores[p] = {
@@ -178,7 +183,7 @@ function update5DiceUI() {
     } else if (cat === 'bonus-5s') {
       scoreEl.innerText = '';            // filled only by the Yahtzee bonus rule
     } else if (rolled && window.myTurn && hintsOn) {
-      const pot = calculate5DiceScore(cat, state.dice);
+      const pot = calculate5DiceScore(cat, state.dice, pScores);
       scoreEl.innerText = pot;
       catEl.classList.add('avail');
       if (pot === 0) catEl.classList.add('zero');
@@ -377,7 +382,7 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     
     if (window.fiveDiceState.scores[window.myPeerId][cat] !== null && window.fiveDiceState.scores[window.myPeerId][cat] !== undefined) return; // Already scored
     
-    const score = calculate5DiceScore(cat, window.fiveDiceState.dice);
+    const score = calculate5DiceScore(cat, window.fiveDiceState.dice, window.fiveDiceState.scores[window.myPeerId]);
     
     // Show commit dialog. Remove any existing overlay first so we never have two
     // overlays sharing the same element IDs (which wired handlers to the wrong
@@ -428,12 +433,16 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
         // This commit ended the game, so THIS client records the result — exactly
         // once (the single finishing player), avoiding every client double-counting.
         // A sole winner counts as a win; a tie is recorded separately for each
-        // tied player (not as a win).
-        const finalWinners = compute5DiceWinners();
-        if (finalWinners.length > 1) {
-          if (typeof window.recordRoomTie === 'function') finalWinners.forEach(w => window.recordRoomTie(w));
-        } else {
-          if (typeof window.recordRoomWin === 'function') finalWinners.forEach(w => window.recordRoomWin(w));
+        // tied player (not as a win). Solo games have no opponent, so there is
+        // nothing meaningful to tally.
+        const soloGame = (window.gamePlayers || []).length <= 1;
+        if (!soloGame) {
+          const finalWinners = compute5DiceWinners();
+          if (finalWinners.length > 1) {
+            if (typeof window.recordRoomTie === 'function') finalWinners.forEach(w => window.recordRoomTie(w));
+          } else {
+            if (typeof window.recordRoomWin === 'function') finalWinners.forEach(w => window.recordRoomWin(w));
+          }
         }
       } else {
         if (window.sync5DiceState) {
@@ -447,13 +456,17 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
   });
 });
 
-function calculate5DiceScore(category, dice) {
+function calculate5DiceScore(category, dice, playerScores) {
   const counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
   let sum = 0;
   dice.forEach(d => { counts[d]++; sum += d; });
-  
+
   const hasN = (n) => Object.values(counts).some(c => c >= n);
-  
+  // Joker rule: a five-of-a-kind may fill Full House / a straight for full
+  // points only once the 5 Dice box is already used (scored 50 or zeroed).
+  // A first-turn five-of-a-kind can NOT bank Full House for a free 25.
+  const jokerOk = hasN(5) && playerScores && typeof playerScores['five-dice'] === 'number';
+
   switch(category) {
     case 'ones': return counts[1] * 1;
     case 'twos': return counts[2] * 2;
@@ -464,18 +477,18 @@ function calculate5DiceScore(category, dice) {
     case 'chance': return sum;
     case 'three-kind': return hasN(3) ? sum : 0;
     case 'four-kind': return hasN(4) ? sum : 0;
-    case 'full-house': return (Object.values(counts).includes(3) && Object.values(counts).includes(2)) || hasN(5) ? 25 : 0;
-    case 'sm-straight': 
+    case 'full-house': return (Object.values(counts).includes(3) && Object.values(counts).includes(2)) || jokerOk ? 25 : 0;
+    case 'sm-straight':
       if (counts[1] && counts[2] && counts[3] && counts[4]) return 30;
       if (counts[2] && counts[3] && counts[4] && counts[5]) return 30;
       if (counts[3] && counts[4] && counts[5] && counts[6]) return 30;
-      return 0;
+      return jokerOk ? 30 : 0;
     case 'lg-straight':
       if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) return 40;
       if (counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) return 40;
-      return 0;
+      return jokerOk ? 40 : 0;
     case 'five-dice': return hasN(5) ? 50 : 0;
-    case 'bonus-5s': return 0; // Simplified for now
+    case 'bonus-5s': return 0; // Filled only by the automatic Yahtzee bonus rule
   }
   return 0;
 }
@@ -602,6 +615,7 @@ window.cleanup5DiceGame = function() {
 };
 
 window.reset5DiceGame = function(firstTurnId = null) {
+  window._fd_celebrated = false; // new game → a fresh celebration is allowed
   const selectedFirstTurn = firstTurnId || window.gameHost;
   window.currentFirstTurn = selectedFirstTurn;
   window.currentTurnPlayerId = selectedFirstTurn;
@@ -613,7 +627,8 @@ window.reset5DiceGame = function(firstTurnId = null) {
     rollsLeft: 3,
     turnsLeft: 13,
     isGameOver: false,
-    scores: {}
+    scores: {},
+    firstTurn: selectedFirstTurn
   };
 
   const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : [window.myPeerId];
@@ -717,13 +732,20 @@ window.sync5DiceState = function(incomingState) {
     }
   }
 
+  // Adopt the persisted turn-order anchor so a reloaded client agrees with
+  // everyone else about who goes first (the local-only variable is just a
+  // fallback for old game states that predate firstTurn).
+  if (window.fiveDiceState && window.fiveDiceState.firstTurn) {
+    window.currentFirstTurn = window.fiveDiceState.firstTurn;
+  }
+
   // Recalculate turn order robustly
   const getCount = p => getScoreCount(window.fiveDiceState, p);
   const counts = window.gamePlayers.map(p => getCount(p));
   const minCount = counts.length > 0 ? Math.min(...counts) : 0;
-  
-  // Find turn order starting from currentFirstTurn
-  const firstPlayer = window.currentFirstTurn || window.gameHost;
+
+  // Find turn order starting from the shared anchor
+  const firstPlayer = (window.fiveDiceState && window.fiveDiceState.firstTurn) || window.currentFirstTurn || window.gameHost;
   let firstIdx = window.gamePlayers.indexOf(firstPlayer);
   if (firstIdx === -1) firstIdx = 0;
   
@@ -805,6 +827,17 @@ window.renderWinsTally = function() {
   const wins = window.roomWins || {};
   const ties = window.roomTies || {};
   let players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers.slice() : Object.keys(wins);
+
+  const aiGame = typeof window.isAIGame === 'function' && window.isAIGame();
+  if (aiGame) {
+    // Vs-computer tic-tac-toe: the computer is a tally column too.
+    if (window.AI_PLAYER_ID && !players.includes(window.AI_PLAYER_ID)) players.push(window.AI_PLAYER_ID);
+  } else if (window.gameMaxPlayers === 1) {
+    // Solo 5 Dice: there's no opponent, so a running win tally is meaningless.
+    el.classList.add('hidden');
+    return;
+  }
+
   if (players.length === 0) { el.classList.add('hidden'); return; }
   players.sort((a, b) => ((wins[b] || 0) - (wins[a] || 0)) || ((ties[b] || 0) - (ties[a] || 0)));
 
@@ -864,16 +897,43 @@ window.handle5DiceGameOver = function() {
   window.apply5DiceWinnerBackground();
 
   const elStatus = document.getElementById('game-status');
+
+  // handle5DiceGameOver re-runs on every later state echo (win-tally writes,
+  // lastUpdated bumps); celebrate only once per game.
+  const firstCelebration = !window._fd_celebrated;
+  window._fd_celebrated = true;
+
+  // Solo game: no opponents to beat, just the final score (with confetti).
+  if ((window.gamePlayers || []).length <= 1) {
+    const finalScore = fdGrand(window.fiveDiceState, window.myPeerId);
+    if (elStatus) elStatus.innerText = `Game Over! You scored ${finalScore}.`;
+    if (firstCelebration) {
+      const gcSolo = document.querySelector('.game-container');
+      if (gcSolo) gcSolo.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        if (window.confetti) {
+          const config = { spread: 100, startVelocity: 50, scalar: 1.2 };
+          window.confetti({ ...config, particleCount: 150, origin: { x: 0.2, y: 0.8 } });
+          window.confetti({ ...config, particleCount: 150, origin: { x: 0.8, y: 0.8 } });
+        }
+      }, 300);
+    }
+    const btnAgainSolo = document.getElementById('btn-play-again');
+    if (btnAgainSolo) btnAgainSolo.classList.remove('hidden');
+    window.renderWinsTally();
+    return;
+  }
+
   if (winners.includes(window.myPeerId)) {
     if (winners.length > 1) {
       if (elStatus) elStatus.innerText = "It's a Tie!";
     } else {
       if (elStatus) elStatus.innerText = "You Win!";
-      
+
       const gc = document.querySelector('.game-container');
       if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
-      
-      setTimeout(() => {
+
+      if (firstCelebration) setTimeout(() => {
         if (window.confetti) {
           const config = { spread: 100, startVelocity: 50, scalar: 1.2 };
           window.confetti({ ...config, particleCount: 150, origin: { x: 0.2, y: 0.8 } });

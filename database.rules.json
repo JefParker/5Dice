@@ -3,11 +3,20 @@
     ".read": false,
     ".write": false,
 
+    // NOTE on identity: sign-in is anonymous, and one player deliberately shares
+    // a PlayerID across devices (each with a different anonymous auth uid), so
+    // rules can NOT bind auth.uid to player ids without breaking that feature.
+    // What they CAN do — and now do — is scope every write to a single room (no
+    // more one-shot wipe of the whole tree), validate shapes, and cap sizes.
+
     "rooms": {
       ".read": "auth != null",
-      ".write": "auth != null",
+      ".indexOn": ["lastEntered"],
 
       "$room": {
+        // Writes are granted per-room, never at the rooms root: deleting or
+        // forging data now takes one request per room instead of one for all.
+        ".write": "auth != null",
 
         "lastEntered": {
           ".validate": "newData.isNumber()"
@@ -18,13 +27,15 @@
             ".validate": "newData.hasChildren(['player_id', 'score']) && newData.child('player_id').val() == $player_id",
 
             "room": {
-              ".validate": "newData.isString() || newData.isNumber()"
+              ".validate": "(newData.isString() && newData.val().length <= 64) || newData.isNumber()"
             },
             "player_id": {
-              ".validate": "newData.isString() && newData.val() == $player_id"
+              ".validate": "newData.isString() && newData.val() == $player_id && newData.val().length <= 64"
             },
             "score": {
-              ".validate": "(newData.isString() && newData.val().length < 20000) || newData.hasChildren()"
+              // The client only ever writes a JSON string; the old
+              // "or any object" escape hatch allowed unbounded payloads.
+              ".validate": "newData.isString() && newData.val().length < 20000"
             },
             "lastdataset": {
               ".validate": "newData.isNumber()"
@@ -56,10 +67,10 @@
             ".validate": "newData.hasChildren(['PlayerID']) && newData.child('PlayerID').val() == $playerId",
 
             "id": {
-              ".validate": "newData.isNumber() || newData.isString()"
+              ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 64)"
             },
             "PlayerID": {
-              ".validate": "newData.isString() && newData.val() == $playerId"
+              ".validate": "newData.isString() && newData.val() == $playerId && newData.val().length <= 64"
             },
             "Name": {
               ".validate": "newData.isString() && newData.val().length <= 64"
@@ -88,13 +99,74 @@
     "lobby": {
       "rooms": {
         ".read": "auth != null",
-        ".write": "auth != null"
+        ".indexOn": ["lastActive"],
+
+        "$roomId": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['id', 'name', 'host']) && newData.child('id').val() == $roomId",
+
+          "id": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "gameType": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "host": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "hostUuid": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "hostName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "hostColor": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "status": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "maxPlayers": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
+          },
+          "lastActive": {
+            ".validate": "newData.isNumber()"
+          },
+          "players": {
+            "$idx": {
+              ".validate": "newData.hasChildren(['peerId'])",
+              "peerId": {
+                ".validate": "newData.isString() && newData.val().length <= 64"
+              },
+              "uuid": {
+                ".validate": "newData.isString() && newData.val().length <= 64"
+              },
+              "name": {
+                ".validate": "newData.isString() && newData.val().length <= 100"
+              },
+              "color": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
       },
 
       "chats": {
         ".read": "auth != null",
-        ".write": "auth != null",
         "$msgId": {
+          // Per-message writes only — the chats node itself is not deletable
+          // wholesale anymore.
+          ".write": "auth != null",
           ".validate": "newData.hasChildren(['text'])",
           "text": {
             ".validate": "newData.isString() && newData.val().length < 2000"
@@ -109,7 +181,7 @@
             ".validate": "newData.isNumber()"
           },
           "id": {
-            ".validate": "newData.isString()"
+            ".validate": "newData.isString() && newData.val().length <= 64"
           },
           "$other": {
             ".validate": false
@@ -121,7 +193,173 @@
     "games": {
       "$roomId": {
         ".read": "auth != null",
-        ".write": "auth != null"
+        ".write": "auth != null",
+
+        "roomId": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "gameType": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "host": {
+          ".validate": "newData.isString() && newData.val().length <= 64"
+        },
+        "status": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "currentTurnPlayerId": {
+          ".validate": "newData.isString() && newData.val().length <= 64"
+        },
+        "lastUpdated": {
+          ".validate": "newData.isNumber()"
+        },
+        "players": {
+          "$idx": {
+            ".validate": "newData.hasChildren(['peerId'])",
+            "peerId": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "uuid": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "color": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "gameState": {
+          "$idx": {
+            ".validate": "newData.isString() && newData.val().length <= 1"
+          }
+        },
+        "wins": {
+          "$pid": {
+            ".validate": "newData.isNumber()"
+          }
+        },
+        "ties": {
+          "$pid": {
+            ".validate": "newData.isNumber()"
+          }
+        },
+        // TRANSITIONAL: clients deployed before Aug 2026 push game events here
+        // (new clients use the top-level gameEvents/ node). Keep this until all
+        // cached clients have cycled, then it can be removed.
+        "events": {
+          "$eventId": {
+            ".validate": "newData.hasChildren(['type'])",
+            "type": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "sender": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "timestamp": { ".validate": "newData.isNumber()" },
+            "index": { ".validate": "newData.isNumber()" },
+            "player": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "firstTurn": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "category": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "score": { ".validate": "newData.isNumber()" },
+            "rollsLeft": { ".validate": "newData.isNumber()" },
+            "dice": {
+              "$i": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6" }
+            },
+            "held": {
+              "$i": { ".validate": "newData.isBoolean()" }
+            },
+            "$other": { ".validate": false }
+          }
+        },
+        "fiveDiceState": {
+          "dice": {
+            "$i": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+            }
+          },
+          "held": {
+            "$i": {
+              ".validate": "newData.isBoolean()"
+            }
+          },
+          "rollsLeft": {
+            ".validate": "newData.isNumber()"
+          },
+          "turnsLeft": {
+            ".validate": "newData.isNumber()"
+          },
+          "isGameOver": {
+            ".validate": "newData.isBoolean()"
+          },
+          "firstTurn": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "scores": {
+            "$pid": {
+              "$cat": {
+                ".validate": "newData.isNumber()"
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+
+    "gameEvents": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+
+        "$eventId": {
+          ".validate": "newData.hasChildren(['type'])",
+          "type": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "sender": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          },
+          "index": {
+            ".validate": "newData.isNumber()"
+          },
+          "player": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "firstTurn": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "category": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "score": {
+            ".validate": "newData.isNumber()"
+          },
+          "rollsLeft": {
+            ".validate": "newData.isNumber()"
+          },
+          "dice": {
+            "$i": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+            }
+          },
+          "held": {
+            "$i": {
+              ".validate": "newData.isBoolean()"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
       }
     }
   }

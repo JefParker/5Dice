@@ -1,5 +1,5 @@
 // dice3d.js
-// 3D physics-based dice overlay using Three.js and Cannon-es
+// 3D physics-based dice overlay using Three.js and cannon.js
 
 class Dice3D {
   constructor() {
@@ -41,46 +41,48 @@ class Dice3D {
     this.world = new CANNON.World({
       gravity: new CANNON.Vec3(0, -40, 0) // Heavy gravity for snappy rolling
     });
-    
-    // Physics floor
-    const floorShape = new CANNON.Plane();
-    const floorBody = new CANNON.Body({ mass: 0 });
-    floorBody.addShape(floorShape);
-    floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    this.world.addBody(floorBody);
 
-    // Physics walls to keep dice in a smaller bouncing area
-    const wallShape = new CANNON.Plane();
-    const wallTop = new CANNON.Body({ mass: 0 });
-    wallTop.addShape(wallShape);
-    wallTop.position.set(0, 0, -3.5);
-    this.world.addBody(wallTop);
-
-    const wallBottom = new CANNON.Body({ mass: 0 });
-    wallBottom.addShape(wallShape);
-    wallBottom.position.set(0, 0, 3.5);
-    wallBottom.quaternion.setFromEuler(0, Math.PI, 0);
-    this.world.addBody(wallBottom);
-
-    const wallLeft = new CANNON.Body({ mass: 0 });
-    wallLeft.addShape(wallShape);
-    wallLeft.position.set(-2.5, 0, 0);
-    wallLeft.quaternion.setFromEuler(0, Math.PI / 2, 0);
-    this.world.addBody(wallLeft);
-
-    const wallRight = new CANNON.Body({ mass: 0 });
-    wallRight.addShape(wallShape);
-    wallRight.position.set(2.5, 0, 0);
-    wallRight.quaternion.setFromEuler(0, -Math.PI / 2, 0);
-    this.world.addBody(wallRight);
-
-    // Bouncy material
+    // Bouncy material. The floor and walls must carry it too — a ContactMaterial
+    // only applies when BOTH bodies have the material, so without it every
+    // die-vs-floor bounce silently used the world default.
     const defaultMaterial = new CANNON.Material();
     const diceContactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
       friction: 0.3,
       restitution: 0.5
     });
     this.world.addContactMaterial(diceContactMaterial);
+
+    // Physics floor
+    const floorShape = new CANNON.Plane();
+    const floorBody = new CANNON.Body({ mass: 0, material: defaultMaterial });
+    floorBody.addShape(floorShape);
+    floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    this.world.addBody(floorBody);
+
+    // Physics walls to keep dice in a smaller bouncing area
+    const wallShape = new CANNON.Plane();
+    const wallTop = new CANNON.Body({ mass: 0, material: defaultMaterial });
+    wallTop.addShape(wallShape);
+    wallTop.position.set(0, 0, -3.5);
+    this.world.addBody(wallTop);
+
+    const wallBottom = new CANNON.Body({ mass: 0, material: defaultMaterial });
+    wallBottom.addShape(wallShape);
+    wallBottom.position.set(0, 0, 3.5);
+    wallBottom.quaternion.setFromEuler(0, Math.PI, 0);
+    this.world.addBody(wallBottom);
+
+    const wallLeft = new CANNON.Body({ mass: 0, material: defaultMaterial });
+    wallLeft.addShape(wallShape);
+    wallLeft.position.set(-2.5, 0, 0);
+    wallLeft.quaternion.setFromEuler(0, Math.PI / 2, 0);
+    this.world.addBody(wallLeft);
+
+    const wallRight = new CANNON.Body({ mass: 0, material: defaultMaterial });
+    wallRight.addShape(wallShape);
+    wallRight.position.set(2.5, 0, 0);
+    wallRight.quaternion.setFromEuler(0, -Math.PI / 2, 0);
+    this.world.addBody(wallRight);
 
     this.diceMeshes = [];
     this.diceBodies = [];
@@ -118,13 +120,26 @@ class Dice3D {
     this.rolling = false;
     this.settling = false;
     this.rollData = null;
-    
+    // Dirty flag: _applySnap() does real work (getBoundingClientRect, physics
+    // shape rebuilds), so it only runs when something actually changed instead
+    // of every rAF frame forever.
+    this.snapDirty = false;
+    this._lastFrameTime = null;
+
+    // Reused across get3DTarget calls instead of allocating per die per call.
+    this._raycaster = new THREE.Raycaster();
+    this._rayNDC = new THREE.Vector2();
+    this._rayPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
     document.body.classList.add('dice3d-active');
 
-    // Store the bound handler so destroy() can actually remove it (a fresh .bind()
-    // can never be removed, which leaked a listener + the whole instance per re-init).
+    // Store the bound handlers so destroy() can actually remove them (a fresh
+    // .bind() can never be removed, which leaked a listener + instance per re-init).
     this._onResize = this.onWindowResize.bind(this);
     window.addEventListener('resize', this._onResize);
+    // Scrolling moves the on-screen dice targets, so a snap re-apply is needed.
+    this._onScroll = () => { this.snapDirty = true; };
+    window.addEventListener('scroll', this._onScroll, true);
 
     this.animate();
   }
@@ -180,20 +195,18 @@ class Dice3D {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+    this.snapDirty = true; // targets moved; re-place and re-render the dice
   }
-  
+
   get3DTarget(x, y, targetSize) {
-    const ndcX = (x / window.innerWidth) * 2 - 1;
-    const ndcY = -(y / window.innerHeight) * 2 + 1;
-    
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
-    
+    this._rayNDC.set((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
+    this._raycaster.setFromCamera(this._rayNDC, this.camera);
+
     // Intersect plane at Y = targetSize / 2 so the center perfectly matches the UI
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(targetSize / 2));
+    this._rayPlane.constant = -(targetSize / 2);
     const target = new THREE.Vector3();
-    raycaster.ray.intersectPlane(plane, target);
-    
+    this._raycaster.ray.intersectPlane(this._rayPlane, target);
+
     return target;
   }
   
@@ -307,7 +320,8 @@ class Dice3D {
     this.rolling = false;
     this.settling = false;
     this.snapData = { finalValues, heldState, targetElements };
-    this._applySnap();
+    // Applied (once) by the animate loop on the next frame.
+    this.snapDirty = true;
   }
   
   _applySnap() {
@@ -372,10 +386,14 @@ class Dice3D {
   destroy() {
     this.destroyed = true;
 
-    // Remove the resize listener (using the stored bound reference).
+    // Remove the window listeners (using the stored bound references).
     if (this._onResize) {
       window.removeEventListener('resize', this._onResize);
       this._onResize = null;
+    }
+    if (this._onScroll) {
+      window.removeEventListener('scroll', this._onScroll, true);
+      this._onScroll = null;
     }
 
     // Dispose GPU resources so WebGL contexts / buffers don't leak across re-inits.
@@ -406,15 +424,33 @@ class Dice3D {
   animate() {
     if (this.destroyed) return;
     requestAnimationFrame(this.animate.bind(this));
-    
+
+    const now = performance.now();
+    const frameDt = this._lastFrameTime ? (now - this._lastFrameTime) / 1000 : 1 / 60;
+    this._lastFrameTime = now;
+
+    // Nothing in motion and nothing changed → do no work at all this frame.
+    // (Idle rendering used to burn CPU/GPU at 60fps from page load onward.)
+    if (!this.rolling && !this.settling) {
+      if (this.snapDirty && this.snapData) {
+        this._applySnap();
+        this.snapDirty = false;
+        this.renderer.render(this.scene, this.camera);
+      }
+      return;
+    }
+
     if (this.rolling && !this.settling) {
-      this.world.step(1 / 60);
-      
+      // Fixed 60Hz physics decoupled from display refresh: real elapsed time
+      // with substeps, so 120Hz phones don't tumble at 2× speed and throttled
+      // tabs don't run in slow motion.
+      this.world.step(1 / 60, Math.min(frameDt, 0.1), 3);
+
       for (let i of this.rollData.unheldIndices) {
         this.diceMeshes[i].position.copy(this.diceBodies[i].position);
         this.diceMeshes[i].quaternion.copy(this.diceBodies[i].quaternion);
       }
-      
+
       const elapsed = performance.now() - this.rollStartTime;
       if (elapsed > 1500) {
         this.settling = true;
@@ -458,18 +494,18 @@ class Dice3D {
           heldState: this.rollData.heldState,
           targetElements: this.rollData.targetElements
         };
+        this.snapDirty = true;
         if (this.rollData.onComplete) {
           this.rollData.onComplete();
         }
       }
-    } else if (!this.rolling && !this.settling && this.snapData) {
-      this._applySnap();
     }
-    
+
     this.renderer.render(this.scene, this.camera);
   }
 }
 
-window.addEventListener('load', () => {
-  window.dice3d = new Dice3D();
-});
+// NOTE: no automatic instantiation on page load. A Dice3D instance owns a WebGL
+// context and a rAF loop, so it's created lazily by whoever needs it — the game
+// screen when a 5 Dice room opens (app.js setupGameUI) and the Score Sheet when
+// the dice tray is turned on. Lobby-only visitors never pay for it.

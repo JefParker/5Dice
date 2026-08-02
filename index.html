@@ -133,7 +133,8 @@
         <details class="about-sec" open>
           <summary><span class="about-ic">🎲</span>5 Dice</summary>
           <div class="about-body">
-            <p>A five-dice, thirteen-turn game of luck and lock-in. <strong>2&ndash;6 players.</strong></p>
+            <p>A five-dice, thirteen-turn game of luck and lock-in. <strong>1&ndash;6 players</strong> &mdash; pick
+              <strong>1 Player (Solo)</strong> to play turn after turn and chase your own best score.</p>
 
             <h4>How a turn works</h4>
             <ul>
@@ -169,6 +170,14 @@
               every additional five-of-a-kind you roll adds <strong>+100</strong> automatically.
             </p>
 
+            <h4>The joker rule</h4>
+            <p>
+              A five-of-a-kind can be claimed as a <strong>Full House</strong> (25) or a
+              <strong>straight</strong> (30/40) only after your <strong>5 Dice</strong> box is
+              already used &mdash; scored for 50 or taken as a zero. Before that, it scores those
+              categories as rolled (usually 0).
+            </p>
+
             <h4>The par indicator</h4>
             <p>
               Under the upper section you'll see something like <strong>+4</strong>,
@@ -196,12 +205,15 @@
         <details class="about-sec">
           <summary><span class="about-ic">⭕</span>Tic-Tac-Toe</summary>
           <div class="about-body">
-            <p>The classic 3&times;3 game, for <strong>exactly 2 players</strong>.</p>
+            <p>The classic 3&times;3 game, for <strong>1 or 2 players</strong>.</p>
             <ul>
               <li>Whoever created the room plays <strong>X</strong> and goes first; the player who joins is <strong>O</strong>.</li>
               <li>Tap any empty square on your turn. Three in a row &mdash; across, down, or diagonally &mdash; wins.</li>
               <li>A full board with no line is a draw, shown as two-color stripes.</li>
-              <li>Sitting in a room alone? Taps alternate X and O so you can play both sides while you wait.</li>
+              <li>Pick <strong>1 Player (vs Computer)</strong> to play against the app: the computer answers
+                each of your moves &mdash; it takes a winning line when it has one, blocks yours, and
+                otherwise fights for the center and corners.</li>
+              <li>Sitting in a 2-player room alone? Taps alternate X and O so you can play both sides while you wait.</li>
             </ul>
             <p>Wins and ties feed the same per-room <strong>Room record</strong> as 5 Dice.</p>
           </div>
@@ -354,7 +366,8 @@
 
         <label for="player-count">How many players?</label>
         <select id="player-count" class="capsule-input">
-          <option value="2">2 Players</option>
+          <option value="1">1 Player (Solo)</option>
+          <option value="2" selected>2 Players</option>
           <option value="3">3 Players</option>
           <option value="4">4 Players</option>
           <option value="5">5 Players</option>
@@ -535,12 +548,12 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=24"></script>
+  <script type="module" src="firebase-game-backend.js?v=25"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-  <script src="dice3d.js?v=21"></script>
-  <script src="five-dice.js?v=34"></script>
+  <script src="dice3d.js?v=22"></script>
+  <script src="five-dice.js?v=35"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=39"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>
