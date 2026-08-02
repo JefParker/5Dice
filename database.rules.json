@@ -132,6 +132,12 @@
           "maxPlayers": {
             ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
           },
+          "bgTarget": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21"
+          },
+          "bgLevel": {
+            ".validate": "newData.isString() && newData.val().length <= 10"
+          },
           "lastActive": {
             ".validate": "newData.isNumber()"
           },
@@ -212,6 +218,15 @@
         },
         "lastUpdated": {
           ".validate": "newData.isNumber()"
+        },
+        "backgammonState": {
+          ".validate": "newData.isString() && newData.val().length < 20000"
+        },
+        "bgTarget": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21"
+        },
+        "bgLevel": {
+          ".validate": "newData.isString() && newData.val().length <= 10"
         },
         "players": {
           "$idx": {
@@ -406,6 +421,40 @@
           "held": {
             "$i": {
               ".validate": "newData.isBoolean()"
+            }
+          },
+          "bgState": {
+            ".validate": "newData.isString() && newData.val().length < 20000"
+          },
+          "d1": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+          },
+          "d2": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+          },
+          "dW": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+          },
+          "dB": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+          },
+          "moves": {
+            "$idx": {
+              "from": {
+                ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 4)"
+              },
+              "to": {
+                ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 4)"
+              },
+              "die": {
+                ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+              },
+              "hit": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
             }
           },
           "$other": {

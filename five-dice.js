@@ -828,9 +828,9 @@ window.renderWinsTally = function() {
   const ties = window.roomTies || {};
   let players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers.slice() : Object.keys(wins);
 
-  const aiGame = typeof window.isAIGame === 'function' && window.isAIGame();
-  if (aiGame) {
-    // Vs-computer tic-tac-toe: the computer is a tally column too.
+  const vsComputer = typeof window.isVsComputerGame === 'function' && window.isVsComputerGame();
+  if (vsComputer) {
+    // Vs-computer games (tic-tac-toe, backgammon): the computer is a tally column.
     if (window.AI_PLAYER_ID && !players.includes(window.AI_PLAYER_ID)) players.push(window.AI_PLAYER_ID);
   } else if (window.gameMaxPlayers === 1) {
     // Solo 5 Dice: there's no opponent, so a running win tally is meaningless.

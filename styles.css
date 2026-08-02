@@ -1344,6 +1344,71 @@ body.dice3d-active .fd-die {
   box-shadow: 0 0 0 2px #ff3b30;
 }
 
+/* ------------------------------------------------------------------ */
+/* Backgammon                                                          */
+/* ------------------------------------------------------------------ */
+
+#backgammon-container {
+  position: relative;
+  width: 100%;
+  height: min(72vh, 640px);
+  min-height: 340px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+#backgammon-container canvas { display: block; width: 100%; height: 100%; }
+
+.bg-ui { position: absolute; inset: 0; pointer-events: none; }
+.bg-ui .bg-topbar {
+  position: absolute; top: 6px; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 12px;
+  font-size: 0.78rem; color: rgba(255,255,255,0.85);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+.bg-match { font-weight: 700; }
+
+.bg-actions {
+  position: absolute; bottom: 10px; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 10px;
+}
+.bg-btn {
+  pointer-events: auto;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 999px;
+  background: rgba(20,30,45,0.85);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 10px 26px;
+  cursor: pointer;
+}
+.bg-btn:active { transform: scale(0.96); }
+.bg-btn-roll { background: #1f7a3d; border-color: #2fae59; }
+.bg-btn-done { background: #235880; border-color: #3f7fb2; }
+.bg-btn-double { background: #7a1f1f; border-color: #b23f3f; }
+.bg-btn-danger { background: #7a1f1f; border-color: #b23f3f; }
+.bg-pulse { animation: bgPulse 1.4s ease-in-out infinite; }
+@keyframes bgPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(63,127,178,0.8); }
+  50%      { box-shadow: 0 0 0 8px rgba(63,127,178,0); }
+}
+
+.bg-cube-dialog {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  background: rgba(15,22,34,0.95);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 14px;
+  padding: 18px 22px;
+  text-align: center;
+  color: #fff;
+  font-weight: 700;
+  z-index: 20;
+}
+.bg-cube-btns { display: flex; gap: 12px; justify-content: center; margin-top: 14px; }
+
 /* My mic/speaker is ON */
 .audio-btn.on {
   color: #28c76f;

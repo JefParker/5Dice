@@ -159,9 +159,17 @@ const AI_PLAYER_ID = 'computer';
 function isAIGame() {
   const room = activeRooms[currentRoomId];
   const maxP = (room && room.maxPlayers) || window.gameMaxPlayers;
-  return getCurrentGameType() !== '5 Dice' && maxP === 1;
+  return getCurrentGameType() === 'Tic-Tac-Toe' && maxP === 1;
+}
+// Any 1-player room with a computer opponent (tic-tac-toe or backgammon) —
+// solo 5 Dice is the only 1-player room WITHOUT one.
+function isVsComputerGame() {
+  const room = activeRooms[currentRoomId];
+  const maxP = (room && room.maxPlayers) || window.gameMaxPlayers;
+  return maxP === 1 && getCurrentGameType() !== '5 Dice';
 }
 window.isAIGame = isAIGame;
+window.isVsComputerGame = isVsComputerGame;
 window.AI_PLAYER_ID = AI_PLAYER_ID;
 
 // Two tabs on one device share the same peerId (and uuid), so they are the
@@ -689,11 +697,25 @@ document.getElementById('btn-cancel-setup').addEventListener('click', () => {
 
 const gameTypeSelect = document.getElementById('game-type-select');
 if (gameTypeSelect) {
+  const refreshSetupOptions = () => {
+    const gameType = gameTypeSelect.value;
+    const playerCount = document.getElementById('player-count').value;
+    const bgOpts = document.getElementById('bg-options');
+    const diffWrap = document.getElementById('bg-difficulty-wrap');
+    if (bgOpts) bgOpts.classList.toggle('hidden', gameType !== 'Backgammon');
+    // Difficulty only matters against the computer.
+    if (diffWrap) diffWrap.classList.toggle('hidden', playerCount !== '1');
+  };
+
   gameTypeSelect.addEventListener('change', (e) => {
     const playerCountSelect = document.getElementById('player-count');
     playerCountSelect.innerHTML = '';
 
     if (e.target.value === 'Tic-Tac-Toe') {
+      playerCountSelect.innerHTML =
+        '<option value="1">1 Player (vs Computer)</option>' +
+        '<option value="2" selected>2 Players</option>';
+    } else if (e.target.value === 'Backgammon') {
       playerCountSelect.innerHTML =
         '<option value="1">1 Player (vs Computer)</option>' +
         '<option value="2" selected>2 Players</option>';
@@ -710,7 +732,11 @@ if (gameTypeSelect) {
       }
       playerCountSelect.value = '2';
     }
+    refreshSetupOptions();
   });
+
+  const playerCountEl = document.getElementById('player-count');
+  if (playerCountEl) playerCountEl.addEventListener('change', refreshSetupOptions);
 }
 
 document.getElementById('room-name-input').addEventListener('keydown', (e) => {
@@ -723,8 +749,14 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   const roomName = document.getElementById('room-name-input').value || 'New Game';
   const gameType = document.getElementById('game-type-select') ? document.getElementById('game-type-select').value : 'Tic-Tac-Toe';
   let maxPlayers = document.getElementById('player-count') ? parseInt(document.getElementById('player-count').value, 10) : 2;
-  // Tic-Tac-Toe is 1 player (vs computer) or exactly 2; clamp anything else.
-  if (gameType === 'Tic-Tac-Toe' && maxPlayers !== 1) maxPlayers = 2;
+  // Tic-Tac-Toe and Backgammon are 1 player (vs computer) or exactly 2.
+  if ((gameType === 'Tic-Tac-Toe' || gameType === 'Backgammon') && maxPlayers !== 1) maxPlayers = 2;
+
+  // Backgammon room options
+  const bgTargetSel = document.getElementById('bg-target-select');
+  const bgDiffSel = document.getElementById('bg-difficulty-select');
+  const bgTarget = gameType === 'Backgammon' && bgTargetSel ? parseInt(bgTargetSel.value, 10) || 1 : 1;
+  const bgLevel = gameType === 'Backgammon' && maxPlayers === 1 && bgDiffSel ? bgDiffSel.value : null;
 
   showLoading('Creating Room...');
 
@@ -747,6 +779,10 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
     maxPlayers: maxPlayers,
     lastActive: Date.now()
   };
+  if (gameType === 'Backgammon') {
+    room.bgTarget = bgTarget;
+    if (bgLevel) room.bgLevel = bgLevel;
+  }
 
   const initialScores = {};
   initialScores[myPeerId] = {
@@ -775,6 +811,10 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
       firstTurn: myPeerId
     }
   };
+  if (gameType === 'Backgammon') {
+    initialGameData.bgTarget = bgTarget;
+    if (bgLevel) initialGameData.bgLevel = bgLevel;
+  }
 
   try {
     await window.firebaseGameBackend.createRoom(room);
@@ -795,6 +835,9 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   window.fiveDiceState = null;      // never inherit a previous room's board
   window.currentFirstTurn = myPeerId;
   window._lastGameRoomId = roomId;
+  // Cached for setupGameUI, which may run before the lobby snapshot arrives.
+  window._bgLevel = bgLevel;
+  window._bgTarget = bgTarget;
 
   document.getElementById('game-room-name').innerText = `🎲 ${roomName} - ${gameType} 🎲`;
 
@@ -975,6 +1018,8 @@ window.joinRoom = async function(roomId) {
   isHost = (room.host === myPeerId);
   currentGameType = displayGameType;
   window.gameMaxPlayers = maxPlayers;
+  window._bgLevel = room.bgLevel || null;
+  window._bgTarget = room.bgTarget || 1;
   document.getElementById('game-room-name').innerText = `🎲 ${room.name} - ${displayGameType} 🎲`;
 
   // "Rejoin" (keep the local board) only applies when returning to a game we
@@ -999,9 +1044,17 @@ window.joinRoom = async function(roomId) {
 function setupGameUI(gameType, isRejoin = false) {
   const tttBoard = document.getElementById('tic-tac-toe-board');
   const fdContainer = document.getElementById('five-dice-container');
+  const bgContainer = document.getElementById('backgammon-container');
   // No one to talk to in a single-player room — hide the voice controls.
   const audioCtl = document.querySelector('.audio-controls');
   if (audioCtl) audioCtl.style.display = (window.gameMaxPlayers === 1) ? 'none' : '';
+
+  // Tear down any previous backgammon scene unless we're re-entering one.
+  if (gameType !== 'Backgammon' && window.BGGame && window.BGGame.active) {
+    window.BGGame.cleanup();
+  }
+  if (bgContainer && gameType !== 'Backgammon') bgContainer.classList.add('hidden');
+
   if (gameType === '5 Dice') {
     tttBoard.classList.add('hidden');
     fdContainer.classList.remove('hidden');
@@ -1013,6 +1066,19 @@ function setupGameUI(gameType, isRejoin = false) {
       init5DiceGame();
     } else {
       update5DiceUI();
+    }
+  } else if (gameType === 'Backgammon') {
+    tttBoard.classList.add('hidden');
+    fdContainer.classList.add('hidden');
+    document.body.classList.remove('bg-five-dice');
+    const room = activeRooms[currentRoomId] || {};
+    if (window.BGGame && bgContainer) {
+      window.BGGame.enter({
+        container: bgContainer,
+        isHost: (room.host || gameHost || myPeerId) === myPeerId,
+        aiLevel: (room.maxPlayers === 1 || window.gameMaxPlayers === 1) ? (room.bgLevel || window._bgLevel || 'normal') : null,
+        matchTarget: room.bgTarget || window._bgTarget || 1
+      });
     }
   } else {
     tttBoard.classList.remove('hidden', 'disabled');
@@ -1078,7 +1144,16 @@ function handleGameStateUpdate(gameData) {
     btnStartNow.classList.toggle('hidden', !canStartEarly);
   }
 
-  if (is5Dice) {
+  const isBackgammon = (getCurrentGameType() === 'Backgammon');
+  if (isBackgammon) {
+    // Backgammon owns its own status text and turn logic.
+    if (gameData.bgTarget) window._bgTarget = gameData.bgTarget;
+    if (gameData.bgLevel) window._bgLevel = gameData.bgLevel;
+    if (gameData.backgammonState && window.BGGame && window.BGGame.active) {
+      window.BGGame.syncState(gameData.backgammonState);
+    }
+    if (window.BGGame && window.BGGame.active) window.BGGame.poke();
+  } else if (is5Dice) {
     if (gameData.fiveDiceState) {
       // Ensure all players are initialized in scores structure
       const scores = gameData.fiveDiceState.scores || {};
@@ -1149,6 +1224,10 @@ function handleGameEvent(evt) {
     if (typeof window.handle5DiceMessage === 'function') {
       window.handle5DiceMessage(evt);
     }
+  } else if (evt.type && evt.type.startsWith('BG_')) {
+    if (window.BGGame && window.BGGame.active) {
+      window.BGGame.handleEvent(evt);
+    }
   }
 }
 
@@ -1173,6 +1252,9 @@ window.sendGameAction = async function(msgObj) {
       if (window.currentTurnPlayerId) {
         updates.currentTurnPlayerId = window.currentTurnPlayerId;
       }
+    } else if (getCurrentGameType() === 'Backgammon' && window.BGGame && window.BGGame.active) {
+      const json = window.BGGame.getStateJson();
+      if (json) updates.backgammonState = json;
     }
 
     await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
@@ -1218,9 +1300,8 @@ function updateGameBackground() {
 
   gameScreen.classList.remove('bg-watermark-x', 'bg-watermark-o');
 
-  // Tracked game type, not the lobby cache — a missing cache entry used to slap
-  // the X/O watermark onto a 5 Dice board.
-  if (gameHost !== null && getCurrentGameType() !== '5 Dice') {
+  // The X/O watermark belongs to tic-tac-toe only.
+  if (gameHost !== null && getCurrentGameType() === 'Tic-Tac-Toe') {
     const mySymbol = (myPeerId === gameHost) ? 'X' : 'O';
     gameScreen.classList.add(`bg-watermark-${mySymbol.toLowerCase()}`);
   }
@@ -1503,6 +1584,13 @@ function resetGame(firstTurn = null) {
 }
 
 document.getElementById('btn-play-again').addEventListener('click', async () => {
+  // Backgammon handles its own reset (next match game or fresh game) and
+  // broadcasts it — none of the shared PLAY_AGAIN plumbing applies.
+  if (getCurrentGameType() === 'Backgammon') {
+    if (window.BGGame && window.BGGame.active) window.BGGame.reset();
+    return;
+  }
+
   const nextFirstTurn = gamePlayers[Math.floor(Math.random() * gamePlayers.length)] || myPeerId;
 
   const is5Dice = getCurrentGameType() === '5 Dice';
@@ -1659,6 +1747,12 @@ const handleLeaveGame = async () => {
                         window.fiveDiceState.scores[myPeerId]) || {};
       soloResumable = Object.values(myScores).some(v => typeof v === 'number');
     }
+    // A backgammon game against the computer takes a while — keep its Rejoin
+    // card too when there's real progress on the board.
+    if (isSoloRoom && getCurrentGameType() === 'Backgammon' &&
+        window.BGGame && window.BGGame.active && window.BGGame.hasProgress()) {
+      soloResumable = true;
+    }
 
     // Only remove player/delete room if the room is an unstarted lobby ('open'),
     // the game has finished, or it's single-player (and not a resumable solo
@@ -1705,6 +1799,11 @@ const handleLeaveGame = async () => {
   if (window.cleanup5DiceGame) {
     window.cleanup5DiceGame();
   }
+  if (window.BGGame && window.BGGame.active) {
+    window.BGGame.cleanup();
+  }
+  const bgc = document.getElementById('backgammon-container');
+  if (bgc) bgc.classList.add('hidden');
 };
 
 // --- PLAYER ID SYNC LOGIC ---
