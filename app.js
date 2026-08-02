@@ -1642,9 +1642,16 @@ const handleLeaveGame = async () => {
     // undeleted) whenever activeRooms was momentarily empty.
     const roomStatus = room ? room.status : (window.gameStarted ? 'in-progress' : 'open');
 
-    // Only remove player/delete room if the room is an unstarted lobby ('open')
-    // or the game has finished; a mid-game leave keeps the seat for rejoining.
-    if (roomStatus === 'open' || isGameOver) {
+    // Single-player rooms (vs computer / solo) die with their only player:
+    // "keep the seat for rejoining" is multiplayer behavior, and without this a
+    // mid-game solo leave left a "Game In Progress (You are playing)" card
+    // squatting in the lobby forever.
+    const isSoloRoom = room ? room.maxPlayers === 1 : window.gameMaxPlayers === 1;
+
+    // Only remove player/delete room if the room is an unstarted lobby ('open'),
+    // the game has finished, or it's single-player; a mid-game multiplayer
+    // leave keeps the seat for rejoining.
+    if (roomStatus === 'open' || isGameOver || isSoloRoom) {
       try {
         // Transactional removal: migrates the host (including hostUuid) and
         // deletes the room + game when the last player leaves. Never recreates
