@@ -558,6 +558,15 @@ label {
   z-index: 2;
 }
 
+/* The header must keep its normal stacking on the tie screen: the generic
+   rule above (same specificity, later in the file) was flattening it to
+   z-index 2, which buried the ☰ dropdown under the game container — the menu
+   opened but every click landed on the invisible container ("can't leave the
+   room"). */
+.tie-background > .top-header {
+  z-index: 1000;
+}
+
 .tie-background::before,
 .tie-background::after {
   content: '';
