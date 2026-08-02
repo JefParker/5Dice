@@ -1335,6 +1335,22 @@ body.dice3d-active .fd-die {
   box-shadow: 0 0 0 2px #ff3b30;
 }
 
+/* My mic/speaker is ON */
+.audio-btn.on {
+  color: #28c76f;
+  background: rgba(40, 199, 111, 0.14);
+  border-color: rgba(40, 199, 111, 0.5);
+}
+
+/* Someone ELSE in the room has this control on: a pulsing ring around it */
+@keyframes voice-ring {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(40, 199, 111, 0.85); }
+  50%      { box-shadow: 0 0 0 5px rgba(40, 199, 111, 0.35); }
+}
+.audio-btn.remote-active {
+  animation: voice-ring 1.6s ease-in-out infinite;
+}
+
 /* ------------------------------------------------------------------ */
 /* Larger screens: the game screen has no sidebar, so the full width   */
 /* is free. Scale the boards, dice and type up to use the extra room.  */

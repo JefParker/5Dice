@@ -357,6 +357,11 @@ html[data-skin],
   background: var(--sk-panel);
   border-color: var(--sk-border);
 }
+[data-skin] .audio-btn.on {
+  color: #28c76f;
+  background: rgba(40, 199, 111, 0.14);
+  border-color: rgba(40, 199, 111, 0.5);
+}
 
 /* ============================================================================
    5 DICE BOARD  (player colors via --pc are intentionally left alone)

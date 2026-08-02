@@ -140,10 +140,8 @@ Object.defineProperty(window, 'myPeerId', { get: () => myPeerId });
 Object.defineProperty(window, 'myName', { get: () => myName });
 Object.defineProperty(window, 'myColor', { get: () => myColor });
 
-// Audio state stub
-let localAudioStream = null;
-let micEnabled = false;
-let speakerEnabled = false;
+// Voice chat (mic/speaker buttons + WebRTC mesh) lives in voice-chat.js; it is
+// attached per-room via window.voiceEnterRoom / window.voiceLeaveRoom.
 
 // The game type of the room we're currently in. The lobby cache (activeRooms)
 // can be empty right after a deep link / room deletion, and several code paths
@@ -805,6 +803,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   document.getElementById('game-status').innerText = solo ? 'Your turn!' : 'Waiting for players to join...';
 
   startListeningToGameSession(roomId);
+  if (window.voiceEnterRoom) window.voiceEnterRoom(roomId);
   hideLoading();
 });
 
@@ -993,12 +992,16 @@ window.joinRoom = async function(roomId) {
   showScreen('screen-game');
 
   startListeningToGameSession(roomId);
+  if (window.voiceEnterRoom) window.voiceEnterRoom(roomId);
   hideLoading();
 };
 
 function setupGameUI(gameType, isRejoin = false) {
   const tttBoard = document.getElementById('tic-tac-toe-board');
   const fdContainer = document.getElementById('five-dice-container');
+  // No one to talk to in a single-player room — hide the voice controls.
+  const audioCtl = document.querySelector('.audio-controls');
+  if (audioCtl) audioCtl.style.display = (window.gameMaxPlayers === 1) ? 'none' : '';
   if (gameType === '5 Dice') {
     tttBoard.classList.add('hidden');
     fdContainer.classList.remove('hidden');
@@ -1624,6 +1627,7 @@ const handleLeaveGame = async () => {
   }
 
   cancelAiMove();
+  if (window.voiceLeaveRoom) window.voiceLeaveRoom();
 
   if (window.firebaseGameBackend) {
     window.firebaseGameBackend.stopGameListeners();
@@ -1642,16 +1646,24 @@ const handleLeaveGame = async () => {
     // undeleted) whenever activeRooms was momentarily empty.
     const roomStatus = room ? room.status : (window.gameStarted ? 'in-progress' : 'open');
 
-    // Single-player rooms (vs computer / solo) die with their only player:
-    // "keep the seat for rejoining" is multiplayer behavior, and without this a
-    // mid-game solo leave left a "Game In Progress (You are playing)" card
-    // squatting in the lobby forever.
+    // Single-player rooms normally die with their only player: "keep the seat
+    // for rejoining" is multiplayer behavior, and without this a mid-game solo
+    // leave left a "Game In Progress (You are playing)" card squatting in the
+    // lobby forever. EXCEPTION: a solo 5 Dice game with real progress keeps its
+    // Rejoin card, so a half-finished scorecard can be resumed later (an
+    // abandoned vs-computer tic-tac-toe board isn't worth keeping).
     const isSoloRoom = room ? room.maxPlayers === 1 : window.gameMaxPlayers === 1;
+    let soloResumable = false;
+    if (isSoloRoom && !isGameOver && getCurrentGameType() === '5 Dice') {
+      const myScores = (window.fiveDiceState && window.fiveDiceState.scores &&
+                        window.fiveDiceState.scores[myPeerId]) || {};
+      soloResumable = Object.values(myScores).some(v => typeof v === 'number');
+    }
 
     // Only remove player/delete room if the room is an unstarted lobby ('open'),
-    // the game has finished, or it's single-player; a mid-game multiplayer
-    // leave keeps the seat for rejoining.
-    if (roomStatus === 'open' || isGameOver || isSoloRoom) {
+    // the game has finished, or it's single-player (and not a resumable solo
+    // scorecard); a mid-game multiplayer leave keeps the seat for rejoining.
+    if (roomStatus === 'open' || isGameOver || (isSoloRoom && !soloResumable)) {
       try {
         // Transactional removal: migrates the host (including hostUuid) and
         // deletes the room + game when the last player leaves. Never recreates

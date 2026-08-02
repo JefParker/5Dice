@@ -312,6 +312,58 @@
       }
     },
 
+    // Voice chat (WebRTC mesh): membership + per-peer signaling inboxes.
+    "voice": {
+      "$roomId": {
+        ".read": "auth != null",
+
+        "members": {
+          "$peerId": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['peerId']) && newData.child('peerId').val() == $peerId",
+            "peerId": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "mic": {
+              ".validate": "newData.isBoolean()"
+            },
+            "speaker": {
+              ".validate": "newData.isBoolean()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+
+        "signals": {
+          "$peerId": {
+            // The inbox owner deletes processed signals; senders push into it.
+            ".write": "auth != null",
+            "$sigId": {
+              ".validate": "newData.hasChildren(['from', 'data'])",
+              "from": {
+                ".validate": "newData.isString() && newData.val().length <= 64"
+              },
+              "data": {
+                ".validate": "newData.isString() && newData.val().length < 50000"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
+
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+
     "gameEvents": {
       "$roomId": {
         ".read": "auth != null",

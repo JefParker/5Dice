@@ -61,6 +61,14 @@ let gameEventsUnsubscribe = null;
 let gameStateGeneration = 0;
 let gameEventsGeneration = 0;
 
+// Voice signaling listener handles (same stale-start guard as the game
+// listeners — one generation counter PER listener, or starting one would
+// cancel the other's in-flight start).
+let voiceMembersUnsubscribe = null;
+let voiceSignalsUnsubscribe = null;
+let voiceMembersGeneration = 0;
+let voiceSignalsGeneration = 0;
+
 // Read the client<->server clock offset once (the .info path is synthetic and
 // must be read with a listener, not get()). Falls back to 0 after 3s.
 function getServerTimeOffset() {
@@ -139,6 +147,7 @@ window.firebaseGameBackend = {
     await remove(ref(db, `lobby/rooms/${roomId}`));
     await remove(ref(db, `games/${roomId}`));
     await remove(ref(db, `gameEvents/${roomId}`)).catch(() => {});
+    await remove(ref(db, `voice/${roomId}`)).catch(() => {});
   },
 
   // Atomically add/refresh a player in a room. Uses a transaction so two people
@@ -294,7 +303,8 @@ window.firebaseGameBackend = {
       await Promise.all(
         stale.map(id => Promise.all([
           remove(ref(db, `games/${id}`)).catch(() => {}),
-          remove(ref(db, `gameEvents/${id}`)).catch(() => {})
+          remove(ref(db, `gameEvents/${id}`)).catch(() => {}),
+          remove(ref(db, `voice/${id}`)).catch(() => {})
         ]))
       );
 
@@ -430,6 +440,82 @@ window.firebaseGameBackend = {
       }
     });
     return gameEventsUnsubscribe;
+  },
+
+  // --- VOICE CHAT SIGNALING (WebRTC mesh) ---
+  // Everything lives under voice/{roomId}: `members/{peerId}` advertises who is
+  // in the voice mesh and their mic/speaker state (with onDisconnect cleanup),
+  // and `signals/{peerId}` is each peer's inbox for SDP/ICE messages, which the
+  // receiver deletes after processing.
+
+  voiceJoin: async (roomId, peerId, state) => {
+    if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
+    if (!roomId || !peerId) return;
+    const mRef = ref(db, `voice/${roomId}/members/${peerId}`);
+    // Arm removal first so a crash right after the write is still cleaned up.
+    await onDisconnect(mRef).remove();
+    await onDisconnect(ref(db, `voice/${roomId}/signals/${peerId}`)).remove();
+    await set(mRef, {
+      peerId: peerId,
+      name: state.name || '',
+      mic: !!state.mic,
+      speaker: !!state.speaker
+    });
+  },
+
+  voiceUpdateState: async (roomId, peerId, state) => {
+    if (!(await requireAuth())) return;
+    if (!roomId || !peerId) return;
+    await update(ref(db, `voice/${roomId}/members/${peerId}`), {
+      mic: !!state.mic,
+      speaker: !!state.speaker
+    });
+  },
+
+  voiceLeave: async (roomId, peerId) => {
+    if (!(await requireAuth())) return;
+    if (!roomId || !peerId) return;
+    await remove(ref(db, `voice/${roomId}/members/${peerId}`)).catch(() => {});
+    await remove(ref(db, `voice/${roomId}/signals/${peerId}`)).catch(() => {});
+  },
+
+  listenVoiceMembers: async (roomId, onMembers) => {
+    const myGeneration = ++voiceMembersGeneration;
+    if (!(await requireAuth())) return;
+    if (!roomId || myGeneration !== voiceMembersGeneration) return;
+    if (voiceMembersUnsubscribe) voiceMembersUnsubscribe();
+    voiceMembersUnsubscribe = onValue(ref(db, `voice/${roomId}/members`), (snap) => {
+      onMembers(snap.val() || {});
+    });
+  },
+
+  // Listen to my signal inbox. Each signal is handed to the callback and then
+  // deleted, so nothing is replayed on reconnect.
+  listenVoiceSignals: async (roomId, myPeerId, onSignal) => {
+    const myGeneration = ++voiceSignalsGeneration;
+    if (!(await requireAuth())) return;
+    if (!roomId || !myPeerId || myGeneration !== voiceSignalsGeneration) return;
+    if (voiceSignalsUnsubscribe) voiceSignalsUnsubscribe();
+    const inboxRef = ref(db, `voice/${roomId}/signals/${myPeerId}`);
+    voiceSignalsUnsubscribe = onChildAdded(inboxRef, (snap) => {
+      const val = snap.val();
+      remove(snap.ref).catch(() => {});
+      if (val && val.from && val.data) onSignal(val);
+    });
+  },
+
+  sendVoiceSignal: async (roomId, toPeerId, fromPeerId, dataStr) => {
+    if (!(await requireAuth())) return;
+    if (!roomId || !toPeerId) return;
+    const inboxRef = ref(db, `voice/${roomId}/signals/${toPeerId}`);
+    await set(push(inboxRef), { from: fromPeerId, data: dataStr });
+  },
+
+  stopVoiceListeners: () => {
+    voiceMembersGeneration++;
+    voiceSignalsGeneration++;
+    if (voiceMembersUnsubscribe) { voiceMembersUnsubscribe(); voiceMembersUnsubscribe = null; }
+    if (voiceSignalsUnsubscribe) { voiceSignalsUnsubscribe(); voiceSignalsUnsubscribe = null; }
   },
 
   stopGameListeners: () => {

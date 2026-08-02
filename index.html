@@ -6,8 +6,8 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=28">
-  <link rel="stylesheet" href="skins.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="skins.css?v=4">
   <link rel="manifest" href="manifest.json">
   <!-- Not deferred: applies the saved skin before first paint. -->
   <script src="skins.js?v=1"></script>
@@ -134,7 +134,9 @@
           <summary><span class="about-ic">🎲</span>5 Dice</summary>
           <div class="about-body">
             <p>A five-dice, thirteen-turn game of luck and lock-in. <strong>1&ndash;6 players</strong> &mdash; pick
-              <strong>1 Player (Solo)</strong> to play turn after turn and chase your own best score.</p>
+              <strong>1 Player (Solo)</strong> to play turn after turn and chase your own best score.
+              Leave a solo game mid-scorecard and its room keeps a <strong>Rejoin</strong> card in the
+              lobby so you can finish later.</p>
 
             <h4>How a turn works</h4>
             <ul>
@@ -399,7 +401,6 @@
         </div>
         <button class="menu-btn" data-menu="game" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
       </header>
-      <audio id="remote-audio" autoplay></audio>
       <div class="game-container">
         <p id="game-status" class="game-status">Waiting for opponent...</p>
         <button id="btn-start-now" class="capsule-button btn-success hidden" style="width: auto; padding: 8px 34px; margin: 4px auto 10px;">Start now</button>
@@ -548,12 +549,13 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=25"></script>
+  <script type="module" src="firebase-game-backend.js?v=26"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=22"></script>
   <script src="five-dice.js?v=35"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=41"></script>
+  <script src="app.js?v=42"></script>
+  <script src="voice-chat.js?v=1"></script>
 </body>
 </html>
