@@ -348,6 +348,9 @@
       state = window.BG.acceptCube(state);
       broadcast('CUBE_TAKE');
       render();
+      // The offerer rolls next. If that's the computer, it needs a nudge —
+      // without this the game sat forever on "Computer's turn".
+      maybeRunAi();
     } else {
       state = window.BG.dropCube(state);
       state._endedBy = window.myPeerId;
