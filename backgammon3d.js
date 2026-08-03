@@ -610,7 +610,6 @@ class Backgammon3D {
     // Ask the controller whether this zone is a legal pickup right now.
     const targets = this.cb.onPickup ? this.cb.onPickup(hit.zone) : null;
     if (targets && targets.length && hit.checker) {
-      this.renderer.domElement.setPointerCapture(e.pointerId);
       this.drag = {
         zone: hit.zone,
         mesh: hit.checker,
@@ -620,6 +619,10 @@ class Backgammon3D {
         startY: e.clientY,
         moved: false
       };
+      // Capture AFTER drag is armed, and never let it throw: if this failed
+      // (stale pointerId on some touch stacks) the press used to be swallowed
+      // whole — no drag, no tap, no dots.
+      try { this.renderer.domElement.setPointerCapture(e.pointerId); } catch (err) {}
       // Do NOT paint this zone's targets yet. A press is not yet a drag, and if
       // it turns out to be a tap we may be completing a move into this zone —
       // repainting here would flash away the dots for the checker already
@@ -637,8 +640,10 @@ class Backgammon3D {
       // Fingers and shaky mice emit pointermove during an intended tap. Below
       // this slop radius the press is still a tap, so don't promote it to a
       // drag (which would hand the press to onDrop and lose the tap-to-move).
+      // Sized for touch: a thumb tap routinely wanders 10px+, and 6px was tight
+      // enough that real taps were still being read as drags.
       const dx = e.clientX - this.drag.startX, dy = e.clientY - this.drag.startY;
-      if (dx * dx + dy * dy < 36) return;
+      if (dx * dx + dy * dy < 196) return;
       this.drag.moved = true;
       // A real drag begins: it supersedes any tap-selection, and only now do
       // the green dots belong to the checker in hand.
@@ -670,7 +675,12 @@ class Backgammon3D {
     if (!applied) {
       // Snap home (controller will re-setState on success, so only failures matter).
       d.mesh.position.copy(d.homePos);
-      if (!d.moved && this.cb.onTap) this.cb.onTap(d.zone); // press without drag = tap
+      // Any press that did NOT complete a move falls back to a tap on its own
+      // zone — so it selects that checker and lights its dots. Previously this
+      // was gated on `!d.moved`, which meant a touch that wandered past the
+      // slop radius and was released again over its own point produced no
+      // dots at all: the drag highlights were cleared and nothing re-selected.
+      if (this.cb.onTap) this.cb.onTap(d.zone);
     }
     // Let the controller restore its idle hints, which clearHighlights just wiped.
     if (this.cb.onIdle) this.cb.onIdle();
