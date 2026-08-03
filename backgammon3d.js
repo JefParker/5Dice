@@ -615,9 +615,15 @@ class Backgammon3D {
         zone: hit.zone,
         mesh: hit.checker,
         homePos: hit.checker.position.clone(),
+        targets,
+        startX: e.clientX,
+        startY: e.clientY,
         moved: false
       };
-      this.highlightTargets(targets);
+      // Do NOT paint this zone's targets yet. A press is not yet a drag, and if
+      // it turns out to be a tap we may be completing a move into this zone —
+      // repainting here would flash away the dots for the checker already
+      // selected. _pointerMove paints them the moment a real drag begins.
       this.needsRender = true;
     } else {
       // Not draggable: treat as a tap (tap-to-move flow handled by controller).
@@ -627,7 +633,19 @@ class Backgammon3D {
 
   _pointerMove(e) {
     if (!this.drag) return;
-    this.drag.moved = true;
+    if (!this.drag.moved) {
+      // Fingers and shaky mice emit pointermove during an intended tap. Below
+      // this slop radius the press is still a tap, so don't promote it to a
+      // drag (which would hand the press to onDrop and lose the tap-to-move).
+      const dx = e.clientX - this.drag.startX, dy = e.clientY - this.drag.startY;
+      if (dx * dx + dy * dy < 36) return;
+      this.drag.moved = true;
+      // A real drag begins: it supersedes any tap-selection, and only now do
+      // the green dots belong to the checker in hand.
+      if (this.cb.onDragStart) this.cb.onDragStart(this.drag.zone);
+      this.highlightTargets(this.drag.targets);
+      this.selectRing.visible = false;
+    }
     // Project onto the lifted drag plane (y = 0.55), in GROUP-local coords.
     this.ray.setFromCamera(this._ndc(e), this.camera);
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.55);

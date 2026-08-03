@@ -321,11 +321,21 @@
     return out;
   }
 
+  // Pure query: "what could this zone move to?" The view asks this on every
+  // press, including presses that turn out to be taps, so it must NOT touch
+  // `selected`. It used to clear it here, which meant tapping a destination
+  // that held your own movable checkers wiped the selection and re-picked-up
+  // that point instead of completing the move — tap-to-move worked onto empty
+  // points and blots but silently failed onto your own points.
   function onPickup(zone) {
     const opts = legalFromZone(zone);
     if (opts.length === 0) return null;
-    selected = null;
     return opts.map(o => o.to);
+  }
+
+  // Only an actual drag supersedes a tap-selection.
+  function onDragStart() {
+    selected = null;
   }
 
   function onDrop(from, to) {
@@ -537,7 +547,7 @@
       const container = opts.container;
       container.classList.remove('hidden');
       view = new Backgammon3D(container, {
-        onPickup, onDrop, onTap,
+        onPickup, onDrop, onTap, onDragStart,
         onIdle: showIdleHints,
         onCubeTap: () => { if (window.BG.canOfferCube(state, myColor)) onDoubleClick(); }
       });
