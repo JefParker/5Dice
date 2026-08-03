@@ -464,18 +464,48 @@
 
   // Animate `moves` one at a time against the CURRENT board, then adopt
   // `finalState`. Used for both a live PREVIEW and a replayed committed TURN.
+  //
+  // These are QUEUED rather than run immediately. Live previews can land while
+  // an earlier one is still animating, and two overlapping runs fought over the
+  // board: each read `mover` and the hop's target stack from whatever `state`
+  // happened to be mid-flight, and whichever finished LAST won the final
+  // `state = finalState` — so a slower first animation could stomp a newer
+  // position back onto the board.
+  let animQueue = [], animRunning = false, queuedSeq = 0, animGen = 0;
+
+  // Highest seq we've either adopted or already have waiting in the queue.
+  // Without counting the queue, a second event arriving mid-animation compares
+  // itself against a state that hasn't caught up yet.
+  function latestSeq() {
+    return Math.max((state && state.seq) || 0, queuedSeq);
+  }
+
   function playMoves(moves, finalState, done) {
+    queuedSeq = Math.max(queuedSeq, (finalState && finalState.seq) || 0);
+    animQueue.push({ moves, finalState, done });
+    pumpAnimQueue();
+  }
+
+  function pumpAnimQueue() {
+    if (animRunning || !animQueue.length) return;
+    animRunning = true;
+    const job = animQueue.shift();
+    const gen = animGen;             // a clear during flight invalidates this run
     const mover = state ? state.turn : null;
     let i = 0;
+    const finish = () => {
+      if (gen !== animGen) return;
+      state = job.finalState;
+      render();
+      animRunning = false;
+      if (state.phase === 'over') gameOverUi();
+      else if (job.done) job.done();
+      pumpAnimQueue();               // drain anything that arrived meanwhile
+    };
     const step = () => {
-      if (i >= moves.length || !view) {
-        state = finalState;
-        render();
-        if (state.phase === 'over') gameOverUi();
-        else if (done) done();
-        return;
-      }
-      const m = moves[i++];
+      if (gen !== animGen) return;
+      if (i >= job.moves.length || !view) return finish();
+      const m = job.moves[i++];
       const countAtTarget = m.to === 'off' ? 0 : Math.abs((state && state.points[m.to]) || 0);
       view.animateMove(m.from === 'bar' ? 'bar' : m.from, m.to === 'off' ? 'off' : m.to,
         mover || 'b', countAtTarget, () => setTimeout(step, 140));
@@ -483,14 +513,15 @@
     step();
   }
 
-  // A freshly-adopted 'opening' state needs somebody to actually roll for first
-  // turn. runOpening() itself decides whether THIS client is the one (host, or
-  // solo-vs-computer), so it is safe to call from every adoption path.
-  //
-  // Without this, Play Again only worked when the HOST pressed it: a guest
-  // pressing it reset the board and broadcast BG_RESET, but their own
-  // runOpening() bailed on the host check while the host merely adopted the new
-  // state and never started it. The rematch hung in 'opening' forever.
+  // Drop everything pending AND orphan any callback chain already in flight, so
+  // a stale job can't land its old finalState on top of a newer board.
+  function clearAnimQueue() {
+    animQueue = [];
+    animRunning = false;
+    queuedSeq = 0;
+    animGen++;
+  }
+
   // Set whenever we've streamed at least one provisional move this turn.
   let previewedThisTurn = false;
 
@@ -503,6 +534,14 @@
     broadcast('PREVIEW', { moves });
   }
 
+  // A freshly-adopted 'opening' state needs somebody to actually roll for first
+  // turn. runOpening() itself decides whether THIS client is the one (host, or
+  // solo-vs-computer), so it is safe to call from every adoption path.
+  //
+  // Without this, Play Again only worked when the HOST pressed it: a guest
+  // pressing it reset the board and broadcast BG_RESET, but their own
+  // runOpening() bailed on the host check while the host merely adopted the new
+  // state and never started it. The rematch hung in 'opening' forever.
   let openingTimer = null;
   function maybeStartOpening() {
     if (!state || state.phase !== 'opening') return;
@@ -641,6 +680,8 @@
       this.active = true;
       myColor = opts.isHost ? 'w' : 'b';
       appliedCheckerCols = null;   // force a repaint for the new room's roster
+      previewedThisTurn = false;
+      clearAnimQueue();
       aiLevel = opts.aiLevel || null;
       selected = null;
       busy = false;
@@ -676,7 +717,8 @@
       let inc;
       try { inc = JSON.parse(json); } catch (e) { return; }
       if (!inc || !inc.points) return;
-      if (state && (state.seq || 0) >= (inc.seq || 0)) return;
+      if (state && latestSeq() >= (inc.seq || 0)) return;
+      clearAnimQueue();   // a wholesale sync supersedes anything mid-flight
       state = inc;
       selected = null;
       if (view) view.clearHighlights();
@@ -691,12 +733,13 @@
       let inc;
       try { inc = JSON.parse(evt.bgState); } catch (e) { return; }
       if (!inc || !inc.points) return;
-      if (state && (state.seq || 0) >= (inc.seq || 0)) return;
+      if (state && latestSeq() >= (inc.seq || 0)) return;
 
       const kind = (evt.type || '').replace(/^BG_/, '');
       if (kind === 'ROLL' || kind === 'OPENING') {
         const a = kind === 'OPENING' ? evt.dW : evt.d1;
         const b = kind === 'OPENING' ? evt.dB : evt.d2;
+        clearAnimQueue();            // a new roll supersedes any pending previews
         state = inc; // adopt now; animation is cosmetic
         if (view && a && b) {
           view.animateRoll(a, b, () => { render(); if (state.phase === 'over') gameOverUi(); else maybeRunAi(); });
@@ -710,6 +753,13 @@
         // and commitTurn() will send the authoritative one with a higher seq.
         playMoves(evt.moves, inc, () => refreshUi());
         return;
+      } else if (kind === 'UNDO' || (kind === 'TURN' && evt.streamed)) {
+        // Both of these carry a state we should adopt WITHOUT animating, but
+        // they must not jump the queue: a fast Done (or a quick undo) arriving
+        // while the last preview is still mid-hop would otherwise clear it and
+        // snap the checker. An empty move list just adopts, in order.
+        playMoves([], inc, () => refreshUi());
+        return;
       } else if (kind === 'TURN' && !evt.streamed && view && Array.isArray(evt.moves) && evt.moves.length) {
         // Animate the opponent's moves against our CURRENT board, then adopt.
         // `streamed` turns were already watched move-by-move via PREVIEW, so
@@ -717,6 +767,9 @@
         playMoves(evt.moves, inc, () => refreshUi());
         return;
       }
+      // Undo, cube events and streamed commits land here: they carry the newest
+      // state outright, so anything still animating is stale by definition.
+      clearAnimQueue();
       state = inc;
       render();
       if (state.phase === 'over') gameOverUi();
@@ -742,6 +795,7 @@
       // Play Again then did nothing at all for the other player.
       state.seq = prevSeq;
       selected = null;
+      clearAnimQueue();
       // A game that ended mid-turn can leave `busy` set, and every roll path
       // bails on it — so the rematch would never roll.
       busy = false;
@@ -785,6 +839,9 @@
     cleanup() {
       this.active = false;
       clearTimeout(aiTimer);
+      clearTimeout(openingTimer);
+      clearAnimQueue();
+      previewedThisTurn = false;
       if (view) { view.destroy(); view = null; }
       if (uiRoot && uiRoot.parentNode) uiRoot.parentNode.removeChild(uiRoot);
       uiRoot = null;
