@@ -72,6 +72,7 @@
 
   function refreshUi() {
     if (!state || !uiRoot) return;
+    applyCheckerColors();   // roster details often arrive after enter()
     const BGE = window.BG;
     const myTurn = state.turn === myColor;
     const moving = state.phase === 'moving';
@@ -85,6 +86,13 @@
     show('bg-btn-done', doneReady);
     const doneBtn = el('bg-btn-done');
     if (doneBtn) doneBtn.classList.toggle('bg-pulse', doneReady);
+
+    // "Play again?" belongs to the game-over screen only. gameOverUi() showed it
+    // but nothing ever hid it again on the OTHER player's client when they
+    // adopted a fresh state, so both players were left staring at the button
+    // after a rematch had already begun.
+    const againBtn = el('btn-play-again');
+    if (againBtn && state.phase !== 'over') againBtn.classList.add('hidden');
 
     // Pips + match score
     const meP = el('bg-pips-me'), opP = el('bg-pips-op'), match = el('bg-match');
@@ -177,6 +185,36 @@
   }
 
   function isAiTurnColor(c) { return isAi() && c !== myColor; }
+
+  // Checker colours. The host seat ('w') keeps classic cream; the other seat
+  // uses that player's chosen profile colour instead of generic brown. Both
+  // clients derive the SAME pair, so the board looks identical to everyone —
+  // which matters the moment players start saying "your dark one on the 8".
+  const CREAM = '#f2e9d8', BROWN = '#3b2f2f';
+  let appliedCheckerCols = null;
+
+  function relLuminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return 0.2126 * ((n >> 16 & 255) / 255) + 0.7152 * ((n >> 8 & 255) / 255) + 0.0722 * ((n & 255) / 255);
+  }
+
+  function applyCheckerColors() {
+    if (!view) return;
+    let bHex = BROWN;
+    if (!isAi()) {
+      const bPeer = (myColor === 'b') ? window.myPeerId : otherPeerId();
+      // otherPeerId() falls back to MY id when the roster has no opponent yet;
+      // using it then would paint the dark side with the white player's colour.
+      const usable = bPeer && !(myColor !== 'b' && bPeer === window.myPeerId);
+      const c = (usable && typeof window.getPeerColor === 'function') ? window.getPeerColor(bPeer) : null;
+      // Reject anything too pale to read against the cream side.
+      if (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) && relLuminance(c) < 0.62) bHex = c;
+    }
+    const key = CREAM + '|' + bHex;
+    if (key === appliedCheckerCols) return;   // roster updates fire constantly
+    appliedCheckerCols = key;
+    view.setCheckerColors(CREAM, bHex);
+  }
 
   // ---------------------------------------------------------------------------
   // State + sync plumbing
@@ -413,6 +451,24 @@
     });
   }
 
+  // A freshly-adopted 'opening' state needs somebody to actually roll for first
+  // turn. runOpening() itself decides whether THIS client is the one (host, or
+  // solo-vs-computer), so it is safe to call from every adoption path.
+  //
+  // Without this, Play Again only worked when the HOST pressed it: a guest
+  // pressing it reset the board and broadcast BG_RESET, but their own
+  // runOpening() bailed on the host check while the host merely adopted the new
+  // state and never started it. The rematch hung in 'opening' forever.
+  let openingTimer = null;
+  function maybeStartOpening() {
+    if (!state || state.phase !== 'opening') return;
+    if (window.gameStarted === false) return;
+    // Adoption paths can fire several times in a row; collapse them to one
+    // pending roll rather than stacking timers.
+    clearTimeout(openingTimer);
+    openingTimer = setTimeout(runOpening, 700);
+  }
+
   // ---------------------------------------------------------------------------
   // Computer opponent
   // ---------------------------------------------------------------------------
@@ -540,6 +596,7 @@
       this.cleanup();
       this.active = true;
       myColor = opts.isHost ? 'w' : 'b';
+      appliedCheckerCols = null;   // force a repaint for the new room's roster
       aiLevel = opts.aiLevel || null;
       selected = null;
       busy = false;
@@ -581,7 +638,7 @@
       if (view) view.clearHighlights();
       render();
       if (state.phase === 'over') gameOverUi();
-      else { checkNoMoves(); maybeRunAi(); }
+      else { checkNoMoves(); maybeRunAi(); maybeStartOpening(); }
     },
 
     // Remote events: animate, then adopt the attached state.
@@ -625,12 +682,14 @@
       state = inc;
       render();
       if (state.phase === 'over') gameOverUi();
+      else maybeStartOpening();
     },
 
     // Play again: next game (carrying match score) or a fresh single game.
     reset() {
       if (!this.active || !state) return;
       const BGE = window.BG;
+      const prevSeq = state.seq || 0;
       if (state.match.target > 1 && !state.match.winner) {
         state = BGE.nextGame(state);
       } else if (state.match.target > 1) {
@@ -638,7 +697,17 @@
       } else {
         state = BGE.initialState(1);
       }
+      // seq has to stay monotonic ACROSS games. Both syncState() and
+      // handleEvent() drop any incoming state whose seq isn't newer than the one
+      // they hold, and initialState()/nextGame() restart it at 0 — so a rematch
+      // broadcast seq 1 to peers sitting on seq 40+ and was silently discarded.
+      // Play Again then did nothing at all for the other player.
+      state.seq = prevSeq;
       selected = null;
+      // A game that ended mid-turn can leave `busy` set, and every roll path
+      // bails on it — so the rematch would never roll.
+      busy = false;
+      clearTimeout(aiTimer);
       const again = el('btn-play-again');
       if (again) again.classList.add('hidden');
       const gs = el('screen-game');

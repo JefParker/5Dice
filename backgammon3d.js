@@ -60,6 +60,7 @@ class Backgammon3D {
     this.drag = null;            // { zone, mesh, plane }
     this.legalTargets = [];
     this.portrait = false;
+    this._offColor = 'w';        // local player's seat; set via setPlayerColor
     this.needsRender = true;
 
     this._onResize = () => this._resize();
@@ -213,8 +214,12 @@ class Backgammon3D {
   _buildCheckers() {
     this.checkers = [];
     const geo = new THREE.CylinderGeometry(this.CHK_R, this.CHK_R, this.CHK_H, 28);
-    const matW = this._mat(0xf2e9d8), matB = this._mat(0x3b2f2f);
-    const rimW = this._mat(0xd8c9a8), rimB = this._mat(0x241c1c);
+    // Kept on `this` and SHARED by every checker of a side, so setCheckerColors()
+    // can recolour a whole side by touching two materials.
+    const matW = this.faceMatW = this._mat(0xf2e9d8);
+    const matB = this.faceMatB = this._mat(0x3b2f2f);
+    const rimW = this.rimMatW = this._mat(0xd8c9a8);
+    const rimB = this.rimMatB = this._mat(0x241c1c);
     for (let i = 0; i < 30; i++) {
       const isW = i < 15;
       const mesh = new THREE.Mesh(geo, [isW ? rimW : rimB, isW ? matW : matB, isW ? matW : matB]);
@@ -224,6 +229,20 @@ class Backgammon3D {
       this.group.add(mesh);
       this.checkers.push(mesh);
     }
+  }
+
+  // Recolour the two sides. Each argument is any THREE-parsable colour (hex
+  // string or number); pass null to leave that side alone. The rim is a
+  // darkened copy of the face so a checker still reads as a disc, not a blob.
+  setCheckerColors(wCol, bCol) {
+    const apply = (face, rim, col) => {
+      if (col == null) return;
+      face.color.set(col);
+      rim.color.copy(face.color).multiplyScalar(0.62);
+    };
+    apply(this.faceMatW, this.rimMatW, wCol);
+    apply(this.faceMatB, this.rimMatB, bCol);
+    this.needsRender = true;
   }
 
   _buildDice() {
@@ -553,7 +572,22 @@ class Backgammon3D {
   _offSideZ() {
     return this._offColor === 'b' ? -(this.DEPTH_HALF / 2 + 0.15) : this.DEPTH_HALF / 2 + 0.15;
   }
-  setPlayerColor(c) { this._offColor = c; }
+
+  // Which seat the LOCAL player occupies. Black sits opposite white, so their
+  // board is the same board turned around: spin the whole group 180° and every
+  // checker, point, highlight and tray follows, because they are all children
+  // of it and all positioned in group-local space. The camera stays put.
+  setPlayerColor(c) {
+    this._offColor = c;
+    this._applyBoardRotation();
+    this.needsRender = true;
+  }
+
+  _applyBoardRotation() {
+    const portraitTurn = this.portrait ? Math.PI / 2 : 0;
+    const seatTurn = this._offColor === 'b' ? Math.PI : 0;
+    this.group.rotation.y = portraitTurn + seatTurn;
+  }
 
   showSelectRing(zone) {
     if (zone == null) { this.selectRing.visible = false; this.needsRender = true; return; }
@@ -698,7 +732,7 @@ class Backgammon3D {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.portrait = h > w * 1.05;
-    this.group.rotation.y = this.portrait ? Math.PI / 2 : 0;
+    this._applyBoardRotation();
     // Fit: pull the camera back until the board's long axis fits the view.
     const long = (this.FELT_HALF_X + this.TRAY_W + 1) * 2;
     const fov = this.camera.fov * Math.PI / 180;

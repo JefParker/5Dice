@@ -1031,6 +1031,13 @@ window.joinRoom = async function(roomId) {
     window.fiveDiceState = null;
     window.currentFirstTurn = null;
   }
+  // Win/tie tallies are PER ROOM. Carrying them into a different room meant the
+  // new room briefly rendered the old room's record — until Firebase delivered
+  // the real numbers, which never happens at all for a room with no wins yet.
+  if (window._lastGameRoomId !== roomId) {
+    window.roomWins = {};
+    window.roomTies = {};
+  }
   window._lastGameRoomId = roomId;
 
   setupGameUI(displayGameType, isRejoin);
@@ -1048,6 +1055,14 @@ function setupGameUI(gameType, isRejoin = false) {
   // No one to talk to in a single-player room — hide the voice controls.
   const audioCtl = document.querySelector('.audio-controls');
   if (audioCtl) audioCtl.style.display = (window.gameMaxPlayers === 1) ? 'none' : '';
+
+  // The Room record is a GAME-OVER panel, and #fd-wins is shared by every game
+  // type. It used to be hidden only on the tic-tac-toe path, so a tally left
+  // visible by a finished game followed you into the next one — showing
+  // backgammon's record on the 5 Dice board, and showing a record mid-game in
+  // backgammon. Each game's own game-over handler re-shows it.
+  const winsEl = document.getElementById('fd-wins');
+  if (winsEl) winsEl.classList.add('hidden');
 
   // Tear down any previous backgammon scene unless we're re-entering one.
   if (gameType !== 'Backgammon' && window.BGGame && window.BGGame.active) {
@@ -1084,8 +1099,6 @@ function setupGameUI(gameType, isRejoin = false) {
     tttBoard.classList.remove('hidden', 'disabled');
     fdContainer.classList.add('hidden');
     document.body.classList.remove('bg-five-dice');
-    const winsElSetup = document.getElementById('fd-wins');
-    if (winsElSetup) winsElSetup.classList.add('hidden');
     createBoard();
     updateBoard();
   }

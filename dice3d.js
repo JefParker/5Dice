@@ -42,15 +42,15 @@ class Dice3D {
     // silently ignored the gravity and left it at ZERO, so the dice only moved
     // because they were thrown and never truly settled. Set it on the instance.
     this.world = new CANNON.World();
-    this.world.gravity.set(0, -40, 0); // Heavy gravity for snappy rolling
+    this.world.gravity.set(0, -32, 0); // Firm, but -40 made the throw frantic
 
     // Bouncy material. The floor and walls must carry it too — a ContactMaterial
     // only applies when BOTH bodies have the material, so without it every
     // die-vs-floor bounce silently used the world default.
     const defaultMaterial = new CANNON.Material();
     const diceContactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
-      friction: 0.3,
-      restitution: 0.5
+      friction: 0.36,
+      restitution: 0.38   // 0.5 kept them pinballing off the walls
     });
     this.world.addContactMaterial(diceContactMaterial);
 
@@ -111,6 +111,11 @@ class Dice3D {
       const shape = new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2));
       const body = new CANNON.Body({ mass: 1, material: defaultMaterial });
       body.addShape(shape);
+      // Bleed off energy as the die tumbles. Without this the dice were still
+      // spinning noticeably when the 1500ms settle tween took over, so the
+      // snap to the final face read as a jump.
+      body.angularDamping = 0.22;
+      body.linearDamping = 0.08;
       this.world.addBody(body);
       this.diceBodies.push(body);
       
@@ -280,21 +285,24 @@ class Dice3D {
           this.normalMaterials[5], this.normalMaterials[1], this.normalMaterials[4]
         ];
         
-        // Spawn inside camera view (near Y=8-12) so there's no lag before they appear
+        // Spawn inside camera view so there's no lag before they appear. Toned
+        // down from 8-12 high / -15 down / 0-20 spin: that combination hurled
+        // the dice at the felt hard enough to look frantic, and the spin was
+        // never negative on any axis so every die tumbled the same direction.
         this.diceBodies[i].position.set(
           (Math.random() - 0.5) * 3,
-          8 + Math.random() * 4,
+          7 + Math.random() * 2.5,
           (Math.random() - 0.5) * 3
         );
         this.diceBodies[i].velocity.set(
-          (Math.random() - 0.5) * 6,
-          -15,
-          (Math.random() - 0.5) * 6
+          (Math.random() - 0.5) * 4,
+          -10,
+          (Math.random() - 0.5) * 4
         );
         this.diceBodies[i].angularVelocity.set(
-          Math.random() * 20,
-          Math.random() * 20,
-          Math.random() * 20
+          (Math.random() - 0.5) * 22,
+          (Math.random() - 0.5) * 22,
+          (Math.random() - 0.5) * 22
         );
         this.diceBodies[i].type = CANNON.Body.DYNAMIC;
         this.diceBodies[i].wakeUp();
@@ -318,6 +326,21 @@ class Dice3D {
     }
   }
   
+  // Distance from die i's centre down to its lowest corner in its CURRENT
+  // orientation. size/2 when flat on a face, size*sqrt(3)/2 balanced on a corner.
+  _supportY(i) {
+    const h = (this.diceMeshes[i].scale.x || 1) * 0.5;
+    const q = this.diceBodies[i].quaternion;
+    const tq = this._supportQuat || (this._supportQuat = new THREE.Quaternion());
+    const v = this._supportVec || (this._supportVec = new THREE.Vector3());
+    tq.set(q.x, q.y, q.z, q.w);
+    let s = 0;
+    s += Math.abs(v.set(1, 0, 0).applyQuaternion(tq).y);
+    s += Math.abs(v.set(0, 1, 0).applyQuaternion(tq).y);
+    s += Math.abs(v.set(0, 0, 1).applyQuaternion(tq).y);
+    return h * s;
+  }
+
   snapToState(finalValues, heldState, targetElements) {
     this.rolling = false;
     this.settling = false;
@@ -451,9 +474,12 @@ class Dice3D {
       for (let i of this.rollData.unheldIndices) {
         // Never let a die sink below the surface (see the floor clamp note in
         // backgammon3d.js — a half-buried cube reads as a flat square slab).
-        const halfSize = (this.diceMeshes[i].scale.x || 1) * 0.5;
-        if (this.diceBodies[i].position.y < halfSize) {
-          this.diceBodies[i].position.y = halfSize;
+        // Clamp on the ROTATED support point, not the centre: a tumbling cube
+        // balanced towards a corner stands up to size*sqrt(3)/2 above its lowest
+        // point, so a centre clamp at size/2 still let it bury ~20% of itself.
+        const rest = this._supportY(i);
+        if (this.diceBodies[i].position.y < rest) {
+          this.diceBodies[i].position.y = rest;
           if (this.diceBodies[i].velocity.y < 0) this.diceBodies[i].velocity.y *= -0.35;
         }
         this.diceMeshes[i].position.copy(this.diceBodies[i].position);
