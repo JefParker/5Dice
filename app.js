@@ -704,7 +704,7 @@ if (gameTypeSelect) {
     const diffWrap = document.getElementById('bg-difficulty-wrap');
     if (bgOpts) bgOpts.classList.toggle('hidden', gameType !== 'Backgammon');
     // Difficulty only matters against the computer.
-    if (diffWrap) diffWrap.classList.toggle('hidden', playerCount !== '1');
+    if (diffWrap) diffWrap.classList.toggle('hidden', gameType !== 'Backgammon' || playerCount !== '1');
   };
 
   gameTypeSelect.addEventListener('change', (e) => {
