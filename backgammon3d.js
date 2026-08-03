@@ -477,13 +477,14 @@ class Backgammon3D {
       die.mesh.position.set(xs[i], this.diceSize / 2 + 0.02, 0.4 - i * 0.9);
       die.mesh.quaternion.copy(this._dieQuatFor(v));
       const dim = used(v) && (d1 !== d2 || used(v));
-      // Only flag the material transparent while it is actually dimmed. Leaving
-      // transparent=true at full opacity pushes the die into three.js's
-      // transparent pass for good, where it stops depth-sorting reliably
-      // against the board.
+      // Dim by DARKENING, not by going translucent. At 35% opacity you could
+      // see the felt and the die's own far faces through it, which read as a
+      // flat tile with no sides — the top number became unreadable on the die
+      // furthest from the camera. Tinting the texture keeps the cube solid.
       die.mesh.material.forEach(m => {
-        if (m.transparent !== dim) { m.transparent = dim; m.needsUpdate = true; }
-        m.opacity = dim ? 0.35 : 1;
+        if (m.transparent) { m.transparent = false; m.needsUpdate = true; }
+        m.opacity = 1;
+        m.color.setHex(dim ? 0x6b6b6b : 0xffffff);
       });
       die.body.position.set(100, 100 + i, 100);
     });
@@ -512,6 +513,7 @@ class Backgammon3D {
       die.mesh.material.forEach(m => {
         if (m.transparent) { m.transparent = false; m.needsUpdate = true; }
         m.opacity = 1;
+        m.color.setHex(0xffffff);
       });
       die.body.position.set(this.FELT_HALF_X * 0.4 + i * 0.3, 3 + i * 1.2, (i ? 1 : -1) * 1.2);
       die.body.velocity.set(2 + Math.random() * 3, -2, (Math.random() - 0.5) * 6);
