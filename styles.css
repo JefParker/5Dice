@@ -1382,9 +1382,9 @@ body.dice3d-active .fd-die {
   border-radius: 999px;
   background: rgba(20,30,45,0.85);
   color: #fff;
-  font-size: 0.95rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  padding: 10px 26px;
+  padding: 14px 34px;
   cursor: pointer;
 }
 .bg-btn:active { transform: scale(0.96); }
@@ -1618,5 +1618,5 @@ body.dice3d-active .fd-die {
   /* The backgammon action row sits above the bottom edge, clear of it. */
   .bg-ui .bg-actions { bottom: 8px; }
   .bg-ui .bg-topbar { top: 30px; font-size: 0.72rem; }
-  .bg-btn { padding: 8px 20px; font-size: 0.85rem; }
+  .bg-btn { padding: 11px 24px; font-size: 1.05rem; }
 }
