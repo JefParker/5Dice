@@ -307,6 +307,22 @@ class Backgammon3D {
     return new THREE.Quaternion().setFromEuler(e);
   }
 
+  // Distance from a die's CENTRE down to its lowest corner for a given
+  // orientation. Flat on a face this is diceSize/2; balanced on a corner it is
+  // diceSize*sqrt(3)/2 (~0.54 at our size). Clamping the centre to diceSize/2 —
+  // which is what this used to do — therefore still let a tilted die sink up to
+  // a quarter of its body under the felt, and a half-buried cube renders as a
+  // flat tile with no visible sides. Always clamp on the support point instead.
+  _supportY(quat) {
+    const h = this.diceSize / 2;
+    const v = this._supportVec || (this._supportVec = new THREE.Vector3());
+    let s = 0;
+    s += Math.abs(v.set(1, 0, 0).applyQuaternion(quat).y);
+    s += Math.abs(v.set(0, 1, 0).applyQuaternion(quat).y);
+    s += Math.abs(v.set(0, 0, 1).applyQuaternion(quat).y);
+    return h * s;
+  }
+
   _buildCube() {
     const size = 0.78;
     const faces = [2, 4, 8, 16, 32, 64].map(n => {
@@ -426,7 +442,14 @@ class Backgammon3D {
       die.mesh.position.set(xs[i], this.diceSize / 2 + 0.02, 0.4 - i * 0.9);
       die.mesh.quaternion.copy(this._dieQuatFor(v));
       const dim = used(v) && (d1 !== d2 || used(v));
-      die.mesh.material.forEach(m => { m.transparent = true; m.opacity = dim ? 0.35 : 1; });
+      // Only flag the material transparent while it is actually dimmed. Leaving
+      // transparent=true at full opacity pushes the die into three.js's
+      // transparent pass for good, where it stops depth-sorting reliably
+      // against the board.
+      die.mesh.material.forEach(m => {
+        if (m.transparent !== dim) { m.transparent = dim; m.needsUpdate = true; }
+        m.opacity = dim ? 0.35 : 1;
+      });
       die.body.position.set(100, 100 + i, 100);
     });
     this.needsRender = true;
@@ -451,7 +474,10 @@ class Backgammon3D {
     }, 3200);
     this.dice.forEach((die, i) => {
       die.mesh.visible = true;
-      die.mesh.material.forEach(m => { m.opacity = 1; });
+      die.mesh.material.forEach(m => {
+        if (m.transparent) { m.transparent = false; m.needsUpdate = true; }
+        m.opacity = 1;
+      });
       die.body.position.set(this.FELT_HALF_X * 0.4 + i * 0.3, 3 + i * 1.2, (i ? 1 : -1) * 1.2);
       die.body.velocity.set(2 + Math.random() * 3, -2, (Math.random() - 0.5) * 6);
       die.body.angularVelocity.set(Math.random() * 18, Math.random() * 18, Math.random() * 18);
@@ -676,10 +702,10 @@ class Backgammon3D {
       if (!a.settling) {
         this.world.step(1 / 60, Math.min(0.1, (now - (this._lastStep || now)) / 1000), 3);
         this._lastStep = now;
-        const rest = this.diceSize / 2;
         this.dice.forEach(d => {
           // Hard floor: a die must never render below the felt. Without this a
           // solver hiccup leaves a half-buried cube showing as a thin square.
+          const rest = this._supportY(d.body.quaternion);
           if (d.body.position.y < rest) {
             d.body.position.y = rest;
             if (d.body.velocity.y < 0) d.body.velocity.y *= -0.35;
@@ -706,8 +732,20 @@ class Backgammon3D {
           const target = new THREE.Vector3(xs[i], this.diceSize / 2 + 0.02, 0.4 - i * 0.9);
           d.mesh.position.lerpVectors(a['p' + i], target, ease);
           d.mesh.quaternion.slerpQuaternions(a['q' + i], this._dieQuatFor(a.values[i]), ease);
+          // The die is still tilted for most of this tween while its centre is
+          // already being pulled down to resting height — so without clamping on
+          // the rotated support point it dips through the felt and reads as a
+          // flat tile until the very last frame.
+          const minY = this._supportY(d.mesh.quaternion) + 0.02;
+          if (d.mesh.position.y < minY) d.mesh.position.y = minY;
         });
         if (t >= 1) {
+          // Land on the exact resting pose rather than trusting the final tween
+          // frame, so the two dice are always identically seated.
+          this.dice.forEach((d, i) => {
+            d.mesh.position.set(xs[i], this.diceSize / 2 + 0.02, 0.4 - i * 0.9);
+            d.mesh.quaternion.copy(this._dieQuatFor(a.values[i]));
+          });
           const done = a.done;
           this.rollAnim = null;
           if (done) done();
