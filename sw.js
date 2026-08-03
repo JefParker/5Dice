@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v106';
+const CACHE_NAME = '5dice-cache-v107';
 
 // Precache the SAME versioned URLs index.html actually requests. Unversioned
 // entries used to coexist with runtime-cached ?v= entries, and the offline
@@ -15,7 +15,7 @@ const urlsToCache = [
   './five-dice.js?v=36',
   './backgammon.js?v=1',
   './backgammon3d.js?v=6',
-  './bg-game.js?v=4',
+  './bg-game.js?v=5',
   './dice3d.js?v=24',
   './firebase-game-backend.js?v=26',
   './firebase-config.js',

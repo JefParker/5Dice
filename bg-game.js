@@ -271,6 +271,10 @@
     state = window.BG.undoMove(state);
     selected = null;
     view.clearHighlights();
+    // Previewed moves are provisional, so an undo has to reach the opponent too
+    // — otherwise their board keeps a checker we've already taken back, and only
+    // snaps into line when the turn is finally committed.
+    broadcast('UNDO');
     render();
   }
 
@@ -285,7 +289,11 @@
     if (state.phase === 'over') state._endedBy = window.myPeerId;
     selected = null;
     view.clearHighlights();
-    broadcast('TURN', { moves });
+    // `streamed` tells the opponent they have ALREADY watched these moves land
+    // one by one, so they adopt the committed state without replaying them.
+    // The AI path and auto-passes never preview, so those still animate.
+    broadcast('TURN', { moves, streamed: previewedThisTurn });
+    previewedThisTurn = false;
     render();
     if (state.phase === 'over') return gameOverUi();
     maybeRunAi();
@@ -381,6 +389,8 @@
     if (!opt) return false;
     for (const m of opt.moves) state = window.BG.applyMove(state, m);
     selected = null;
+    // Show the opponent this move NOW rather than making them wait for Done.
+    streamMove(opt.moves);
     render();
     autoDoneCheck();
     return true;
@@ -395,6 +405,7 @@
         for (const m of opt.moves) state = window.BG.applyMove(state, m);
         selected = null;
         view.clearHighlights();
+        streamMove(opt.moves);
         render();
         autoDoneCheck();
         return;
@@ -451,6 +462,27 @@
     });
   }
 
+  // Animate `moves` one at a time against the CURRENT board, then adopt
+  // `finalState`. Used for both a live PREVIEW and a replayed committed TURN.
+  function playMoves(moves, finalState, done) {
+    const mover = state ? state.turn : null;
+    let i = 0;
+    const step = () => {
+      if (i >= moves.length || !view) {
+        state = finalState;
+        render();
+        if (state.phase === 'over') gameOverUi();
+        else if (done) done();
+        return;
+      }
+      const m = moves[i++];
+      const countAtTarget = m.to === 'off' ? 0 : Math.abs((state && state.points[m.to]) || 0);
+      view.animateMove(m.from === 'bar' ? 'bar' : m.from, m.to === 'off' ? 'off' : m.to,
+        mover || 'b', countAtTarget, () => setTimeout(step, 140));
+    };
+    step();
+  }
+
   // A freshly-adopted 'opening' state needs somebody to actually roll for first
   // turn. runOpening() itself decides whether THIS client is the one (host, or
   // solo-vs-computer), so it is safe to call from every adoption path.
@@ -459,6 +491,18 @@
   // pressing it reset the board and broadcast BG_RESET, but their own
   // runOpening() bailed on the host check while the host merely adopted the new
   // state and never started it. The rematch hung in 'opening' forever.
+  // Set whenever we've streamed at least one provisional move this turn.
+  let previewedThisTurn = false;
+
+  // Push a provisional mid-turn move to the opponent. The state we send is a
+  // real, legal position (the mover's board after the move), it just isn't the
+  // END of the turn — Undo can still take it back, and commitTurn() sends the
+  // authoritative version. Peers reconcile on seq either way.
+  function streamMove(moves) {
+    previewedThisTurn = true;
+    broadcast('PREVIEW', { moves });
+  }
+
   let openingTimer = null;
   function maybeStartOpening() {
     if (!state || state.phase !== 'opening') return;
@@ -659,24 +703,18 @@
           refreshUi();
           return;
         }
-      } else if (kind === 'TURN' && view && Array.isArray(evt.moves) && evt.moves.length) {
+      } else if (kind === 'PREVIEW' && view && Array.isArray(evt.moves) && evt.moves.length) {
+        // A provisional mid-turn move: animate it right now so the turn unfolds
+        // in front of us instead of arriving as a burst at Done. Adopt the
+        // attached state — it is a legal position, just not the end of the turn,
+        // and commitTurn() will send the authoritative one with a higher seq.
+        playMoves(evt.moves, inc, () => refreshUi());
+        return;
+      } else if (kind === 'TURN' && !evt.streamed && view && Array.isArray(evt.moves) && evt.moves.length) {
         // Animate the opponent's moves against our CURRENT board, then adopt.
-        const mover = state ? state.turn : null;
-        const finalState = inc;
-        let i = 0;
-        const step = () => {
-          if (i >= evt.moves.length || !view) {
-            state = finalState;
-            render();
-            if (state.phase === 'over') gameOverUi(); else refreshUi();
-            return;
-          }
-          const m = evt.moves[i++];
-          const countAtTarget = m.to === 'off' ? 0 : Math.abs((state && state.points[m.to]) || 0);
-          view.animateMove(m.from === 'bar' ? 'bar' : m.from, m.to === 'off' ? 'off' : m.to,
-            mover || 'b', countAtTarget, () => setTimeout(step, 140));
-        };
-        step();
+        // `streamed` turns were already watched move-by-move via PREVIEW, so
+        // they fall through and adopt silently rather than replaying.
+        playMoves(evt.moves, inc, () => refreshUi());
         return;
       }
       state = inc;
