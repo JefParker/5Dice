@@ -1251,41 +1251,79 @@ function handleGameEvent(evt) {
   }
 }
 
-window.sendGameAction = async function(msgObj) {
-  if (!currentRoomId || !window.firebaseGameBackend) return;
+// Writes are chained so they land in the order the moves happened. Without
+// this, two rapid actions raced: each awaited its event push and only THEN read
+// the game state, so a slow first write could persist a mid-turn board on top
+// of a newer one.
+let gameActionChain = Promise.resolve();
 
-  try {
-    const eventPayload = {
-      ...msgObj,
-      sender: myPeerId
-    };
-    await window.firebaseGameBackend.sendGameEvent(currentRoomId, eventPayload);
+async function retryWrite(fn, tries = 3) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (err) {
+      lastErr = err;
+      if (i < tries - 1) await new Promise(r => setTimeout(r, 300 * Math.pow(2, i)));
+    }
+  }
+  throw lastErr;
+}
 
-    // Synchronize overall state in Firebase
-    const updates = { lastUpdated: Date.now() };
+window.sendGameAction = function(msgObj) {
+  if (!currentRoomId || !window.firebaseGameBackend) return Promise.resolve();
 
-    // Keyed off the tracked game type (not the lobby cache) so 5 Dice state is
-    // persisted even when the lobby snapshot hasn't arrived — otherwise rolls
-    // and scores broadcast as transient events but are lost on any reload.
-    if (getCurrentGameType() === '5 Dice') {
-      updates.fiveDiceState = window.fiveDiceState;
-      if (window.currentTurnPlayerId) {
-        updates.currentTurnPlayerId = window.currentTurnPlayerId;
-      }
-    } else if (getCurrentGameType() === 'Backgammon' && window.BGGame && window.BGGame.active) {
-      const json = window.BGGame.getStateJson();
-      if (json) updates.backgammonState = json;
+  const roomId = currentRoomId;
+  const eventPayload = { ...msgObj, sender: myPeerId };
+
+  // Snapshot the state NOW, not after the event await — see the note above.
+  const updates = { lastUpdated: Date.now() };
+
+  // Keyed off the tracked game type (not the lobby cache) so 5 Dice state is
+  // persisted even when the lobby snapshot hasn't arrived — otherwise rolls
+  // and scores broadcast as transient events but are lost on any reload.
+  if (getCurrentGameType() === '5 Dice') {
+    updates.fiveDiceState = window.fiveDiceState;
+    if (window.currentTurnPlayerId) {
+      updates.currentTurnPlayerId = window.currentTurnPlayerId;
+    }
+  } else if (getCurrentGameType() === 'Backgammon' && window.BGGame && window.BGGame.active) {
+    const json = window.BGGame.getStateJson();
+    if (json) updates.backgammonState = json;
+  }
+
+  gameActionChain = gameActionChain.then(async () => {
+    // The event is only the fast path — it carries the animation. Losing it is
+    // survivable, so a failure here must NOT skip the state write below: that
+    // write is the reconciliation channel the other client heals from. It used
+    // to be one try/catch around both, which meant a single dropped event left
+    // the two boards permanently disagreeing about whose turn it was.
+    let eventOk = true;
+    try {
+      // Retrying can duplicate an event; the receiver's seq guard drops dupes.
+      await retryWrite(() => window.firebaseGameBackend.sendGameEvent(roomId, eventPayload));
+    } catch (err) {
+      eventOk = false;
+      console.error('sendGameEvent failed (falling back to state sync):', err);
     }
 
-    await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
-    touchRoomActivity();
-  } catch (err) {
-    // No caller awaits this, so surface the failure to the player instead of
-    // letting it die as an unhandled rejection while the UI shows the action
-    // as done.
+    try {
+      await retryWrite(() => window.firebaseGameBackend.updateGameState(roomId, updates));
+      touchRoomActivity();
+    } catch (err) {
+      console.error('updateGameState failed:', err);
+      showToast('Move failed to sync — check your connection.', '#dc3545');
+      return;
+    }
+
+    if (!eventOk) {
+      // State landed, so the opponent still catches up from the games node —
+      // they just miss the animation for this one action.
+      console.warn('Game event dropped; opponent reconciles from persisted state.');
+    }
+  }).catch(err => {
     console.error('sendGameAction failed:', err);
-    showToast('Move failed to sync — check your connection.', '#dc3545');
-  }
+  });
+
+  return gameActionChain;
 };
 
 // Record a win/tie for a player in the current room (atomic; persists across games).
