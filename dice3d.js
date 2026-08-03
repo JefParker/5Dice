@@ -38,9 +38,11 @@ class Dice3D {
     dirLight.position.set(10, 20, 10);
     this.scene.add(dirLight);
 
-    this.world = new CANNON.World({
-      gravity: new CANNON.Vec3(0, -40, 0) // Heavy gravity for snappy rolling
-    });
+    // NOTE: cannon.js 0.6.2 has no options-object constructor — `new World({...})`
+    // silently ignored the gravity and left it at ZERO, so the dice only moved
+    // because they were thrown and never truly settled. Set it on the instance.
+    this.world = new CANNON.World();
+    this.world.gravity.set(0, -40, 0); // Heavy gravity for snappy rolling
 
     // Bouncy material. The floor and walls must carry it too — a ContactMaterial
     // only applies when BOTH bodies have the material, so without it every
@@ -447,6 +449,13 @@ class Dice3D {
       this.world.step(1 / 60, Math.min(frameDt, 0.1), 3);
 
       for (let i of this.rollData.unheldIndices) {
+        // Never let a die sink below the surface (see the floor clamp note in
+        // backgammon3d.js — a half-buried cube reads as a flat square slab).
+        const halfSize = (this.diceMeshes[i].scale.x || 1) * 0.5;
+        if (this.diceBodies[i].position.y < halfSize) {
+          this.diceBodies[i].position.y = halfSize;
+          if (this.diceBodies[i].velocity.y < 0) this.diceBodies[i].velocity.y *= -0.35;
+        }
         this.diceMeshes[i].position.copy(this.diceBodies[i].position);
         this.diceMeshes[i].quaternion.copy(this.diceBodies[i].quaternion);
       }

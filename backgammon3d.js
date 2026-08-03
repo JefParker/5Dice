@@ -234,7 +234,14 @@ class Backgammon3D {
     // BoxGeometry order: +x,-x,+y,-y,+z,-z → faces 3,4,1,6,2,5 (standard die: opposite faces sum 7)
     const order = [2, 3, 0, 5, 1, 4];
     this.dice = [];
-    this.world = new CANNON.World({ gravity: new CANNON.Vec3(0, -34, 0) });
+    this.world = new CANNON.World();
+    this.world.allowSleep = true;
+    // cannon.js 0.6.2 (what index.html loads) has NO options-object
+    // constructor — `new World({gravity})` silently left gravity at ZERO, so
+    // dice never actually settled and the solver could leave one embedded in
+    // the felt (it read as a flat, thin square slab). Set it on the instance,
+    // which works in both cannon.js and cannon-es.
+    this.world.gravity.set(0, -34, 0);
     const mat = new CANNON.Material();
     this.world.addContactMaterial(new CANNON.ContactMaterial(mat, mat, { friction: 0.25, restitution: 0.42 }));
     const floor = new CANNON.Body({ mass: 0, material: mat });
@@ -255,7 +262,10 @@ class Backgammon3D {
     wall(0, this.DEPTH_HALF - 0.3, Math.PI);
 
     for (let i = 0; i < 2; i++) {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(this.diceSize, this.diceSize, this.diceSize), order.map(f => mats[f]));
+      // Each die needs its OWN materials: sharing them meant dimming the die
+      // whose value had been played also dimmed the other one.
+      const dieMats = order.map(f => mats[f].clone());
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(this.diceSize, this.diceSize, this.diceSize), dieMats);
       mesh.visible = false;
       this.group.add(mesh);
       const body = new CANNON.Body({ mass: 1, material: mat });
@@ -342,12 +352,14 @@ class Backgammon3D {
   }
 
   _buildHighlights() {
-    // Simple glowing discs used to mark legal target zones.
+    // Glowing discs marking zones. Green = a legal destination for the
+    // checker you're holding; amber = a checker you still have to move.
     this.highlightMeshes = [];
     const geo = new THREE.CylinderGeometry(0.36, 0.36, 0.03, 20);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x39e07a, transparent: true, opacity: 0.65 });
+    this.targetMat = new THREE.MeshBasicMaterial({ color: 0x39e07a, transparent: true, opacity: 0.65 });
+    this.sourceMat = new THREE.MeshBasicMaterial({ color: 0xffc83d, transparent: true, opacity: 0.5 });
     for (let i = 0; i < 28; i++) {
-      const m = new THREE.Mesh(geo, mat);
+      const m = new THREE.Mesh(geo, this.targetMat);
       m.visible = false;
       this.group.add(m);
       this.highlightMeshes.push(m);
@@ -483,13 +495,25 @@ class Backgammon3D {
 
   highlightTargets(zones) {
     this.legalTargets = zones.slice();
+    this._paintZones(zones, this.targetMat);
+  }
+
+  // Amber markers on the checkers that still have a legal move — shown while
+  // nothing is picked up so it's never a mystery what the game is waiting for.
+  highlightSources(zones) {
+    this.legalTargets = [];
+    this._paintZones(zones, this.sourceMat);
+  }
+
+  _paintZones(zones, material) {
     this.highlightMeshes.forEach(m => { m.visible = false; });
     zones.forEach((z, i) => {
       if (i >= this.highlightMeshes.length) return;
       const m = this.highlightMeshes[i];
+      m.material = material;
       let p;
       if (z === 'off') p = new THREE.Vector3(this.trayX, 0.25, this._offSideZ());
-      else if (z === 'bar') p = new THREE.Vector3(0, 0.4, 0);
+      else if (z === 'bar') p = new THREE.Vector3(0, 0.55, 0);
       else {
         const { x, side } = this._pointBase(z);
         p = new THREE.Vector3(x, 0.08, side * (this.DEPTH_HALF - 1.2));
@@ -604,6 +628,8 @@ class Backgammon3D {
       d.mesh.position.copy(d.homePos);
       if (!d.moved && this.cb.onTap) this.cb.onTap(d.zone); // press without drag = tap
     }
+    // Let the controller restore its idle hints, which clearHighlights just wiped.
+    if (this.cb.onIdle) this.cb.onIdle();
     this.needsRender = true;
   }
 
@@ -648,8 +674,16 @@ class Backgammon3D {
       busy = true;
       const a = this.rollAnim;
       if (!a.settling) {
-        this.world.step(1 / 60);
+        this.world.step(1 / 60, Math.min(0.1, (now - (this._lastStep || now)) / 1000), 3);
+        this._lastStep = now;
+        const rest = this.diceSize / 2;
         this.dice.forEach(d => {
+          // Hard floor: a die must never render below the felt. Without this a
+          // solver hiccup leaves a half-buried cube showing as a thin square.
+          if (d.body.position.y < rest) {
+            d.body.position.y = rest;
+            if (d.body.velocity.y < 0) d.body.velocity.y *= -0.35;
+          }
           d.mesh.position.copy(d.body.position);
           d.mesh.quaternion.copy(d.body.quaternion);
         });

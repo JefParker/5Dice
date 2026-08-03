@@ -6,7 +6,7 @@
  // strings above.
  const assets = ['./', 'index.html',
     'Score.js?v=23', 'firebase-backend.js?v=12', 'Score.css?v=9',
-    'forms.css', 'Score.json', '../dice3d.js?v=22',
+    'forms.css', 'Score.json', '../dice3d.js?v=23',
     '../skins.css?v=4', '../skins.js?v=1',
     '../firebase-config.js',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',

@@ -1498,3 +1498,114 @@ body.dice3d-active .fd-die {
   .tic-tac-toe-board { max-width: 480px; }
   .cell { font-size: 5.5rem; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Landscape phones: immersive game screen.                            */
+/* A handset in landscape has ~350px of height, and the header + footer*/
+/* were eating a third of it. Hide the chrome and give every pixel to  */
+/* the board; the ☰ menu and voice buttons float over the game so      */
+/* nothing becomes unreachable, and the status line overlays the top.  */
+/* ------------------------------------------------------------------ */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* Header collapses to zero height; its children float over the board.
+     (position is overridden with !important because the element carries an
+     inline style="position: relative".) */
+  #screen-game .top-header {
+    position: absolute !important;
+    top: 0; left: 0; right: 0;
+    height: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    z-index: 1200;
+  }
+  #screen-game .top-header h1 { display: none; }
+  #screen-game .top-header .menu-btn {
+    top: 6px;
+    right: 6px;
+    transform: none;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 50%;
+    backdrop-filter: blur(2px);
+  }
+  /* Voice buttons keep their own inline positioning — override it. */
+  #screen-game .audio-controls {
+    top: 6px !important;
+    left: 6px !important;
+    transform: none !important;
+    gap: 6px !important;
+  }
+  #screen-game .audio-btn { width: 34px; height: 34px; }
+  #screen-game .audio-btn svg { width: 19px; height: 19px; }
+
+  #screen-game .app-footer { display: none; }
+
+  #screen-game .game-container {
+    padding: 0;
+    overflow: hidden;
+    justify-content: center;
+  }
+
+  /* Status overlays the top strip instead of taking a row of its own. */
+  #screen-game .game-status {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: 0.85rem;
+    max-width: 60vw;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 1150;
+  }
+
+  /* Boards claim the full viewport height. */
+  #backgammon-container {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+  }
+  #screen-game .tic-tac-toe-board {
+    max-height: 82vh;
+    max-width: 82vh;
+    margin-top: 0;
+  }
+
+  /* Floating action buttons so they survive the hidden footer. */
+  #screen-game #btn-play-again {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    z-index: 1150;
+  }
+  #screen-game #btn-start-now {
+    position: absolute;
+    top: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    z-index: 1150;
+  }
+  #screen-game #fd-wins {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    margin: 0;
+    z-index: 1150;
+    font-size: 0.75rem;
+  }
+  /* The backgammon action row sits above the bottom edge, clear of it. */
+  .bg-ui .bg-actions { bottom: 8px; }
+  .bg-ui .bg-topbar { top: 30px; font-size: 0.72rem; }
+  .bg-btn { padding: 8px 20px; font-size: 0.85rem; }
+}

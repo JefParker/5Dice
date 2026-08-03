@@ -116,7 +116,9 @@
       if (t) t.innerText = `${colorName(state.cube.offeredBy)} doubles to ${state.cube.value * 2}. Take or drop?`;
     }
 
-    // Status text
+    // Status text. While moving, say exactly which dice still HAVE to be
+    // played — backgammon forces you to use every die you legally can, so the
+    // Done button stays hidden until then and that needs explaining.
     if (!started) {
       status('Waiting for players...');
     } else if (state.phase === 'over') {
@@ -125,15 +127,48 @@
       status('Rolling for first turn...');
     } else if (offered) {
       status(state.cube.offeredBy === myColor ? `Double offered — waiting for ${oppName()}...` : 'You have been doubled!');
-    } else if (myTurn) {
-      status(rolling ? 'Your turn — roll!' : 'Your turn: move your checkers');
+    } else if (myTurn && rolling) {
+      status('Your turn — roll!');
+    } else if (myTurn && moving) {
+      if (doneReady) {
+        status(state.movesLeft.length ? 'No moves left — tap Done' : 'Tap Done to end your turn');
+      } else {
+        const left = state.movesLeft.slice().sort((a, b) => b - a);
+        const onBar = (myColor === 'w' ? state.barW : state.barB) > 0;
+        if (onBar) {
+          status(`Enter from the bar — play your ${left.join(' and ')}`);
+        } else if (left.length === 1) {
+          status(`You must still play your ${left[0]}`);
+        } else {
+          status(`Play your ${left.join(' and ')}`);
+        }
+      }
     } else {
       status(`${oppName()}'s turn`);
     }
 
+    showIdleHints();
+
     window.myTurn = myTurn && (moving || rolling);
     window.currentTurnPlayerId = myTurn ? window.myPeerId : (isAi() ? AI : otherPeerId());
     if (typeof window.updateGameBackground === 'function') window.updateGameBackground();
+  }
+
+  // With nothing picked up, mark every checker that still has a legal move in
+  // amber. Combined with the status line this answers "why is only Undo
+  // showing?" — there are still dice you're required to play, and these are
+  // the checkers that can play them.
+  function showIdleHints() {
+    if (!view || !state) return;
+    if (selected !== null) return;                       // targets are showing instead
+    if (state.turn !== myColor || state.phase !== 'moving' || window.gameStarted === false) {
+      view.clearHighlights();
+      return;
+    }
+    const sources = [...new Set(window.BG.legalMoves(state).map(m => String(m.from)))]
+      .map(s => (s === 'bar' ? 'bar' : parseInt(s, 10)));
+    if (sources.length) view.highlightSources(sources);
+    else view.clearHighlights();
   }
 
   function otherPeerId() {
@@ -503,6 +538,7 @@
       container.classList.remove('hidden');
       view = new Backgammon3D(container, {
         onPickup, onDrop, onTap,
+        onIdle: showIdleHints,
         onCubeTap: () => { if (window.BG.canOfferCube(state, myColor)) onDoubleClick(); }
       });
       view.setPlayerColor(myColor);
