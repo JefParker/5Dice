@@ -215,6 +215,32 @@
     return 0.2126 * ((n >> 16 & 255) / 255) + 0.7152 * ((n >> 8 & 255) / 255) + 0.0722 * ((n & 255) / 255);
   }
 
+  // Accept #abc as well as #aabbcc — getPeerColor's own fallback is '#333', and
+  // the 6-digit-only test used to throw that (and any short hex a player had
+  // saved) away, which is one of the ways the dark side ended up generic brown.
+  function normHex(c) {
+    if (typeof c !== 'string') return null;
+    if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(c)) return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toLowerCase();
+    return null;
+  }
+
+  // Darken a colour until it reads against the cream side, instead of throwing
+  // it out. Rejecting pale colours meant a player who picked, say, a light blue
+  // silently got brown checkers and none of her chosen colour at all — now she
+  // gets a deeper blue, which still identifies her.
+  function readableOnCream(hex) {
+    let c = hex;
+    for (let i = 0; i < 12 && relLuminance(c) >= 0.5; i++) {
+      const n = parseInt(c.slice(1), 16);
+      const r = Math.round((n >> 16 & 255) * 0.82);
+      const g = Math.round((n >> 8 & 255) * 0.82);
+      const b = Math.round((n & 255) * 0.82);
+      c = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+    return c;
+  }
+
   function applyCheckerColors() {
     if (!view) return;
     let bHex = BROWN;
@@ -224,8 +250,10 @@
       // using it then would paint the dark side with the white player's colour.
       const usable = bPeer && !(myColor !== 'b' && bPeer === window.myPeerId);
       const c = (usable && typeof window.getPeerColor === 'function') ? window.getPeerColor(bPeer) : null;
-      // Reject anything too pale to read against the cream side.
-      if (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) && relLuminance(c) < 0.62) bHex = c;
+      // '#333' is getPeerColor's "roster hasn't loaded" placeholder, not a
+      // choice — keep classic brown until the real colour arrives.
+      const hex = (c === '#333') ? null : normHex(c);
+      if (hex) bHex = readableOnCream(hex);
     }
     const key = CREAM + '|' + bHex;
     if (key === appliedCheckerCols) return;   // roster updates fire constantly
