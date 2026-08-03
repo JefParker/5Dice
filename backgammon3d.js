@@ -387,22 +387,38 @@ class Backgammon3D {
   }
 
   _buildHighlights() {
-    // Glowing discs marking zones. Green = a legal destination for the
-    // checker you're holding; amber = a checker you still have to move.
+    // Markers for zones. Cyan = a legal destination for the checker you've got
+    // selected; amber = a checker that still has a move to play.
+    //
+    // These used to be flat green discs — on a GREEN felt, which is about the
+    // worst colour you could pick for "look here". Each marker is now a filled
+    // disc inside a bright ring, in a cool colour that nothing else on the
+    // board uses, and it pulses while it's up.
     this.highlightMeshes = [];
-    const geo = new THREE.CylinderGeometry(0.36, 0.36, 0.03, 20);
-    this.targetMat = new THREE.MeshBasicMaterial({ color: 0x39e07a, transparent: true, opacity: 0.65 });
-    this.sourceMat = new THREE.MeshBasicMaterial({ color: 0xffc83d, transparent: true, opacity: 0.5 });
+    const discGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.04, 24);
+    const ringGeo = new THREE.TorusGeometry(0.36, 0.055, 10, 30);
+    this.targetMat = new THREE.MeshBasicMaterial({ color: 0x6ef2ff, transparent: true, opacity: 0.45 });
+    this.targetRingMat = new THREE.MeshBasicMaterial({ color: 0x9dfaff, transparent: true, opacity: 0.95 });
+    this.sourceMat = new THREE.MeshBasicMaterial({ color: 0xffc83d, transparent: true, opacity: 0.25 });
+    this.sourceRingMat = new THREE.MeshBasicMaterial({ color: 0xffd76b, transparent: true, opacity: 0.75 });
     for (let i = 0; i < 28; i++) {
-      const m = new THREE.Mesh(geo, this.targetMat);
-      m.visible = false;
-      this.group.add(m);
-      this.highlightMeshes.push(m);
+      const g = new THREE.Group();
+      const disc = new THREE.Mesh(discGeo, this.targetMat);
+      const ring = new THREE.Mesh(ringGeo, this.targetRingMat);
+      ring.rotation.x = Math.PI / 2;
+      g.add(disc);
+      g.add(ring);
+      g.visible = false;
+      this.group.add(g);
+      this.highlightMeshes.push({ group: g, disc, ring });
     }
-    // Source ring under a selected checker
+    this._hlOn = false;
+
+    // Ring around the checker you have selected.
+    this.selectRingMat = new THREE.MeshBasicMaterial({ color: 0xffd54a });
     this.selectRing = new THREE.Mesh(
-      new THREE.TorusGeometry(this.CHK_R + 0.08, 0.045, 10, 28),
-      new THREE.MeshBasicMaterial({ color: 0xffd54a })
+      new THREE.TorusGeometry(this.CHK_R + 0.09, 0.055, 10, 28),
+      this.selectRingMat
     );
     this.selectRing.rotation.x = Math.PI / 2;
     this.selectRing.visible = false;
@@ -540,32 +556,65 @@ class Backgammon3D {
 
   highlightTargets(zones) {
     this.legalTargets = zones.slice();
-    this._paintZones(zones, this.targetMat);
+    this._paintZones(zones, 'target');
   }
 
   // Amber markers on the checkers that still have a legal move — shown while
   // nothing is picked up so it's never a mystery what the game is waiting for.
   highlightSources(zones) {
     this.legalTargets = [];
-    this._paintZones(zones, this.sourceMat);
+    this._paintZones(zones, 'source');
   }
 
-  _paintZones(zones, material) {
-    this.highlightMeshes.forEach(m => { m.visible = false; });
+  _stackCount(zone) {
+    let n = 0;
+    for (const c of this.checkers) if (c.visible && c.userData.zone === zone) n++;
+    return n;
+  }
+
+  // Which slot an arriving checker would occupy. A lone opponent checker gets
+  // hit and sent to the bar, so we'd land on an empty point.
+  _landingSlot(zone) {
+    const n = this._stackCount(zone);
+    if (!n) return 0;
+    const mine = this._offColor || 'w';
+    let topColor = null;
+    for (const c of this.checkers) {
+      if (c.visible && c.userData.zone === zone) { topColor = c.userData.checkerColor; break; }
+    }
+    return topColor !== mine ? 0 : n;
+  }
+
+  _paintZones(zones, kind) {
+    const isTarget = kind !== 'source';
+    const discMat = isTarget ? this.targetMat : this.sourceMat;
+    const ringMat = isTarget ? this.targetRingMat : this.sourceRingMat;
+    this.highlightMeshes.forEach(h => { h.group.visible = false; });
     zones.forEach((z, i) => {
       if (i >= this.highlightMeshes.length) return;
-      const m = this.highlightMeshes[i];
-      m.material = material;
+      const h = this.highlightMeshes[i];
+      h.disc.material = discMat;
+      h.ring.material = ringMat;
       let p;
       if (z === 'off') p = new THREE.Vector3(this.trayX, 0.25, this._offSideZ());
       else if (z === 'bar') p = new THREE.Vector3(0, 0.55, 0);
       else {
-        const { x, side } = this._pointBase(z);
-        p = new THREE.Vector3(x, 0.08, side * (this.DEPTH_HALF - 1.2));
+        // Put the marker where the checker would actually LAND, on top of any
+        // stack already there. The old fixed spot near the point's base sat
+        // UNDER the second checker onwards — so the clearest moves of all,
+        // stacking onto your own points, showed no visible dot whatsoever.
+        const slot = isTarget ? this._landingSlot(z) : Math.max(0, this._stackCount(z) - 1);
+        p = this._slotPos(z, slot, this._offColor || 'w');
+        p.y += this.CHK_H + (isTarget ? 0.08 : 0.02);
       }
-      m.position.copy(p);
-      m.visible = true;
+      h.group.position.copy(p);
+      h.group.scale.set(1, 1, 1);
+      h.group.visible = true;
     });
+    // Only the cyan destination markers pulse. The amber "these can move" hints
+    // are up for most of your turn, and pulsing those would keep the renderer
+    // awake continuously — a real battery cost on a phone for no benefit.
+    this._hlOn = isTarget && zones.length > 0;
     this.needsRender = true;
   }
 
@@ -591,6 +640,8 @@ class Backgammon3D {
 
   showSelectRing(zone) {
     if (zone == null) { this.selectRing.visible = false; this.needsRender = true; return; }
+    this.selectRingMat.color.set(0xffd54a);   // clear any leftover red flash
+    this._blockedUntil = 0;
     let top = null;
     for (const c of this.checkers) if (c.visible && c.userData.zone === zone) top = c;
     if (top) {
@@ -603,8 +654,19 @@ class Backgammon3D {
 
   clearHighlights() {
     this.legalTargets = [];
-    this.highlightMeshes.forEach(m => { m.visible = false; });
+    this.highlightMeshes.forEach(h => { h.group.visible = false; });
     this.selectRing.visible = false;
+    this._hlOn = false;
+    this.needsRender = true;
+  }
+
+  // "This checker can't go anywhere." Flashes the ring red on the tapped point
+  // so a dead checker gets an explicit answer instead of silence.
+  flashBlocked(zone) {
+    this.showSelectRing(zone);
+    if (!this.selectRing.visible) return;
+    this.selectRingMat.color.set(0xff5a5a);
+    this._blockedUntil = performance.now() + 700;
     this.needsRender = true;
   }
 
@@ -833,6 +895,26 @@ class Backgammon3D {
     }
 
     if (this.drag) busy = true;
+
+    // Breathe the move markers so they read as "live" rather than as painted-on
+    // board decoration. Only runs while markers are actually up.
+    if (this._hlOn) {
+      const s = 1 + Math.sin(now / 240) * 0.11;
+      for (const h of this.highlightMeshes) {
+        if (h.group.visible) h.group.scale.set(s, 1, s);
+      }
+      busy = true;
+    }
+
+    // Return the select ring to amber after a "no moves" flash.
+    if (this._blockedUntil) {
+      if (now >= this._blockedUntil) {
+        this._blockedUntil = 0;
+        this.selectRingMat.color.set(0xffd54a);
+        this.selectRing.visible = false;
+        this.needsRender = true;
+      } else busy = true;
+    }
 
     if (busy || this.needsRender) {
       this.renderer.render(this.scene, this.camera);

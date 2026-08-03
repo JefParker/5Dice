@@ -417,9 +417,35 @@
       view.highlightTargets(opts.map(o => o.to));
       view.showSelectRing(zone);
     } else {
+      const wasSelected = String(selected) === String(zone);
       selected = null;
       view.clearHighlights();
+      // Tapping one of your own checkers that simply cannot move used to do
+      // nothing at all — indistinguishable from a missed tap. Say so.
+      if (!wasSelected && !opts.length && ownsZone(zone)) {
+        view.flashBlocked(zone);
+        if (window.showToast) window.showToast(noMoveReason(zone), '#8a4a25');
+      }
     }
+  }
+
+  // Is `zone` occupied by MY checkers (i.e. something I could expect to move)?
+  function ownsZone(zone) {
+    if (!state || state.turn !== myColor || state.phase !== 'moving') return false;
+    if (zone === 'bar') return (myColor === 'w' ? state.barW : state.barB) > 0;
+    if (zone === 'off' || zone == null) return false;
+    const n = state.points[zone];
+    return myColor === 'w' ? n > 0 : n < 0;
+  }
+
+  // Why can't this checker move? The bar rule is the one that genuinely
+  // confuses people, so name it rather than saying "no moves".
+  function noMoveReason(zone) {
+    const onBar = (myColor === 'w' ? state.barW : state.barB) > 0;
+    if (onBar && zone !== 'bar') return 'You must enter from the bar first.';
+    if (!state.movesLeft.length) return 'No dice left to play — tap Done.';
+    return 'That checker has no legal move with ' +
+      (state.movesLeft.length === 1 ? 'a ' + state.movesLeft[0] : 'these dice') + '.';
   }
 
   function autoDoneCheck() {
