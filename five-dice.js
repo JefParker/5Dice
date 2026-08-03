@@ -843,6 +843,12 @@ window.renderWinsTally = function() {
 
   let html = `<div class="fd-wins-title">Room record</div>`;
 
+  // A backgammon game always produces a winner — someone bears off all fifteen
+  // checkers, or a double is dropped. There is no draw in the rules, so a Ties
+  // row there is a permanent zero taking up space.
+  const canTie = (typeof window.getCurrentGameType !== 'function') ||
+    window.getCurrentGameType() !== 'Backgammon';
+
   if (players.length <= 2) {
     // 2 players (or solo): a tie is shared by everyone, so listing it on each
     // player just duplicates the same number. Show a single wins column plus one
@@ -852,10 +858,12 @@ window.renderWinsTally = function() {
       + `<span class="fd-win-name">${fdEsc(getPeerName(p))}</span>`
       + `<span class="fd-win-count">${wins[p] || 0}</span></div>`
     ).join('');
-    const tieCount = Math.max(0, ...players.map(p => ties[p] || 0));
-    html += `<div class="fd-win-row fd-win-tie"><span class="fd-win-dot" style="visibility:hidden"></span>`
-      + `<span class="fd-win-name">Ties</span>`
-      + `<span class="fd-win-count">${tieCount}</span></div>`;
+    if (canTie) {
+      const tieCount = Math.max(0, ...players.map(p => ties[p] || 0));
+      html += `<div class="fd-win-row fd-win-tie"><span class="fd-win-dot" style="visibility:hidden"></span>`
+        + `<span class="fd-win-name">Ties</span>`
+        + `<span class="fd-win-count">${tieCount}</span></div>`;
+    }
   } else {
     // 3+ players: a tie can be between only some players, so keep the per-player
     // Win / Tie columns.

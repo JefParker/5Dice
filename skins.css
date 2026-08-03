@@ -370,8 +370,11 @@ html[data-skin],
 [data-skin] body.bg-five-dice { background-color: var(--sk-bg); }
 [data-skin] .fd-board { color: var(--sk-text); }
 [data-skin] .fd-sec-label,
-[data-skin] .fd-wins-title,
 [data-skin] .fd-win-head .fd-win-count { color: var(--sk-text-muted); }
+/* The tally panel keeps its own opaque dark backing in every skin, because the
+   screen behind it is the winner's profile colour, not the skin's background —
+   a skin-muted title on top of that was the unreadable combination. */
+[data-skin] .fd-wins-title { color: #cfe1f5; }
 
 /* :not(.avail) so the "tap here" highlight keeps its bright accent — that's a
    readability cue, not decoration. */
@@ -411,13 +414,16 @@ html[data-skin],
   border: 1px solid rgba(var(--pc), .6);
 }
 
+/* Deliberately NOT var(--sk-panel): several skins use a translucent panel, and
+   this one sits over the winner-coloured game screen rather than the skin's own
+   background. Keep it opaque so the numbers stay legible in every skin. */
 [data-skin] .fd-wins {
-  background: var(--sk-panel);
-  border: 1px solid var(--sk-border);
+  background: rgba(10, 16, 26, .92);
+  border: 1px solid rgba(255,255,255,.22);
   border-radius: var(--sk-radius);
 }
-[data-skin] .fd-win-name  { color: var(--sk-text); }
-[data-skin] .fd-win-count { color: var(--sk-text); }
+[data-skin] .fd-win-name  { color: #eaf2fb; }
+[data-skin] .fd-win-count { color: #ffffff; }
 [data-skin] .fd-win-tie .fd-win-name { color: var(--sk-text-muted); }
 [data-skin] .fd-win-row { border-top: 1px solid var(--sk-border); }
 [data-skin] .fd-win-row:first-of-type,

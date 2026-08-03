@@ -91,8 +91,15 @@
     // but nothing ever hid it again on the OTHER player's client when they
     // adopted a fresh state, so both players were left staring at the button
     // after a rematch had already begun.
-    const againBtn = el('btn-play-again');
-    if (againBtn && state.phase !== 'over') againBtn.classList.add('hidden');
+    // Both of these belong to the game-over screen only. reset() hid the button
+    // but not the tally, so after Play Again the room record stayed parked over
+    // the board — on a phone that's directly on top of your home board.
+    if (state.phase !== 'over') {
+      const againBtn = el('btn-play-again');
+      if (againBtn) againBtn.classList.add('hidden');
+      const winsBtn = el('fd-wins');
+      if (winsBtn) winsBtn.classList.add('hidden');
+    }
 
     // Pips + match score
     const meP = el('bg-pips-me'), opP = el('bg-pips-op'), match = el('bg-match');
@@ -185,6 +192,16 @@
   }
 
   function isAiTurnColor(c) { return isAi() && c !== myColor; }
+
+  // Peer id of whoever won, or null if we can't say for sure. Never guesses.
+  function winnerPeerId() {
+    if (!state || !state.winner) return null;
+    if (state.winner === myColor) return window.myPeerId || null;
+    if (isAi()) return AI;
+    const other = (window.roomPlayerDetails || [])
+      .find(p => p.peerId && p.peerId !== window.myPeerId);
+    return other ? other.peerId : null;
+  }
 
   // Checker colours. The host seat ('w') keeps classic cream; the other seat
   // uses that player's chosen profile colour instead of generic brown. Both
@@ -673,8 +690,14 @@
       // The client whose action ended the game records (winner's committer =
       // whoever ran the final transition = this client if we made it end).
       if (state._endedBy === window.myPeerId || isAi()) {
-        const winPid = state.winner === myColor ? window.myPeerId : (isAi() ? AI : otherPeerId());
-        if (typeof window.recordRoomWin === 'function') window.recordRoomWin(winPid);
+        const winPid = winnerPeerId();
+        // otherPeerId() falls back to MY id when the roster is empty, so a loss
+        // that I committed (bearing off is not the only way to end a game — a
+        // dropped double ends it on the LOSER's client) could credit the win to
+        // me. Skip the tally rather than record it to the wrong player; the
+        // number is permanent and there's no UI to correct it.
+        if (winPid && typeof window.recordRoomWin === 'function') window.recordRoomWin(winPid);
+        else if (!winPid) state._recorded = false;   // retry when the roster lands
       }
     }
     if (state.match.target > 1 && state.match.winner) {
