@@ -1166,6 +1166,13 @@ function handleGameStateUpdate(gameData) {
       window.BGGame.syncState(gameData.backgammonState);
     }
     if (window.BGGame && window.BGGame.active) window.BGGame.poke();
+    // Backgammon was the only branch that never repainted the tally, so the
+    // server's win count never reached the panel that was already on screen.
+    // Only repaint while it's actually showing (game over) — never un-hide it.
+    const bgWinsEl = document.getElementById('fd-wins');
+    if (bgWinsEl && !bgWinsEl.classList.contains('hidden') && window.renderWinsTally) {
+      window.renderWinsTally();
+    }
   } else if (is5Dice) {
     if (gameData.fiveDiceState) {
       // Ensure all players are initialized in scores structure
@@ -1282,12 +1289,24 @@ window.sendGameAction = async function(msgObj) {
 };
 
 // Record a win/tie for a player in the current room (atomic; persists across games).
+// incrementWin/Tie are async Firebase transactions, but callers render the
+// tally in the SAME tick — so the winner saw the pre-win number (usually 0) and
+// it only corrected if some later state update happened to repaint. Bump the
+// local copy optimistically and repaint now; the state listener overwrites
+// window.roomWins with the authoritative server value moments later.
+function bumpLocalTally(bucket, playerId) {
+  window[bucket] = window[bucket] || {};
+  window[bucket][playerId] = (window[bucket][playerId] || 0) + 1;
+  if (typeof window.renderWinsTally === 'function') window.renderWinsTally();
+}
 window.recordRoomWin = function(playerId) {
   if (!currentRoomId || !playerId || !window.firebaseGameBackend || !window.firebaseGameBackend.incrementWin) return;
+  bumpLocalTally('roomWins', playerId);
   window.firebaseGameBackend.incrementWin(currentRoomId, playerId);
 };
 window.recordRoomTie = function(playerId) {
   if (!currentRoomId || !playerId || !window.firebaseGameBackend || !window.firebaseGameBackend.incrementTie) return;
+  bumpLocalTally('roomTies', playerId);
   window.firebaseGameBackend.incrementTie(currentRoomId, playerId);
 };
 
