@@ -63,6 +63,16 @@ class Backgammon3D {
     this._offColor = 'w';        // local player's seat; set via setPlayerColor
     this.needsRender = true;
 
+    // --- Camera tilt ---
+    // 0 = the seated three-quarter view, 1 = flat overhead. The board tips up to
+    // face the player on their turn and leans back when it isn't. _resize()
+    // computes a fitted pose for each end and _applyCamera() interpolates.
+    this._tilt = 0;              // where the camera is now
+    this._tiltGoal = 0;          // where it's heading
+    this._camSeated = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+    this._camFlat = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+    this.TILT_MS = 650;
+
     this._onResize = () => this._resize();
     window.addEventListener('resize', this._onResize);
     // The container is often display:none when we're constructed (the screen
@@ -904,10 +914,61 @@ class Backgammon3D {
       dist = (long / 2) / Math.tan(fov / 2) * 1.18;
     }
     dist = Math.max(dist, 13);
-    this.camera.position.set(0, dist * 0.86, dist * 0.62);
-    this.camera.lookAt(0, 0, this.portrait ? 0 : 0.4);
+    this._camSeated.pos.set(0, dist * 0.86, dist * 0.62);
+    this._camSeated.look.set(0, 0, this.portrait ? 0 : 0.4);
+
+    // Overhead pose. Straight down means nothing is foreshortened any more, so
+    // the short axis of the board suddenly needs its full height on screen —
+    // fit BOTH axes here rather than reusing the seated distance, or the top
+    // and bottom rails get cropped as the board tips up.
+    const halfLong = long / 2;
+    const halfShort = this.DEPTH_HALF + 0.6;
+    const halfV = this.portrait ? halfLong : halfShort;  // screen vertical
+    const halfH = this.portrait ? halfShort : halfLong;  // screen horizontal
+    const hFovFlat = 2 * Math.atan(Math.tan(fov / 2) * this.camera.aspect);
+    const flatDist = Math.max(halfV / Math.tan(fov / 2), halfH / Math.tan(hFovFlat / 2)) * 1.08;
+    this._camFlat.pos.set(0, Math.max(flatDist, 13), 0);
+    this._camFlat.look.set(0, 0, 0);
+
     this.camera.updateProjectionMatrix();
+    this._applyCamera();
+  }
+
+  // Place the camera for the current _tilt. Positions are swung along an arc
+  // rather than lerped in a straight line — a straight line would dive the
+  // camera toward the felt halfway through and the board would lurch bigger.
+  _applyCamera() {
+    const a = this._camSeated, b = this._camFlat;
+    const t = this._tilt;
+    if (t <= 0) {
+      this.camera.position.copy(a.pos);
+      this.camera.lookAt(a.look);
+    } else if (t >= 1) {
+      this.camera.position.copy(b.pos);
+      this.camera.lookAt(b.look);
+    } else {
+      const p = new THREE.Vector3().lerpVectors(a.pos, b.pos, t);
+      p.setLength(a.pos.length() + (b.pos.length() - a.pos.length()) * t);
+      this.camera.position.copy(p);
+      this.camera.lookAt(
+        a.look.x + (b.look.x - a.look.x) * t,
+        a.look.y + (b.look.y - a.look.y) * t,
+        a.look.z + (b.look.z - a.look.z) * t
+      );
+    }
     this.needsRender = true;
+  }
+
+  // Called by bg-game.js whenever the turn changes. `on` = it's this player's
+  // turn, so lay the board flat and look straight down at it.
+  setFlat(on) {
+    const goal = on ? 1 : 0;
+    if (goal === this._tiltGoal) return;
+    this._tiltGoal = goal;
+    // Start from wherever the camera actually is, so a turn that changes
+    // mid-swing reverses smoothly instead of snapping.
+    this._tiltFrom = this._tilt;
+    this._tiltStart = performance.now();
   }
 
   _animate() {
@@ -915,6 +976,16 @@ class Backgammon3D {
     requestAnimationFrame(() => this._animate());
     const now = performance.now();
     let busy = false;
+
+    // Camera tilt toward the current goal
+    if (this._tilt !== this._tiltGoal) {
+      const raw = Math.min(1, (now - this._tiltStart) / this.TILT_MS);
+      const e = raw * raw * (3 - 2 * raw);   // smoothstep: ease in and out
+      this._tilt = this._tiltFrom + (this._tiltGoal - this._tiltFrom) * e;
+      if (raw >= 1) this._tilt = this._tiltGoal;
+      this._applyCamera();
+      busy = true;
+    }
 
     // Dice physics / settle
     if (this.rollAnim) {

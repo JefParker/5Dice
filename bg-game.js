@@ -164,6 +164,12 @@
 
     showIdleHints();
 
+    // Tip the board flat to face you on your turn, and lean it back when it
+    // isn't yours — a wordless "you're up".
+    if (view && typeof view.setFlat === 'function') {
+      view.setFlat(started && myTurn && state.phase !== 'over' && state.phase !== 'opening');
+    }
+
     window.myTurn = myTurn && (moving || rolling);
     window.currentTurnPlayerId = myTurn ? window.myPeerId : (isAi() ? AI : otherPeerId());
     if (typeof window.updateGameBackground === 'function') window.updateGameBackground();
