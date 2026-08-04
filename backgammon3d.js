@@ -213,6 +213,9 @@ class Backgammon3D {
 
   _buildCheckers() {
     this.checkers = [];
+    // Bumped by setCheckerColors(). The dice bake the checker colours into
+    // their face textures, so they need to know when those colours went stale.
+    this._skinRev = 0;
     const geo = new THREE.CylinderGeometry(this.CHK_R, this.CHK_R, this.CHK_H, 28);
     // Kept on `this` and SHARED by every checker of a side, so setCheckerColors()
     // can recolour a whole side by touching two materials.
@@ -242,16 +245,25 @@ class Backgammon3D {
     };
     apply(this.faceMatW, this.rimMatW, wCol);
     apply(this.faceMatB, this.rimMatB, bCol);
+    // Each side's dice are painted that side's checker colour, and the pips are
+    // baked into a canvas texture — so a recolour has to throw the cached skins
+    // away and repaint, not just tint a material.
+    this._skinRev++;
+    if (this.dice) {
+      this.dice.forEach(d => this._setDieSkin(d, d.side || 'w'));
+      // Re-run the last placement so the spent-die dimming survives the repaint.
+      const l = this._lastDice;
+      if (l && !this.rollAnim && this.dice[0].mesh.visible) {
+        this._placeDiceStatic(l.d1, l.d2, l.movesLeft, l.sides);
+      }
+    }
     this.needsRender = true;
   }
 
   _buildDice() {
-    // Two dice with pip textures, tumbled by a local cannon world.
+    // Two dice with pip textures, tumbled by a local cannon world. Each die is
+    // skinned in the colour of whoever is rolling it — see _setDieSkin().
     this.diceSize = 0.62;
-    const mats = [];
-    for (let v = 1; v <= 6; v++) mats.push(this._dieFace(v));
-    // BoxGeometry order: +x,-x,+y,-y,+z,-z → faces 3,4,1,6,2,5 (standard die: opposite faces sum 7)
-    const order = [2, 3, 0, 5, 1, 4];
     this.dice = [];
     this.world = new CANNON.World();
     this.world.allowSleep = true;
@@ -281,35 +293,100 @@ class Backgammon3D {
     wall(0, this.DEPTH_HALF - 0.3, Math.PI);
 
     for (let i = 0; i < 2; i++) {
-      // Each die needs its OWN materials: sharing them meant dimming the die
-      // whose value had been played also dimmed the other one.
-      const dieMats = order.map(f => mats[f].clone());
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(this.diceSize, this.diceSize, this.diceSize), dieMats);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(this.diceSize, this.diceSize, this.diceSize), []);
       mesh.visible = false;
       this.group.add(mesh);
       const body = new CANNON.Body({ mass: 1, material: mat });
       body.addShape(new CANNON.Box(new CANNON.Vec3(this.diceSize / 2, this.diceSize / 2, this.diceSize / 2)));
       body.position.set(100, 100, 100);
       this.world.addBody(body);
-      this.dice.push({ mesh, body });
+      const die = { mesh, body, skins: {}, skinRev: this._skinRev, side: null };
+      this._setDieSkin(die, 'w');
+      this.dice.push(die);
     }
     this.rollAnim = null;
   }
 
-  _dieFace(v) {
-    const c = document.createElement('canvas');
-    c.width = c.height = 128;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#f8f4ea'; ctx.fillRect(0, 0, 128, 128);
-    ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 6; ctx.strokeRect(3, 3, 122, 122);
-    ctx.fillStyle = '#22252b';
-    const dot = (x, y) => { ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill(); };
-    const m = 64, d = 32;
-    if (v % 2 === 1) dot(m, m);
-    if (v > 1) { dot(m - d, m - d); dot(m + d, m + d); }
-    if (v > 3) { dot(m + d, m - d); dot(m - d, m + d); }
-    if (v === 6) { dot(m - d, m); dot(m + d, m); }
-    return new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) });
+  // The body/pip/border colours for one side's dice, derived from that side's
+  // CURRENT checker colour so custom roster colours carry through.
+  //
+  // Two guards keep the numbers readable at any hue. The pips flip dark-on-light
+  // or light-on-dark from the body's luminance rather than being fixed; and a
+  // body close to pure black is lifted slightly first, since Lambert shading
+  // gives it no visible edges and it reads as a hole in the felt rather than a
+  // cube. The lift threshold is deliberately below the default dark checker
+  // (#3b2f2f, ~0.19) so the classic set is left exactly as it is.
+  //
+  // The luminance formula matches bg-game.js's relLuminance(), which is what
+  // decides how far a custom roster colour gets darkened — so the two agree.
+  _dieSkin(side) {
+    const body = (side === 'b' ? this.faceMatB : this.faceMatW).color.clone();
+    const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    if (lum(body) < 0.06) body.lerp(new THREE.Color(1, 1, 1), 0.18);
+    const light = lum(body) > 0.45;
+    const border = body.clone().lerp(new THREE.Color(light ? 0 : 1, light ? 0 : 1, light ? 0 : 1), 0.22);
+    return {
+      body: '#' + body.getHexString(),
+      border: '#' + border.getHexString(),
+      pip: light ? '#22252b' : '#f6f1e6',
+      // How hard a spent die may be darkened. A cream die can take the full
+      // knock-down and still read; a dark one would go to near-black, so it
+      // gets a gentler one.
+      dim: light ? 0x6b6b6b : 0x9c9c9c
+    };
+  }
+
+  // Point a die at its side's material set, building it on first use. Skins are
+  // cached per die (never shared) because _placeDiceStatic dims a spent die by
+  // tinting its materials — shared ones dimmed both dice at once.
+  _setDieSkin(die, side) {
+    side = (side === 'b') ? 'b' : 'w';
+    if (die.skinRev !== this._skinRev) {
+      // Drop the stale materials but KEEP the texture cache — a player toggling
+      // between two colours should not repaint six canvases every time.
+      Object.keys(die.skins).forEach(k => die.skins[k].forEach(m => m.dispose()));
+      die.skins = {}; die.skinRev = this._skinRev; die.side = null;
+    }
+    if (!die.skins[side]) {
+      const s = this._dieSkin(side);
+      const faces = [];
+      for (let v = 1; v <= 6; v++) faces.push(this._dieFace(v, s.body, s.pip, s.border));
+      // BoxGeometry order: +x,-x,+y,-y,+z,-z → faces 3,4,1,6,2,5 (opposite faces sum 7)
+      die.skins[side] = [2, 3, 0, 5, 1, 4].map(f => faces[f]);
+      (die.dims || (die.dims = {}))[side] = s.dim;
+    }
+    if (die.side === side) return;
+    die.side = side;
+    die.dimHex = die.dims[side];
+    die.mesh.material = die.skins[side];
+    this.needsRender = true;
+  }
+
+  // One face of a die, painted in a given colour scheme. The canvas texture is
+  // cached per (value, scheme) — there are only ever a handful of schemes in
+  // play — but a FRESH material is returned each call so the two dice can be
+  // dimmed independently while still sharing the underlying texture.
+  _dieFace(v, bodyHex, pipHex, borderHex) {
+    const key = v + '|' + bodyHex + '|' + pipHex + '|' + borderHex;
+    if (!this._faceTex) this._faceTex = new Map();
+    let tex = this._faceTex.get(key);
+    if (!tex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = bodyHex; ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = borderHex; ctx.lineWidth = 6; ctx.strokeRect(3, 3, 122, 122);
+      ctx.fillStyle = pipHex;
+      const dot = (x, y) => { ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill(); };
+      const m = 64, d = 32;
+      if (v % 2 === 1) dot(m, m);
+      if (v > 1) { dot(m - d, m - d); dot(m + d, m + d); }
+      if (v > 3) { dot(m + d, m - d); dot(m - d, m + d); }
+      if (v === 6) { dot(m - d, m); dot(m + d, m); }
+      tex = new THREE.CanvasTexture(c);
+      this._faceTex.set(key, tex);
+    }
+    return new THREE.MeshLambertMaterial({ map: tex });
   }
 
   // Orientation that shows `v` on top (matches the face order above).
@@ -457,22 +534,35 @@ class Backgammon3D {
 
     // Static dice display for the current roll.
     if (state.dice && !this.rollAnim) {
-      this._placeDiceStatic(state.dice[0], state.dice[1], state.movesLeft);
+      // Dice on the felt belong to whoever is on roll, so they wear that side's
+      // colour — EXCEPT the opening pair, which stays on the felt for the whole
+      // first turn and is literally one die from each player.
+      const sides = state.diceFromOpening ? ['w', 'b'] : state.turn;
+      this._placeDiceStatic(state.dice[0], state.dice[1], state.movesLeft, sides);
     } else if (!state.dice && !this.rollAnim) {
       this.dice.forEach(d => { d.mesh.visible = false; });
     }
     this.needsRender = true;
   }
 
-  _placeDiceStatic(d1, d2, movesLeft) {
+  // `sides` is the colour to skin the dice in: a single 'w'/'b' for a normal
+  // roll, or a two-element array for the opening roll, where each player throws
+  // one die. Omit it to leave the current skins alone.
+  _placeDiceStatic(d1, d2, movesLeft, sides) {
     const used = (v) => {
       // Dim a die whose value has been fully consumed this turn.
       if (!movesLeft) return false;
       return movesLeft.indexOf(v) === -1;
     };
+    // Remembered so setCheckerColors() can repaint and then restore this exact
+    // presentation — rebuilding a skin hands back fresh, untinted materials, so
+    // a recolour mid-turn would otherwise un-dim an already-played die.
+    this._lastDice = { d1, d2, movesLeft, sides };
     const xs = [this.FELT_HALF_X * 0.45, this.FELT_HALF_X * 0.72];
     [d1, d2].forEach((v, i) => {
       const die = this.dice[i];
+      const side = Array.isArray(sides) ? sides[i] : sides;
+      if (side) this._setDieSkin(die, side);
       die.mesh.visible = true;
       die.mesh.position.set(xs[i], this.diceSize / 2 + 0.02, 0.4 - i * 0.9);
       die.mesh.quaternion.copy(this._dieQuatFor(v));
@@ -484,7 +574,7 @@ class Backgammon3D {
       die.mesh.material.forEach(m => {
         if (m.transparent) { m.transparent = false; m.needsUpdate = true; }
         m.opacity = 1;
-        m.color.setHex(dim ? 0x6b6b6b : 0xffffff);
+        m.color.setHex(dim ? (die.dimHex || 0x6b6b6b) : 0xffffff);
       });
       die.body.position.set(100, 100 + i, 100);
     });
@@ -495,10 +585,13 @@ class Backgammon3D {
   // A hidden tab pauses requestAnimationFrame, which would stall the whole
   // game flow behind this animation — so when the page is hidden (or becomes
   // hidden mid-roll: the watchdog below), skip straight to the result.
-  animateRoll(d1, d2, done) {
+  //
+  // `sides` skins the dice: 'w'/'b' for a normal roll, or ['w','b'] for the
+  // opening roll so each player's single die shows in their own colour.
+  animateRoll(d1, d2, done, sides) {
     const finishInstantly = () => {
       this.rollAnim = null;
-      this._placeDiceStatic(d1, d2, null);
+      this._placeDiceStatic(d1, d2, null, sides);
       if (done) done();
     };
     if (typeof document !== 'undefined' && document.hidden) { finishInstantly(); return; }
@@ -509,6 +602,8 @@ class Backgammon3D {
       if (this.rollAnim === anim) finishInstantly(); // rAF never progressed
     }, 3200);
     this.dice.forEach((die, i) => {
+      const side = Array.isArray(sides) ? sides[i] : sides;
+      if (side) this._setDieSkin(die, side);
       die.mesh.visible = true;
       die.mesh.material.forEach(m => {
         if (m.transparent) { m.transparent = false; m.needsUpdate = true; }

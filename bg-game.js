@@ -301,7 +301,7 @@
       broadcast('ROLL', { d1, d2 });
       render();
       checkNoMoves();
-    });
+    }, state.turn);
   }
 
   function checkNoMoves() {
@@ -533,7 +533,9 @@
       render();
       checkNoMoves();
       maybeRunAi();
-    });
+      // One die per player, each in that player's colour — the opening roll is
+      // the one throw where the two dice do not belong to the same side.
+    }, ['w', 'b']);
   }
 
   // Animate `moves` one at a time against the CURRENT board, then adopt
@@ -659,7 +661,7 @@
         busy = false;
         render();
         setTimeout(runAiTurn, 500);
-      });
+      }, aiColor);
       return;
     }
 
@@ -822,7 +824,10 @@
         clearAnimQueue();            // a new roll supersedes any pending previews
         state = inc; // adopt now; animation is cosmetic
         if (view && a && b) {
-          view.animateRoll(a, b, () => { render(); if (state.phase === 'over') gameOverUi(); else maybeRunAi(); });
+          // `state` is already the post-roll position, and rolling does not
+          // change whose turn it is, so state.turn IS the roller.
+          const sides = kind === 'OPENING' ? ['w', 'b'] : state.turn;
+          view.animateRoll(a, b, () => { render(); if (state.phase === 'over') gameOverUi(); else maybeRunAi(); }, sides);
           refreshUi();
           return;
         }

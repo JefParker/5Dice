@@ -51,6 +51,10 @@
       turnMoves: [],               // moves made this turn (for undo)
       cube: { value: 1, owner: null, offeredBy: null },
       opening: { w: null, b: null },
+      // True while the pair sitting on the felt IS the opening throw — one die
+      // rolled by each player rather than two by the side on turn. Purely for
+      // presentation: the board paints those two dice one colour each.
+      diceFromOpening: false,
       winner: null, winKind: null, // single | gammon | backgammon
       gamePoints: 0,               // points the winner earned for THIS game
       match: {
@@ -99,6 +103,7 @@
     s.dice = [dW, dB];
     s.movesLeft = [dW, dB];
     s.turnMoves = [];
+    s.diceFromOpening = true;
     s.phase = 'moving';
     return s;
   }
@@ -106,6 +111,7 @@
   function rollDice(state, d1, d2) {
     const s = clone(state);
     s.dice = [d1, d2];
+    s.diceFromOpening = false;
     s.movesLeft = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
     s.turnMoves = [];
     s.phase = 'moving';
@@ -327,6 +333,7 @@
     s.turn = opp(c);
     s.phase = 'rolling';
     s.dice = null;
+    s.diceFromOpening = false;
     s.movesLeft = [];
     s.turnMoves = [];
     return s;
