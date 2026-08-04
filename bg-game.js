@@ -268,7 +268,11 @@
   // stained-cherry tone, like a real wooden set. Its luminance (~0.44) has to
   // stay under 0.45: above that the dice logic flips this side's pips to dark,
   // and above 0.5 it stops reading as "the dark side" against CREAM at all.
-  const CREAM = '#f2e9d8', BROWN = '#a9633a';
+  // AI_RED is the computer's own colour in solo play — it has no roster entry
+  // to draw from, so it gets a deliberate one instead of the neutral fallback.
+  // Its luminance (~0.13) sits clear of both dice guards: above 0.06, so the
+  // die isn't lifted toward grey, and below 0.45, so the pips stay cream.
+  const CREAM = '#f2e9d8', BROWN = '#a9633a', AI_RED = '#990000';
   let appliedCheckerCols = null;
 
   function relLuminance(hex) {
@@ -304,7 +308,7 @@
 
   function applyCheckerColors() {
     if (!view) return;
-    let bHex = BROWN;
+    let bHex = isAi() ? AI_RED : BROWN;
     if (!isAi()) {
       const bPeer = (myColor === 'b') ? window.myPeerId : otherPeerId();
       // otherPeerId() falls back to MY id when the roster has no opponent yet;
