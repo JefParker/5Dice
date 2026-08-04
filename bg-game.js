@@ -270,9 +270,13 @@
   // and above 0.5 it stops reading as "the dark side" against CREAM at all.
   // AI_RED is the computer's own colour in solo play — it has no roster entry
   // to draw from, so it gets a deliberate one instead of the neutral fallback.
-  // Its luminance (~0.13) sits clear of both dice guards: above 0.06, so the
-  // die isn't lifted toward grey, and below 0.45, so the pips stay cream.
-  const CREAM = '#f2e9d8', BROWN = '#a9633a', AI_RED = '#990000';
+  // Its luminance (~0.064) clears both dice guards: above 0.06, so the die
+  // isn't lifted toward grey, and below 0.45, so the pips stay cream. That
+  // lower guard is why this is as dark as the colour goes — one more step down
+  // and the dice get lightened while the checkers don't, so the two stop
+  // matching. Anything darker wanted here needs the guard in
+  // backgammon3d.js#_dieSkin revisited, not just this constant.
+  const CREAM = '#f2e9d8', BROWN = '#a9633a', AI_RED = '#4d0000';
   let appliedCheckerCols = null;
 
   function relLuminance(hex) {
