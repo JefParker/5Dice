@@ -264,7 +264,11 @@
   // uses that player's chosen profile colour instead of generic brown. Both
   // clients derive the SAME pair, so the board looks identical to everyone —
   // which matters the moment players start saying "your dark one on the 8".
-  const CREAM = '#f2e9d8', BROWN = '#3b2f2f';
+  // BROWN is a warm mid-brown rather than the near-black it used to be — a
+  // stained-cherry tone, like a real wooden set. Its luminance (~0.44) has to
+  // stay under 0.45: above that the dice logic flips this side's pips to dark,
+  // and above 0.5 it stops reading as "the dark side" against CREAM at all.
+  const CREAM = '#f2e9d8', BROWN = '#a9633a';
   let appliedCheckerCols = null;
 
   function relLuminance(hex) {

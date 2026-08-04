@@ -324,8 +324,8 @@ class Backgammon3D {
   // or light-on-dark from the body's luminance rather than being fixed; and a
   // body close to pure black is lifted slightly first, since Lambert shading
   // gives it no visible edges and it reads as a hole in the felt rather than a
-  // cube. The lift threshold is deliberately below the default dark checker
-  // (#3b2f2f, ~0.19) so the classic set is left exactly as it is.
+  // cube. The lift threshold is deliberately below any sane checker colour, so
+  // it only ever catches a near-black custom pick, never the default set.
   //
   // The luminance formula matches bg-game.js's relLuminance(), which is what
   // decides how far a custom roster colour gets darkened — so the two agree.
