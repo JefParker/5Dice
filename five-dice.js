@@ -204,6 +204,10 @@ function update5DiceUI() {
   // Final total UI
   const total = upperTotal + lowerTotal + bonus;
   document.getElementById('fd-grand-total').innerText = total;
+
+  // Every path that starts a turn ends up here, so this is the one place that
+  // reliably catches "it's my turn and nothing's been rolled yet".
+  if (window.maybeAutoRoll5Dice) window.maybeAutoRoll5Dice();
 }
 
 // --- Scorecard skin helpers ---
@@ -319,15 +323,17 @@ document.querySelectorAll('.fd-die').forEach(die => {
   });
 });
 
-// Bind roll click
-document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
+// The roll itself, shared by the Roll button and by Auto-Roll.
+function performRoll() {
   if (!window.myTurn) return;
+  if (!window.fiveDiceState) return;
   if (window.fiveDiceState.rollsLeft <= 0) return;
-  
-  const btn = e.currentTarget;
+
+  const btn = document.getElementById('fd-roll-btn');
+  if (!btn) return;
   if (btn.classList.contains('is-rolling')) return;
   btn.classList.add('is-rolling');
-  
+
   let unheldIndices = [];
   let finalValues = [];
   for (let i = 0; i < 5; i++) {
@@ -359,7 +365,43 @@ document.getElementById('fd-roll-btn').addEventListener('click', (e) => {
     btn.classList.remove('is-rolling');
     update5DiceUI();
   }
-});
+}
+
+// Bind roll click
+document.getElementById('fd-roll-btn').addEventListener('click', performRoll);
+
+// --- AUTO-ROLL ---
+// With the Auto-Roll setting on (app.js, default ON), the first of a turn's three
+// rolls happens by itself. Only the first: holds and re-rolls are the actual game,
+// so those stay manual. rollsLeft === 3 is exactly "nothing rolled yet this turn".
+// The small delay lets the turn hand-off finish painting first — rolling inside
+// the same frame that reveals the board reads as a glitch rather than a roll.
+const FD_AUTO_ROLL_DELAY = 350;
+let fdAutoRollTimer = null;
+
+function fdAutoRollAllowed() {
+  return window.autoRollEnabled !== false &&
+    !!window.fiveDiceState &&
+    !!window.myTurn &&
+    window.gameStarted !== false &&
+    !window.fiveDiceState.isGameOver &&
+    window.fiveDiceState.rollsLeft === 3;
+}
+
+window.maybeAutoRoll5Dice = function() {
+  if (!fdAutoRollAllowed()) {
+    clearTimeout(fdAutoRollTimer);
+    fdAutoRollTimer = null;
+    return;
+  }
+  // update5DiceUI() runs on every state change; collapse repeat calls into the
+  // one pending roll instead of stacking timers.
+  if (fdAutoRollTimer) return;
+  fdAutoRollTimer = setTimeout(() => {
+    fdAutoRollTimer = null;
+    if (fdAutoRollAllowed()) performRoll();
+  }, FD_AUTO_ROLL_DELAY);
+};
 
 // Bind category click (Scoring)
 document.querySelectorAll('.fd-cat').forEach(catEl => {

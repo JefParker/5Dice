@@ -143,7 +143,7 @@
     } else if (offered) {
       status(state.cube.offeredBy === myColor ? `Double offered — waiting for ${oppName()}...` : 'You have been doubled!');
     } else if (myTurn && rolling) {
-      status('Your turn — roll!');
+      status(autoRollAllowed() ? 'Your turn — rolling...' : 'Your turn — roll!');
     } else if (myTurn && moving) {
       if (doneReady) {
         status(state.movesLeft.length ? 'No moves left — tap Done' : 'Tap Done to end your turn');
@@ -167,6 +167,57 @@
     window.myTurn = myTurn && (moving || rolling);
     window.currentTurnPlayerId = myTurn ? window.myPeerId : (isAi() ? AI : otherPeerId());
     if (typeof window.updateGameBackground === 'function') window.updateGameBackground();
+
+    maybeAutoRoll();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-roll
+  // ---------------------------------------------------------------------------
+  // With the Auto-Roll setting on (app.js, default ON), a turn starts by itself —
+  // no Roll press. The short delay is just so the roll doesn't land in the same
+  // frame the board finishes painting.
+  //
+  // The hard rule: if the Double button is on screen, we do NOT roll for you.
+  // The cube only exists in this 'rolling' window and vanishes the moment the
+  // dice land, so auto-rolling would silently take the decision away. Whenever
+  // doubling is on the table, the turn waits for a deliberate tap — Roll or
+  // Double. This mirrors refreshUi's condition for showing bg-btn-double.
+  const AUTO_ROLL_DELAY = 350;
+  let autoRollTimer = null;
+  let autoRollArmedFor = null;
+
+  function autoRollAllowed() {
+    return window.autoRollEnabled !== false &&
+      !!state && !busy &&
+      state.turn === myColor &&
+      state.phase === 'rolling' &&
+      window.gameStarted !== false &&
+      !window.BG.canOfferCube(state, myColor);
+  }
+
+  function cancelAutoRoll() {
+    clearTimeout(autoRollTimer);
+    autoRollTimer = null;
+    autoRollArmedFor = null;
+  }
+
+  function maybeAutoRoll() {
+    if (!autoRollAllowed()) return cancelAutoRoll();
+    // refreshUi() runs on every render, several times per turn. Arm once per
+    // turn rather than restarting the countdown on each repaint — otherwise a
+    // chatty opponent's state updates could hold the roll off indefinitely.
+    const key = String(state.seq || 0) + ':' + state.turn;
+    if (autoRollTimer && autoRollArmedFor === key) return;
+    clearTimeout(autoRollTimer);
+    autoRollArmedFor = key;
+    autoRollTimer = setTimeout(() => {
+      autoRollTimer = null;
+      autoRollArmedFor = null;
+      // Re-check: the player may have doubled, or the turn may have moved on,
+      // while the timer was pending.
+      if (autoRollAllowed()) onRollClick();
+    }, AUTO_ROLL_DELAY);
   }
 
   // With nothing picked up, mark every checker that still has a legal move in
@@ -885,6 +936,7 @@
       // bails on it — so the rematch would never roll.
       busy = false;
       clearTimeout(aiTimer);
+      cancelAutoRoll();
       const again = el('btn-play-again');
       if (again) again.classList.add('hidden');
       const gs = el('screen-game');
@@ -900,6 +952,10 @@
     // for future keyboard control. Returns true if the move applied.
     tryMove(from, to) { return onDrop(from, to); },
     tryRoll() { onRollClick(); },
+
+    // Settings flipped Auto-Roll on mid-turn — pick up the roll already waiting.
+    maybeAutoRoll() { if (this.active) maybeAutoRoll(); },
+
     tryDone() { onDoneClick(); },
     legalFrom(zone) { return legalFromZone(zone); },
 
@@ -925,6 +981,7 @@
       this.active = false;
       clearTimeout(aiTimer);
       clearTimeout(openingTimer);
+      cancelAutoRoll();
       clearAnimQueue();
       previewedThisTurn = false;
       if (view) { view.destroy(); view = null; }

@@ -93,6 +93,25 @@ function setHintsEnabled(on) {
   if (currentRoomId && typeof window.update5DiceUI === 'function') window.update5DiceUI();
 }
 
+// --- AUTO-ROLL SETTING ---
+// When on, the start-of-turn roll happens by itself — no Roll button press. Applies
+// to both 5 Dice (first of the three rolls) and Backgammon (after a short pause, so
+// the doubling cube is still reachable). five-dice.js and bg-game.js read
+// window.autoRollEnabled. Default: ON — only off if the user turned it off.
+let autoRollEnabled = (localStorage.getItem('autoRollEnabled') !== 'false');
+window.autoRollEnabled = autoRollEnabled;
+
+function setAutoRollEnabled(on) {
+  autoRollEnabled = !!on;
+  window.autoRollEnabled = autoRollEnabled;
+  localStorage.setItem('autoRollEnabled', autoRollEnabled ? 'true' : 'false');
+  // Turning it on mid-turn should pick up the roll that's already waiting.
+  if (autoRollEnabled) {
+    if (typeof window.maybeAutoRoll5Dice === 'function') window.maybeAutoRoll5Dice();
+    if (window.BGGame && typeof window.BGGame.maybeAutoRoll === 'function') window.BGGame.maybeAutoRoll();
+  }
+}
+
 function parseGameState(rawState) {
   const result = ['', '', '', '', '', '', '', '', ''];
   if (!rawState) return result;
@@ -629,6 +648,9 @@ const openSettings = () => {
   const hintsToggle = document.getElementById('hints-toggle');
   if (hintsToggle) hintsToggle.checked = hintsEnabled;
 
+  const autoRollToggle = document.getElementById('auto-roll-toggle');
+  if (autoRollToggle) autoRollToggle.checked = autoRollEnabled;
+
   syncSkinPicker();
 
   if (document.getElementById('settings-uuid')) {
@@ -679,6 +701,12 @@ const hintsToggleEl = document.getElementById('hints-toggle');
 if (hintsToggleEl) {
   hintsToggleEl.checked = hintsEnabled;
   hintsToggleEl.addEventListener('change', (e) => setHintsEnabled(e.target.checked));
+}
+
+const autoRollToggleEl = document.getElementById('auto-roll-toggle');
+if (autoRollToggleEl) {
+  autoRollToggleEl.checked = autoRollEnabled;
+  autoRollToggleEl.addEventListener('change', (e) => setAutoRollEnabled(e.target.checked));
 }
 
 // --- ROOM CREATION & LOBBY RENDER ---
