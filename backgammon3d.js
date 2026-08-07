@@ -490,8 +490,10 @@ class Backgammon3D {
   }
 
   _buildHighlights() {
-    // Markers for zones. Cyan = a legal destination for the checker you've got
-    // selected; amber = a checker that still has a move to play.
+    // Markers for zones. Blue = a legal destination for the checker you've got
+    // selected; amber = a checker that still has a move to play. Blue rather
+    // than a pale cyan: the marker often sits on top of a stack of cream
+    // checkers, and pale-on-cream was unreadable.
     //
     // These used to be flat green discs — on a GREEN felt, which is about the
     // worst colour you could pick for "look here". Each marker is now a filled
@@ -500,8 +502,8 @@ class Backgammon3D {
     this.highlightMeshes = [];
     const discGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.04, 24);
     const ringGeo = new THREE.TorusGeometry(0.36, 0.055, 10, 30);
-    this.targetMat = new THREE.MeshBasicMaterial({ color: 0x6ef2ff, transparent: true, opacity: 0.45 });
-    this.targetRingMat = new THREE.MeshBasicMaterial({ color: 0x9dfaff, transparent: true, opacity: 0.95 });
+    this.targetMat = new THREE.MeshBasicMaterial({ color: 0x2f80ff, transparent: true, opacity: 0.5 });
+    this.targetRingMat = new THREE.MeshBasicMaterial({ color: 0x1a6bff, transparent: true, opacity: 0.95 });
     this.sourceMat = new THREE.MeshBasicMaterial({ color: 0xffc83d, transparent: true, opacity: 0.25 });
     this.sourceRingMat = new THREE.MeshBasicMaterial({ color: 0xffd76b, transparent: true, opacity: 0.75 });
     for (let i = 0; i < 28; i++) {
@@ -752,7 +754,7 @@ class Backgammon3D {
       h.group.scale.set(1, 1, 1);
       h.group.visible = true;
     });
-    // Only the cyan destination markers pulse. The amber "these can move" hints
+    // Only the blue destination markers pulse. The amber "these can move" hints
     // are up for most of your turn, and pulsing those would keep the renderer
     // awake continuously — a real battery cost on a phone for no benefit.
     this._hlOn = isTarget && zones.length > 0;
