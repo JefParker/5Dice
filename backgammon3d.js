@@ -11,6 +11,8 @@
 // Layout (white seated at the bottom):
 //   points 1-6   bottom right (white home)     points 7-12  bottom left
 //   points 13-18 top left                      points 19-24 top right
+// The black seat renders the mirror image of that (see _pointBase), so both
+// players see their own home board and bear-off tray at the bottom right.
 //   Bear-off trays sit past the right rail: white's bottom, black's top.
 // In portrait containers the whole board group rotates 90° to fit.
 
@@ -61,6 +63,7 @@ class Backgammon3D {
     this.legalTargets = [];
     this.portrait = false;
     this._offColor = 'w';        // local player's seat; set via setPlayerColor
+    this._mirror = false;        // true for the black seat: mirrored layout, see _pointBase
     this.needsRender = true;
 
     // --- Camera tilt ---
@@ -190,7 +193,14 @@ class Backgammon3D {
 
   // Board position of a point's base: x center and which side (1 = front/bottom
   // row = points 1-12, -1 = back/top row = points 13-24).
+  //
+  // The black seat sees the MIRROR of that layout (point 24 front-right, point
+  // 1 back-right): same x, opposite row — which is exactly what swapping point
+  // N for point 25-N gives. That one remap makes every consumer of _pointBase
+  // (checkers, highlights, hit zones) lay the board out so black's home board
+  // and bear-off sit bottom-right, just like white's view of their own.
   _pointBase(i) {
+    if (this._mirror) i = 23 - i;
     const p = i + 1; // 1..24
     const off = this.BAR_W / 2;
     let x, side;
@@ -205,11 +215,15 @@ class Backgammon3D {
   _slotPos(zone, k, color) {
     const dh = this.DEPTH_HALF;
     if (zone === 'bar') {
-      const dir = color === 'w' ? -1 : 1; // white waits on top half? put white bar checkers toward top (they enter far side)
+      // Bar checkers wait on the half where they re-enter (the opponent's home
+      // board) — the far row for white in white's view; mirrored seats flip it.
+      const dir = (color === 'w' ? -1 : 1) * (this._mirror ? -1 : 1);
       return new THREE.Vector3(0, 0.31 + Math.floor(k / 3) * (this.CHK_H + 0.01), dir * (1.0 + (k % 3) * 0.9));
     }
     if (zone === 'off') {
-      const z = color === 'w' ? dh / 2 + 0.15 : -dh / 2 - 0.15;
+      // The near tray belongs to the local seat: white's in white's view,
+      // black's in the mirrored black view.
+      const z = (color === 'w') !== this._mirror ? dh / 2 + 0.15 : -dh / 2 - 0.15;
       // Stack borne-off checkers lying in the tray in two columns.
       const col = Math.floor(k / 8), row = k % 8;
       return new THREE.Vector3(this.trayX + (col === 0 ? -0.25 : 0.25), 0.12 + 0.0, z - (dh / 2 - 0.7) + row * 0.55 * (color === 'w' ? 1 : 1) * (color === 'w' ? 1 : 1) - 0);
@@ -484,7 +498,10 @@ class Backgammon3D {
     ][idx];
     m.quaternion.setFromEuler(target);
     const x = -(this.FELT_HALF_X + 0.5 + this.TRAY_W / 2 - 0.6);
-    const z = owner === 'w' ? this.DEPTH_HALF - 0.6 : owner === 'b' ? -(this.DEPTH_HALF - 0.6) : 0;
+    // Near the owner's edge: the owner's side is the near one when the owner
+    // is the local seat, which the mirrored black view flips.
+    let z = owner === 'w' ? this.DEPTH_HALF - 0.6 : owner === 'b' ? -(this.DEPTH_HALF - 0.6) : 0;
+    if (this._mirror) z = -z;
     m.position.set(-(this.FELT_HALF_X + 0.95), 0.42, z);
     this.needsRender = true;
   }
@@ -536,6 +553,7 @@ class Backgammon3D {
 
   // Lay out all 30 checkers to match an engine state.
   setState(state) {
+    this._lastState = state;     // so a later seat change can re-lay the board
     let iW = 0, iB = 15;
     const place = (mesh, zone, k, color) => {
       mesh.visible = true;
@@ -762,23 +780,37 @@ class Backgammon3D {
   }
 
   _offSideZ() {
-    return this._offColor === 'b' ? -(this.DEPTH_HALF / 2 + 0.15) : this.DEPTH_HALF / 2 + 0.15;
+    // The local player's own bear-off tray is always the near one: white's in
+    // white's view, and the mirrored black view puts black's tray near too.
+    return this.DEPTH_HALF / 2 + 0.15;
   }
 
-  // Which seat the LOCAL player occupies. Black sits opposite white, so their
-  // board is the same board turned around: spin the whole group 180° and every
-  // checker, point, highlight and tray follows, because they are all children
-  // of it and all positioned in group-local space. The camera stays put.
+  // Which seat the LOCAL player occupies. Black gets the MIRRORED layout (see
+  // _pointBase) rather than the board spun 180°: a spin is how a real table
+  // works, but it lands your home board bottom-LEFT, the reverse of every
+  // diagram and app — mirroring keeps each player's home board bottom-right.
   setPlayerColor(c) {
     this._offColor = c;
-    this._applyBoardRotation();
+    this._mirror = c === 'b';
+    // The tap zones were laid out in the constructor, before the seat was
+    // known — move them to where their point now renders.
+    const dh = this.DEPTH_HALF;
+    for (const m of this.hitZones) {
+      const z = m.userData.zone;
+      if (typeof z === 'number') {
+        const { x, side } = this._pointBase(z);
+        m.position.set(x, 0.3, side * (dh / 2 + 0.15));
+      } else if (z === 'offW' || z === 'offB') {
+        const near = (z === 'offW') !== this._mirror;
+        m.position.z = (near ? 1 : -1) * (dh / 2 + 0.15);
+      }
+    }
+    if (this._lastState) this.setState(this._lastState);
     this.needsRender = true;
   }
 
   _applyBoardRotation() {
-    const portraitTurn = this.portrait ? Math.PI / 2 : 0;
-    const seatTurn = this._offColor === 'b' ? Math.PI : 0;
-    this.group.rotation.y = portraitTurn + seatTurn;
+    this.group.rotation.y = this.portrait ? Math.PI / 2 : 0;
   }
 
   showSelectRing(zone) {
