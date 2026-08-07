@@ -138,6 +138,9 @@
           "bgLevel": {
             ".validate": "newData.isString() && newData.val().length <= 10"
           },
+          "bgCube": {
+            ".validate": "newData.isBoolean()"
+          },
           "lastActive": {
             ".validate": "newData.isNumber()"
           },
@@ -227,6 +230,9 @@
         },
         "bgLevel": {
           ".validate": "newData.isString() && newData.val().length <= 10"
+        },
+        "bgCube": {
+          ".validate": "newData.isBoolean()"
         },
         "players": {
           "$idx": {

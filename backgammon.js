@@ -40,7 +40,11 @@
 
   // matchTarget 1 = independent single games (room-record style);
   // 3/5/7 = match play with gammons/backgammons and the Crawford rule.
-  function initialState(matchTarget) {
+  //
+  // cubeEnabled false retires the doubling cube for the whole room: no Double
+  // button, no cube on the board, stake always 1. Omit it (undefined) and the
+  // cube is on — states saved before this option existed must keep working.
+  function initialState(matchTarget, cubeEnabled) {
     return {
       points: initialPoints(),
       barW: 0, barB: 0, offW: 0, offB: 0,
@@ -49,7 +53,7 @@
       dice: null,                  // the rolled pair [d1, d2]
       movesLeft: [],               // die values still to be played this turn
       turnMoves: [],               // moves made this turn (for undo)
-      cube: { value: 1, owner: null, offeredBy: null },
+      cube: { value: 1, owner: null, offeredBy: null, enabled: cubeEnabled !== false },
       opening: { w: null, b: null },
       // True while the pair sitting on the felt IS the opening throw — one die
       // rolled by each player rather than two by the side on turn. Purely for
@@ -69,7 +73,7 @@
 
   // Start the next game of a match, carrying scores + Crawford bookkeeping.
   function nextGame(state) {
-    const s = initialState(state.match.target);
+    const s = initialState(state.match.target, state.cube.enabled !== false);
     s.match = {
       target: state.match.target,
       scoreW: state.match.scoreW,
@@ -361,6 +365,7 @@
 
   function canOfferCube(state, c) {
     return state.phase === 'rolling' &&
+      state.cube.enabled !== false &&
       state.turn === c &&
       !state.match.crawford &&
       state.cube.value < 64 &&

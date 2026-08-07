@@ -106,10 +106,10 @@ function setAutoRollEnabled(on) {
   window.autoRollEnabled = autoRollEnabled;
   localStorage.setItem('autoRollEnabled', autoRollEnabled ? 'true' : 'false');
   // Turning it on mid-turn should pick up the roll that's already waiting.
-  if (autoRollEnabled) {
-    if (typeof window.maybeAutoRoll5Dice === 'function') window.maybeAutoRoll5Dice();
-    if (window.BGGame && typeof window.BGGame.maybeAutoRoll === 'function') window.BGGame.maybeAutoRoll();
-  }
+  if (autoRollEnabled && typeof window.maybeAutoRoll5Dice === 'function') window.maybeAutoRoll5Dice();
+  // Backgammon has its own switch on the board which follows this one until it
+  // is overridden, so tell it either way — it decides what to do.
+  if (window.BGGame && typeof window.BGGame.maybeAutoRoll === 'function') window.BGGame.maybeAutoRoll();
 }
 
 function parseGameState(rawState) {
@@ -783,8 +783,12 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   // Backgammon room options
   const bgTargetSel = document.getElementById('bg-target-select');
   const bgDiffSel = document.getElementById('bg-difficulty-select');
+  const bgCubeSel = document.getElementById('bg-cube-toggle');
   const bgTarget = gameType === 'Backgammon' && bgTargetSel ? parseInt(bgTargetSel.value, 10) || 1 : 1;
   const bgLevel = gameType === 'Backgammon' && maxPlayers === 1 && bgDiffSel ? bgDiffSel.value : null;
+  // Off by default: without the cube there is no decision to make before the
+  // dice, so backgammon turns can auto-roll instead of waiting for a tap.
+  const bgCube = gameType === 'Backgammon' && bgCubeSel ? !!bgCubeSel.checked : false;
 
   showLoading('Creating Room...');
 
@@ -809,6 +813,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   };
   if (gameType === 'Backgammon') {
     room.bgTarget = bgTarget;
+    room.bgCube = bgCube;
     if (bgLevel) room.bgLevel = bgLevel;
   }
 
@@ -841,6 +846,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   };
   if (gameType === 'Backgammon') {
     initialGameData.bgTarget = bgTarget;
+    initialGameData.bgCube = bgCube;
     if (bgLevel) initialGameData.bgLevel = bgLevel;
   }
 
@@ -866,6 +872,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   // Cached for setupGameUI, which may run before the lobby snapshot arrives.
   window._bgLevel = bgLevel;
   window._bgTarget = bgTarget;
+  window._bgCube = bgCube;
 
   document.getElementById('game-room-name').innerText = `🎲 ${roomName} - ${gameType} 🎲`;
 
@@ -1048,6 +1055,9 @@ window.joinRoom = async function(roomId) {
   window.gameMaxPlayers = maxPlayers;
   window._bgLevel = room.bgLevel || null;
   window._bgTarget = room.bgTarget || 1;
+  // Rooms created before this option existed have no bgCube field; those played
+  // with the cube, so undefined must stay "on".
+  window._bgCube = room.bgCube;
   document.getElementById('game-room-name').innerText = `🎲 ${room.name} - ${displayGameType} 🎲`;
 
   // "Rejoin" (keep the local board) only applies when returning to a game we
@@ -1130,7 +1140,10 @@ function setupGameUI(gameType, isRejoin = false) {
         container: bgContainer,
         isHost: amBgHost,
         aiLevel: (room.maxPlayers === 1 || window.gameMaxPlayers === 1) ? (room.bgLevel || window._bgLevel || 'normal') : null,
-        matchTarget: room.bgTarget || window._bgTarget || 1
+        matchTarget: room.bgTarget || window._bgTarget || 1,
+        cubeEnabled: room.bgCube !== undefined ? room.bgCube
+                   : window._bgCube !== undefined ? window._bgCube
+                   : true
       });
     }
   } else {
@@ -1200,6 +1213,7 @@ function handleGameStateUpdate(gameData) {
     // Backgammon owns its own status text and turn logic.
     if (gameData.bgTarget) window._bgTarget = gameData.bgTarget;
     if (gameData.bgLevel) window._bgLevel = gameData.bgLevel;
+    if (gameData.bgCube !== undefined) window._bgCube = gameData.bgCube;
     if (gameData.backgammonState && window.BGGame && window.BGGame.active) {
       window.BGGame.syncState(gameData.backgammonState);
     }

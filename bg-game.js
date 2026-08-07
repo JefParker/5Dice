@@ -52,6 +52,16 @@
         '<button id="bg-btn-undo" class="bg-btn hidden">Undo</button>' +
         '<button id="bg-btn-done" class="bg-btn bg-btn-done hidden">Done</button>' +
       '</div>' +
+      // The input is nested inside the label, which is association enough — a
+      // `for` as well makes a click on the input itself get forwarded back by
+      // the label and toggle twice in some browsers.
+      '<label class="bg-autoroll" title="Roll automatically at the start of your turn">' +
+        '<span class="bg-autoroll-label">AUTO<br>ROLL</span>' +
+        '<span class="bg-switch">' +
+          '<input type="checkbox" id="bg-autoroll-toggle">' +
+          '<span class="bg-switch-slider"></span>' +
+        '</span>' +
+      '</label>' +
       '<div id="bg-cube-dialog" class="bg-cube-dialog hidden">' +
         '<div id="bg-cube-text"></div>' +
         '<div class="bg-cube-btns">' +
@@ -66,6 +76,11 @@
     el('bg-btn-double').addEventListener('click', onDoubleClick);
     el('bg-btn-take').addEventListener('click', () => onCubeAnswer(true));
     el('bg-btn-drop').addEventListener('click', () => onCubeAnswer(false));
+    const arEl = el('bg-autoroll-toggle');
+    if (arEl) {
+      arEl.checked = autoRollPref();
+      arEl.addEventListener('change', e => setBgAutoRoll(e.target.checked));
+    }
   }
 
   function show(id, on) { const e = el(id); if (e) e.classList.toggle('hidden', !on); }
@@ -116,11 +131,18 @@
       }
     }
 
-    // Cube display
+    // Cube display. With the cube switched off for the room there is nothing to
+    // show: the stake is always 1 and Double never appears.
+    const cubeOn = state.cube.enabled !== false;
     if (view) {
       const showCube = state.match.target === 1 || !state.match.crawford;
-      view.setCube(state.cube.value === 1 ? 1 : state.cube.value, state.cube.owner, showCube && !state.match.crawford);
+      view.setCube(state.cube.value, state.cube.owner, cubeOn && showCube && !state.match.crawford);
     }
+
+    // The board's Auto-Roll switch always shows the value actually in force —
+    // this board's own override if it has one, otherwise the Settings value.
+    const arEl = el('bg-autoroll-toggle');
+    if (arEl) arEl.checked = autoRollPref();
 
     // Cube offer dialog (shown to the player being doubled)
     const offered = state.phase === 'cube-offered';
@@ -189,12 +211,31 @@
   // dice land, so auto-rolling would silently take the decision away. Whenever
   // doubling is on the table, the turn waits for a deliberate tap — Roll or
   // Double. This mirrors refreshUi's condition for showing bg-btn-double.
+  //
+  // The board carries its own Auto-Roll switch (far right). Until it is touched
+  // there is no stored key and the board simply follows the global Settings
+  // toggle. The first flip writes 'bgAutoRoll' and from then on backgammon keeps
+  // its own answer — Settings still governs 5 Dice, but no longer this board.
   const AUTO_ROLL_DELAY = 350;
   let autoRollTimer = null;
   let autoRollArmedFor = null;
 
+  function autoRollPref() {
+    let v = null;
+    try { v = localStorage.getItem('bgAutoRoll'); } catch (e) {}
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    return window.autoRollEnabled !== false;
+  }
+
+  function setBgAutoRoll(on) {
+    try { localStorage.setItem('bgAutoRoll', on ? 'true' : 'false'); } catch (e) {}
+    if (!on) cancelAutoRoll();
+    refreshUi();   // repaints the status line and picks up a waiting roll
+  }
+
   function autoRollAllowed() {
-    return window.autoRollEnabled !== false &&
+    return autoRollPref() &&
       !!state && !busy &&
       state.turn === myColor &&
       state.phase === 'rolling' &&
@@ -529,6 +570,22 @@
       }
     }
     const opts = legalFromZone(zone);
+
+    // Bearing off when that is this checker's ONLY move: one tap on the checker
+    // does it. Asking for a second tap on the tray added a step that could not
+    // have gone any other way. If the checker can also move within the board
+    // (say a 3 bears off and a 1 is still live) the choice is real, so fall
+    // through and let the player pick a destination as usual.
+    if (opts.length === 1 && opts[0].to === 'off') {
+      for (const m of opts[0].moves) state = window.BG.applyMove(state, m);
+      selected = null;
+      view.clearHighlights();
+      streamMove(opts[0].moves);
+      render();
+      autoDoneCheck();
+      return;
+    }
+
     if (opts.length && String(selected) !== String(zone)) {
       selected = zone;
       view.highlightTargets(opts.map(o => o.to));
@@ -825,7 +882,8 @@
   window.BGGame = {
     active: false,
 
-    // Enter a backgammon room. opts: { container, isHost, aiLevel, matchTarget, existingJson }
+    // Enter a backgammon room.
+    // opts: { container, isHost, aiLevel, matchTarget, cubeEnabled, existingJson }
     enter(opts) {
       this.cleanup();
       this.active = true;
@@ -854,7 +912,7 @@
           if (inc && inc.points) { state = inc; adopted = true; }
         } catch (e) {}
       }
-      if (!adopted) state = window.BG.initialState(opts.matchTarget || 1);
+      if (!adopted) state = window.BG.initialState(opts.matchTarget || 1, opts.cubeEnabled);
 
       render();
       if (state.phase === 'opening') setTimeout(runOpening, 700);
@@ -935,12 +993,15 @@
       if (!this.active || !state) return;
       const BGE = window.BG;
       const prevSeq = state.seq || 0;
+      // The cube setting belongs to the room, not the game — carry it into the
+      // rematch rather than silently handing the cube back.
+      const cubeOn = state.cube.enabled !== false;
       if (state.match.target > 1 && !state.match.winner) {
         state = BGE.nextGame(state);
       } else if (state.match.target > 1) {
-        state = BGE.initialState(state.match.target); // new match
+        state = BGE.initialState(state.match.target, cubeOn); // new match
       } else {
-        state = BGE.initialState(1);
+        state = BGE.initialState(1, cubeOn);
       }
       // seq has to stay monotonic ACROSS games. Both syncState() and
       // handleEvent() drop any incoming state whose seq isn't newer than the one
@@ -971,8 +1032,9 @@
     tryMove(from, to) { return onDrop(from, to); },
     tryRoll() { onRollClick(); },
 
-    // Settings flipped Auto-Roll on mid-turn — pick up the roll already waiting.
-    maybeAutoRoll() { if (this.active) maybeAutoRoll(); },
+    // Settings flipped Auto-Roll: repaint the board switch (it follows Settings
+    // until it has been overridden here) and pick up any roll already waiting.
+    maybeAutoRoll() { if (this.active && state) refreshUi(); },
 
     tryDone() { onDoneClick(); },
     legalFrom(zone) { return legalFromZone(zone); },

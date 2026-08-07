@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=33">
+  <link rel="stylesheet" href="styles.css?v=34">
   <link rel="stylesheet" href="skins.css?v=5">
   <link rel="manifest" href="manifest.json">
   <!-- Not deferred: applies the saved skin before first paint. -->
@@ -100,7 +100,7 @@
           <div class="hints-toggle-row">
             <div>
               <label for="auto-roll-toggle">Auto-Roll</label>
-              <p class="small-hint" style="text-align: left; margin: 4px 0 0;">Roll for you at the start of your turn, in both 5 Dice and Backgammon. Turn off if you'd rather tap Roll yourself.</p>
+              <p class="small-hint" style="text-align: left; margin: 4px 0 0;">Roll for you at the start of your turn, in both 5 Dice and Backgammon. Turn off if you'd rather tap Roll yourself. The Backgammon board has its own switch that starts from this one and then keeps its own setting.</p>
             </div>
             <label class="switch">
               <input type="checkbox" id="auto-roll-toggle">
@@ -225,7 +225,9 @@
               <li><strong>Drag</strong> a checker to a highlighted point, or <strong>tap</strong> it and then tap where it should go. Dragging the full distance of both dice in one go works too.</li>
               <li>The opening roll decides who goes first; doubles give four moves; you must play both dice when possible (the larger if only one fits), enter from the bar first, and bear off by exact count.</li>
               <li><strong>Undo</strong> rearranges your turn until you press <strong>Done</strong>. If you have no legal moves, the turn passes automatically.</li>
-              <li>The <strong>doubling cube</strong> sits at the left edge — tap it (or the Double button) before rolling to offer a double. Your opponent takes (and owns the cube) or drops (conceding the game at the current stake).</li>
+              <li>When bearing off, if taking a checker off is that checker's only move, one tap on the checker does it — no need to tap the tray.</li>
+              <li>The <strong>Auto-Roll</strong> switch on the right edge of the board rolls for you at the start of your turn. It starts out matching your Settings, and remembers whatever you set it to here.</li>
+              <li>The <strong>doubling cube</strong> is off by default — switch it on when you create the room to play for stakes. It then sits at the left edge; tap it (or the Double button) before rolling to offer a double, and your opponent takes (and owns the cube) or drops (conceding the game at the current stake). With the cube off, turns roll themselves far more often.</li>
               <li>Pick <strong>Single games</strong> for one-off games feeding the Room record, or a <strong>match to 3/5/7 points</strong> — gammons count double, backgammons triple, with the Crawford rule.</li>
               <li>Play the <strong>computer</strong> at Easy or Normal difficulty, or a friend online. Leaving a game against the computer mid-way keeps a Rejoin card so you can finish later.</li>
             </ul>
@@ -403,6 +405,17 @@
             <option value="5">Match to 5 points</option>
             <option value="7">Match to 7 points</option>
           </select>
+
+          <div class="hints-toggle-row" style="margin-bottom: 15px;">
+            <div>
+              <label for="bg-cube-toggle">Doubling cube</label>
+              <p class="small-hint" style="text-align: left; margin: 4px 0 0;">Turn on to play for stakes with the Double button and the cube. Left off, turns roll themselves far more often.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="bg-cube-toggle">
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
 
         <label for="player-count">How many players?</label>
@@ -604,11 +617,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=24"></script>
   <script src="five-dice.js?v=38"></script>
-  <script src="backgammon.js?v=1"></script>
+  <script src="backgammon.js?v=2"></script>
   <script src="backgammon3d.js?v=8"></script>
-  <script src="bg-game.js?v=12"></script>
+  <script src="bg-game.js?v=13"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
   <script src="voice-chat.js?v=1"></script>
 </body>
 </html>
