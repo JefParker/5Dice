@@ -491,14 +491,43 @@
 
   function onUndoClick() {
     if (!state || state.turn !== myColor || state.turnMoves.length === 0) return;
+    // Grab the move being taken back BEFORE undoMove pops it — it is what says
+    // where the checker has to fly home to.
+    const m = state.turnMoves[state.turnMoves.length - 1];
     state = window.BG.undoMove(state);
     selected = null;
-    view.clearHighlights();
+    if (view) view.clearHighlights();
     // Previewed moves are provisional, so an undo has to reach the opponent too
     // — otherwise their board keeps a checker we've already taken back, and only
     // snaps into line when the turn is finally committed.
     broadcast('UNDO');
-    render();
+
+    // Rewind the hop instead of repainting: the checker flies back the way it
+    // came and anything it hit comes off the bar at the same moment, so an undo
+    // reads as the move running backwards. Same deal as applyMyMoves — the
+    // state is already correct, only the repaint waits for the checker to land.
+    const gen = ++myAnimGen;
+    const settle = () => { if (gen === myAnimGen) render(); };
+    if (!view || typeof view.animateMove !== 'function') return settle();
+    if (typeof view.finishMoveAnims === 'function') view.finishMoveAnims();
+
+    // Slot to land in: the post-undo stack already counts the returning
+    // checker, so it takes the top of it.
+    const homeZone = m.from === 'bar' ? 'bar' : m.from;
+    const homeSlot = Math.max(0, (m.from === 'bar'
+      ? (myColor === 'w' ? state.barW : state.barB)
+      : Math.abs(state.points[m.from] || 0)) - 1);
+
+    // Counted up front: a hop can call back synchronously (hidden tab, or no
+    // checker found), which would otherwise settle before the second is armed.
+    let waiting = m.hit ? 2 : 1;
+    const oneDone = () => { if (--waiting === 0) settle(); };
+    view.animateMove(m.to === 'off' ? 'off' : m.to, homeZone, myColor, homeSlot, oneDone);
+    if (m.hit) {
+      // The blot goes back where it was standing, alone — undoMove puts the
+      // point at exactly one checker of theirs.
+      view.animateMove('bar', m.to, window.BG.opp(myColor), 0, oneDone);
+    }
   }
 
   function onDoneClick() {
