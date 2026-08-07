@@ -1398,12 +1398,52 @@ body.dice3d-active .fd-die {
   50%      { box-shadow: 0 0 0 8px rgba(63,127,178,0); }
 }
 
-/* Auto-Roll switch, pinned to the far right edge of the board. Deliberately
-   narrow: the bear-off trays live under this edge, and only the switch itself
-   takes pointer events, so a tap that misses it still reaches the tray. */
-.bg-autoroll {
+/* The right-hand rail. Deliberately narrow — the bear-off trays live under this
+   edge — and the rail itself takes no pointer events, so a tap that misses the
+   switch still reaches the tray. The rail box IS the Auto-Roll switch: the dice
+   hang above it, out of flow, so the switch stays in exactly the same place
+   whether there are no dice, two, or four. A control you reach for should not
+   move under your thumb. */
+.bg-rail {
   position: absolute; right: 4px; top: 50%;
   transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 15;
+}
+
+/* My dice for this turn: four of them on doubles, darkened as they're played.
+   Anchored by its BOTTOM just above the switch, so it grows upward. */
+.bg-dice-readout {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 6px 5px;
+  border-radius: 12px;
+  background: rgba(15,22,34,0.72);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+.bg-die {
+  position: relative;
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  border: 1px solid;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  transition: background 0.2s, border-color 0.2s;
+}
+.bg-die i {
+  position: absolute;
+  width: 21%; height: 21%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: background 0.2s;
+}
+/* A played die drops back rather than disappearing — the roll you got stays
+   readable for the whole turn. */
+.bg-die-spent { opacity: 0.85; box-shadow: none; }
+
+.bg-autoroll {
   pointer-events: auto;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 8px 5px;
@@ -1411,7 +1451,6 @@ body.dice3d-active .fd-die {
   background: rgba(15,22,34,0.72);
   border: 1px solid rgba(255,255,255,0.18);
   cursor: pointer;
-  z-index: 15;
   user-select: none; -webkit-user-select: none;
 }
 .bg-autoroll-label {
@@ -1442,7 +1481,10 @@ body.dice3d-active .fd-die {
    (width-constrained, so the board fills the full width) and short landscape.
    Take as little of the bear-off tray as we can and still be tappable. */
 @media (max-width: 560px), (orientation: landscape) and (max-height: 560px) {
-  .bg-autoroll { right: 2px; padding: 6px 5px; gap: 4px; }
+  .bg-rail { right: 2px; }
+  .bg-dice-readout { bottom: calc(100% + 6px); padding: 5px 4px; gap: 4px; border-radius: 10px; }
+  .bg-die { width: 19px; height: 19px; border-radius: 4px; }
+  .bg-autoroll { padding: 6px 5px; gap: 4px; }
   .bg-autoroll-label { font-size: 0.42rem; letter-spacing: 0.03em; }
   .bg-switch { width: 19px; height: 34px; }
   .bg-switch-slider::before { width: 13px; height: 13px; left: 3px; bottom: 3px; }

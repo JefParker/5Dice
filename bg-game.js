@@ -52,16 +52,22 @@
         '<button id="bg-btn-undo" class="bg-btn hidden">Undo</button>' +
         '<button id="bg-btn-done" class="bg-btn bg-btn-done hidden">Done</button>' +
       '</div>' +
-      // The input is nested inside the label, which is association enough — a
-      // `for` as well makes a click on the input itself get forwarded back by
-      // the label and toggle twice in some browsers.
-      '<label class="bg-autoroll" title="Roll automatically at the start of your turn">' +
-        '<span class="bg-autoroll-label">AUTO<br>ROLL</span>' +
-        '<span class="bg-switch">' +
-          '<input type="checkbox" id="bg-autoroll-toggle">' +
-          '<span class="bg-switch-slider"></span>' +
-        '</span>' +
-      '</label>' +
+      // Right-hand rail: my dice above, the Auto-Roll switch below. Kept in one
+      // column so the pair stays centred on the board edge as the dice count
+      // changes between two and four.
+      '<div class="bg-rail">' +
+        '<div id="bg-dice-readout" class="bg-dice-readout hidden"></div>' +
+        // The input is nested inside the label, which is association enough — a
+        // `for` as well makes a click on the input itself get forwarded back by
+        // the label and toggle twice in some browsers.
+        '<label class="bg-autoroll" title="Roll automatically at the start of your turn">' +
+          '<span class="bg-autoroll-label">AUTO<br>ROLL</span>' +
+          '<span class="bg-switch">' +
+            '<input type="checkbox" id="bg-autoroll-toggle">' +
+            '<span class="bg-switch-slider"></span>' +
+          '</span>' +
+        '</label>' +
+      '</div>' +
       '<div id="bg-cube-dialog" class="bg-cube-dialog hidden">' +
         '<div id="bg-cube-text"></div>' +
         '<div class="bg-cube-btns">' +
@@ -144,6 +150,8 @@
     const arEl = el('bg-autoroll-toggle');
     if (arEl) arEl.checked = autoRollPref();
 
+    renderDiceReadout();
+
     // Cube offer dialog (shown to the player being doubled)
     const offered = state.phase === 'cube-offered';
     const iAmAsked = offered && state.cube.offeredBy !== myColor;
@@ -197,6 +205,66 @@
     if (typeof window.updateGameBackground === 'function') window.updateGameBackground();
 
     maybeAutoRoll();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dice readout (right-hand rail)
+  // ---------------------------------------------------------------------------
+  // My dice for this turn, mirrored beside the board and crossed off as they
+  // are played. The felt only ever holds two dice, so on doubles it cannot show
+  // how many of the four moves are left — here all four appear and darken one
+  // at a time. Spent dice are DARKENED rather than removed, so the roll you got
+  // stays readable for the whole turn.
+  const DIE_PIPS = {
+    1: [[50, 50]],
+    2: [[28, 28], [72, 72]],
+    3: [[28, 28], [50, 50], [72, 72]],
+    4: [[28, 28], [72, 28], [28, 72], [72, 72]],
+    5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]],
+    6: [[28, 28], [72, 28], [28, 50], [72, 50], [28, 72], [72, 72]]
+  };
+  let lastDiceReadout = null;
+
+  function renderDiceReadout() {
+    const box = el('bg-dice-readout');
+    if (!box) return;
+    const mine = !!state && !!state.dice && state.turn === myColor &&
+      state.phase === 'moving' && window.gameStarted !== false;
+    if (!mine || !view || typeof view.dieSkinCss !== 'function') {
+      if (lastDiceReadout !== null) { box.innerHTML = ''; lastDiceReadout = null; }
+      box.classList.add('hidden');
+      return;
+    }
+
+    const d1 = state.dice[0], d2 = state.dice[1];
+    const doubles = d1 === d2;
+    const values = doubles ? [d1, d1, d1, d1] : [d1, d2];
+    const left = state.movesLeft || [];
+    // Which dice are spent. On doubles all four read the same, so the count of
+    // moves still owed is what decides and the top ones cross off first. On a
+    // normal roll each die is spent once its own value has left movesLeft.
+    const spent = doubles
+      ? values.map((_, i) => i < values.length - left.length)
+      : values.map(v => left.indexOf(v) === -1);
+
+    // Always my own colour, even on the opening turn — the felt shows one die
+    // per player there, but both of them are mine to play, and this rail says
+    // "yours". applyCheckerColors() ran at the top of refreshUi, so the skin is
+    // current; it goes in the signature so a roster recolour repaints.
+    const skin = view.dieSkinCss(myColor);
+    const sig = values.join(',') + '|' + spent.join(',') + '|' + skin.body + skin.pip;
+    box.classList.remove('hidden');
+    if (sig === lastDiceReadout) return;   // refreshUi runs on every render
+    lastDiceReadout = sig;
+
+    box.innerHTML = values.map((v, i) => {
+      const off = spent[i];
+      const pips = (DIE_PIPS[v] || []).map(([x, y]) =>
+        `<i style="left:${x}%;top:${y}%;background:${off ? skin.dimPip : skin.pip}"></i>`).join('');
+      return `<span class="bg-die${off ? ' bg-die-spent' : ''}" aria-label="${v}" ` +
+        `style="background:${off ? skin.dimBody : skin.body};` +
+        `border-color:${off ? skin.dimBorder : skin.border}">${pips}</span>`;
+    }).join('');
   }
 
   // ---------------------------------------------------------------------------
@@ -889,6 +957,7 @@
       this.active = true;
       myColor = opts.isHost ? 'w' : 'b';
       appliedCheckerCols = null;   // force a repaint for the new room's roster
+      lastDiceReadout = null;      // the rail belongs to the old uiRoot
       previewedThisTurn = false;
       clearAnimQueue();
       aiLevel = opts.aiLevel || null;

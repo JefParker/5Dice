@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=34">
+  <link rel="stylesheet" href="styles.css?v=35">
   <link rel="stylesheet" href="skins.css?v=5">
   <link rel="manifest" href="manifest.json">
   <!-- Not deferred: applies the saved skin before first paint. -->
@@ -226,7 +226,8 @@
               <li>The opening roll decides who goes first; doubles give four moves; you must play both dice when possible (the larger if only one fits), enter from the bar first, and bear off by exact count.</li>
               <li><strong>Undo</strong> rearranges your turn until you press <strong>Done</strong>. If you have no legal moves, the turn passes automatically.</li>
               <li>When bearing off, if taking a checker off is that checker's only move, one tap on the checker does it — no need to tap the tray.</li>
-              <li>The <strong>Auto-Roll</strong> switch on the right edge of the board rolls for you at the start of your turn. It starts out matching your Settings, and remembers whatever you set it to here.</li>
+              <li>The right edge of the board shows <strong>your dice</strong> for the turn, darkening each one as you use it — all four of them when you roll doubles, so you can see how many moves you have left.</li>
+              <li>Under them, the <strong>Auto-Roll</strong> switch rolls for you at the start of your turn. It starts out matching your Settings, and remembers whatever you set it to here.</li>
               <li>The <strong>doubling cube</strong> is off by default — switch it on when you create the room to play for stakes. It then sits at the left edge; tap it (or the Double button) before rolling to offer a double, and your opponent takes (and owns the cube) or drops (conceding the game at the current stake). With the cube off, turns roll themselves far more often.</li>
               <li>Pick <strong>Single games</strong> for one-off games feeding the Room record, or a <strong>match to 3/5/7 points</strong> — gammons count double, backgammons triple, with the Crawford rule.</li>
               <li>Play the <strong>computer</strong> at Easy or Normal difficulty, or a friend online. Leaving a game against the computer mid-way keeps a Rejoin card so you can finish later.</li>
@@ -618,8 +619,8 @@
   <script src="dice3d.js?v=24"></script>
   <script src="five-dice.js?v=38"></script>
   <script src="backgammon.js?v=2"></script>
-  <script src="backgammon3d.js?v=8"></script>
-  <script src="bg-game.js?v=13"></script>
+  <script src="backgammon3d.js?v=9"></script>
+  <script src="bg-game.js?v=14"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <script src="app.js?v=48"></script>
   <script src="voice-chat.js?v=1"></script>

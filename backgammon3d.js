@@ -346,6 +346,22 @@ class Backgammon3D {
     };
   }
 
+  // CSS colours for one side's dice, lit and spent, so an HTML dice readout can
+  // match the ones on the felt exactly — including a custom roster colour.
+  // _placeDiceStatic dims a die through material.color, which MULTIPLIES the
+  // face texture, so the spent variants are the same per-channel multiply.
+  dieSkinCss(side) {
+    const s = this._dieSkin(side === 'b' ? 'b' : 'w');
+    const f = ((s.dim >> 16) & 255) / 255;   // dim is a grey: all channels equal
+    const mul = (hex) => '#' + [1, 3, 5]
+      .map(i => Math.round(parseInt(hex.substr(i, 2), 16) * f).toString(16).padStart(2, '0'))
+      .join('');
+    return {
+      body: s.body, border: s.border, pip: s.pip,
+      dimBody: mul(s.body), dimBorder: mul(s.border), dimPip: mul(s.pip)
+    };
+  }
+
   // Point a die at its side's material set, building it on first use. Skins are
   // cached per die (never shared) because _placeDiceStatic dims a spent die by
   // tinting its materials — shared ones dimmed both dice at once.
