@@ -610,15 +610,57 @@
     selected = null;
   }
 
+  // Commit my own move(s) and let the checker be SEEN travelling, the way an
+  // opponent's move arrives, instead of the board blinking into its new shape.
+  //
+  // The engine state and the broadcast go out immediately, so a second tap
+  // landing mid-hop is still computed against the real position and the
+  // opponent isn't kept waiting on an animation running on my device. Only the
+  // REPAINT is held back: render() is the one thing that repositions checkers,
+  // so not calling it leaves the pre-move board standing for the hop to happen
+  // against, and the hop itself is what shows the change.
+  //
+  // `animate` is false for drags — the checker is already under your finger at
+  // the destination, so flying it anywhere would undo what you just did.
+  let myAnimGen = 0;
+
+  function applyMyMoves(moves, animate) {
+    if (!moves || !moves.length) return;
+    const before = state;                   // the position still on screen
+    for (const m of moves) state = window.BG.applyMove(state, m);
+    selected = null;
+    if (view) view.clearHighlights();
+    // Show the opponent this move NOW rather than making them wait for Done.
+    streamMove(moves);
+
+    const gen = ++myAnimGen;
+    const settle = () => { if (gen === myAnimGen) { render(); autoDoneCheck(); } };
+    if (!animate || !view || typeof view.animateMove !== 'function') return settle();
+
+    // A tap arriving while the last checker is still flying: drop it on its
+    // target and let this newer move animate. `state` already holds both.
+    if (typeof view.finishMoveAnims === 'function') view.finishMoveAnims();
+
+    let s = before, i = 0;
+    const step = () => {
+      if (gen !== myAnimGen) return;        // superseded by a later move
+      if (i >= moves.length) return settle();
+      const m = moves[i++];
+      // Count from the running position, not the starting one, so the second
+      // hop of a two-die move stacks onto the right height. A hit clears the
+      // point on the way in, so the checker lands on the bottom of it.
+      const countAtTarget = (m.to === 'off' || m.hit) ? 0 : Math.abs(s.points[m.to] || 0);
+      s = window.BG.applyMove(s, m);
+      view.animateMove(m.from === 'bar' ? 'bar' : m.from, m.to === 'off' ? 'off' : m.to,
+        myColor, countAtTarget, step);
+    };
+    step();
+  }
+
   function onDrop(from, to) {
     const opt = legalFromZone(from).find(o => String(o.to) === String(to));
     if (!opt) return false;
-    for (const m of opt.moves) state = window.BG.applyMove(state, m);
-    selected = null;
-    // Show the opponent this move NOW rather than making them wait for Done.
-    streamMove(opt.moves);
-    render();
-    autoDoneCheck();
+    applyMyMoves(opt.moves, false);
     return true;
   }
 
@@ -628,12 +670,7 @@
     if (selected !== null && String(selected) !== String(zone)) {
       const opt = legalFromZone(selected).find(o => String(o.to) === String(zone));
       if (opt) {
-        for (const m of opt.moves) state = window.BG.applyMove(state, m);
-        selected = null;
-        view.clearHighlights();
-        streamMove(opt.moves);
-        render();
-        autoDoneCheck();
+        applyMyMoves(opt.moves, true);
         return;
       }
     }
@@ -645,12 +682,7 @@
     // (say a 3 bears off and a 1 is still live) the choice is real, so fall
     // through and let the player pick a destination as usual.
     if (opts.length === 1 && opts[0].to === 'off') {
-      for (const m of opts[0].moves) state = window.BG.applyMove(state, m);
-      selected = null;
-      view.clearHighlights();
-      streamMove(opts[0].moves);
-      render();
-      autoDoneCheck();
+      applyMyMoves(opts[0].moves, true);
       return;
     }
 
@@ -776,7 +808,9 @@
       if (gen !== animGen) return;
       if (i >= job.moves.length || !view) return finish();
       const m = job.moves[i++];
-      const countAtTarget = m.to === 'off' ? 0 : Math.abs((state && state.points[m.to]) || 0);
+      // A hit sends the blot to the bar first, so the arriving checker is alone
+      // on the point — landing it at height 1 left it hovering over nothing.
+      const countAtTarget = (m.to === 'off' || m.hit) ? 0 : Math.abs((state && state.points[m.to]) || 0);
       view.animateMove(m.from === 'bar' ? 'bar' : m.from, m.to === 'off' ? 'off' : m.to,
         mover || 'b', countAtTarget, () => setTimeout(step, 140));
     };
@@ -790,6 +824,10 @@
     animRunning = false;
     queuedSeq = 0;
     animGen++;
+    // My own hop chain is held back from repainting until it lands, so it has
+    // to be abandoned by the same paths — otherwise its settle() would render
+    // over the newer board that caused the clear.
+    myAnimGen++;
   }
 
   // Set whenever we've streamed at least one provisional move this turn.

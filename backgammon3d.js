@@ -607,6 +607,17 @@ class Backgammon3D {
     this.needsRender = true;
   }
 
+  // Cut every hop still in flight to its landing spot, WITHOUT firing its done
+  // callback — the caller is abandoning that chain, not completing it. Used when
+  // something needs the board settled right now, such as a second tap arriving
+  // while the previous checker is still moving.
+  finishMoveAnims() {
+    const anims = this.moveAnims || [];
+    this.moveAnims = [];
+    for (const a of anims) a.mesh.position.copy(a.to);
+    if (anims.length) this.needsRender = true;
+  }
+
   // Physics tumble ending on known values; calls done() when settled.
   // A hidden tab pauses requestAnimationFrame, which would stall the whole
   // game flow behind this animation — so when the page is hidden (or becomes
@@ -657,6 +668,13 @@ class Backgammon3D {
     if (!mesh) { if (done) done(); return; }
     const from = mesh.position.clone();
     const to = this._slotPos(toZone === 'off' ? 'off' : toZone, countsAtTarget, color);
+    // Book the checker into its destination the moment it sets off. A two-hop
+    // sequence animates as two calls against a board that has not been
+    // repainted yet, so without this the second hop looked for a checker on the
+    // intermediate point, found the stale occupant (or nothing at all), and
+    // either flew the wrong disc or silently skipped. setState() rewrites every
+    // zone on the next repaint, so this only has to hold until then.
+    mesh.userData.zone = toZone;
     const anim = { mesh, from, to, start: performance.now(), dur: 260, done, toZone };
     this.moveAnims = this.moveAnims || [];
     this.moveAnims.push(anim);
