@@ -160,9 +160,10 @@ window.firebaseGameBackend = {
     const roomRef = ref(db, `lobby/rooms/${roomId}`);
     try {
       let reason = null;
+      let oldPeerId = null;
       const result = await runTransaction(roomRef, (room) => {
         if (!room) { reason = 'gone'; return room; }
-        reason = null;
+        reason = null; oldPeerId = null; // the callback can re-run; start clean
         // Trust the room the transaction just read, not the caller's cached
         // lobby snapshot: the host may have locked the roster ("Start now")
         // or changed maxPlayers since the caller last looked.
@@ -170,7 +171,17 @@ window.firebaseGameBackend = {
         const players = Array.isArray(room.players) ? room.players.slice() : [];
         const idx = players.findIndex(p => p && (p.uuid === player.uuid || p.peerId === player.peerId));
         if (idx >= 0) {
-          players[idx] = player; // reconnect: refresh this player's entry
+          // Reconnect: refresh this player's entry. A different stored peerId
+          // means the same person arriving on a new device (their uuid is
+          // synced; peerIds are per-device) — remember the old id so the
+          // caller can migrate peerId-keyed game state to the new one, and
+          // keep the room's host field pointing at the person, not the
+          // abandoned device.
+          if (players[idx].peerId && players[idx].peerId !== player.peerId) {
+            oldPeerId = players[idx].peerId;
+            if (room.host === oldPeerId) room.host = player.peerId;
+          }
+          players[idx] = player;
         } else {
           // New joiner: rejected if the room is full or already underway.
           if (room.status === 'in-progress') { reason = 'full'; return; }
@@ -185,12 +196,62 @@ window.firebaseGameBackend = {
       });
       if (result && result.committed && result.snapshot && result.snapshot.exists()) {
         const val = result.snapshot.val();
-        return { ok: true, players: val.players || [], status: val.status || 'open' };
+        return { ok: true, players: val.players || [], status: val.status || 'open', oldPeerId: oldPeerId };
       }
       return { ok: false, reason: reason || 'gone' };
     } catch (e) {
       console.error('addPlayerToRoom transaction failed:', e);
       return { ok: false, reason: 'error' };
+    }
+  },
+
+  // Re-key games/{roomId} after a device switch. The player's uuid is stable
+  // across devices, but everything inside the game node — host, whose turn it
+  // is, the 5 Dice turn-order anchor and score columns, the win/tie tallies —
+  // is keyed by peerId, which each device mints for itself. Without this, a
+  // player who resumes on another device finds the turn pointing at a device
+  // that no longer exists and their score column stranded under the old id.
+  migrateGamePeerId: async (roomId, oldPeerId, newPeerId) => {
+    if (!(await requireAuth())) return;
+    if (!roomId || !oldPeerId || !newPeerId || oldPeerId === newPeerId) return;
+    const swap = (v) => (v === oldPeerId ? newPeerId : v);
+    const swapKey = (obj) => {
+      if (!obj || typeof obj !== 'object' || !(oldPeerId in obj)) return obj;
+      const moved = obj[oldPeerId];
+      const out = {};
+      for (const k in obj) { if (k !== oldPeerId) out[k] = obj[k]; }
+      if (typeof moved === 'number' && typeof out[newPeerId] === 'number') {
+        out[newPeerId] += moved; // win/tie tallies from both device ids combine
+      } else {
+        // Score columns: the migrated column is the real one — anything already
+        // under the new id is at most a just-created empty sheet.
+        out[newPeerId] = moved;
+      }
+      return out;
+    };
+    try {
+      await runTransaction(ref(db, `games/${roomId}`), (game) => {
+        if (!game) return game;
+        // Touch only fields that exist: the RTDB rejects a transaction result
+        // containing `undefined` anywhere (e.g. assigning back swapKey(missing)).
+        if (game.host !== undefined) game.host = swap(game.host);
+        if (game.currentTurnPlayerId !== undefined) game.currentTurnPlayerId = swap(game.currentTurnPlayerId);
+        if (Array.isArray(game.players)) {
+          for (const p of game.players) {
+            if (p && p.peerId === oldPeerId) p.peerId = newPeerId;
+          }
+        }
+        const fd = game.fiveDiceState;
+        if (fd) {
+          if (fd.firstTurn !== undefined) fd.firstTurn = swap(fd.firstTurn);
+          if (fd.scores) fd.scores = swapKey(fd.scores);
+        }
+        if (game.wins) game.wins = swapKey(game.wins);
+        if (game.ties) game.ties = swapKey(game.ties);
+        return game;
+      });
+    } catch (e) {
+      console.error('migrateGamePeerId transaction failed:', e);
     }
   },
 
@@ -239,16 +300,30 @@ window.firebaseGameBackend = {
   // to mirror their own lobby snapshot with a plain last-writer-wins update, so
   // two people joining within a few hundred ms could erase each other from the
   // game roster. The union keeps everyone.
+  // Returns { peerSwaps: [{oldPeerId, newPeerId}] } — one entry per roster slot
+  // whose uuid matched an incoming player but whose stored peerId differed
+  // (that person moved to a new device). The caller feeds these to
+  // migrateGamePeerId; detecting it HERE as well as in addPlayerToRoom means a
+  // migration that was lost mid-join (tab closed, network drop) heals on the
+  // next join instead of orphaning the game state forever.
   syncGamePlayers: async (roomId, players) => {
-    if (!(await requireAuth())) return;
-    if (!roomId || !Array.isArray(players)) return;
+    if (!(await requireAuth())) return { peerSwaps: [] };
+    if (!roomId || !Array.isArray(players)) return { peerSwaps: [] };
+    let peerSwaps = [];
     try {
       await runTransaction(ref(db, `games/${roomId}/players`), (cur) => {
+        peerSwaps = []; // the callback can re-run; start clean
         const merged = Array.isArray(cur) ? cur.slice() : [];
         for (const p of players) {
           if (!p) continue;
           const idx = merged.findIndex(m => m && (m.uuid === p.uuid || m.peerId === p.peerId));
-          if (idx >= 0) merged[idx] = p;
+          if (idx >= 0) {
+            if (merged[idx].peerId && p.peerId && merged[idx].uuid === p.uuid &&
+                merged[idx].peerId !== p.peerId) {
+              peerSwaps.push({ oldPeerId: merged[idx].peerId, newPeerId: p.peerId });
+            }
+            merged[idx] = p;
+          }
           else merged.push(p);
         }
         return merged;
@@ -256,6 +331,7 @@ window.firebaseGameBackend = {
     } catch (e) {
       console.error('syncGamePlayers transaction failed:', e);
     }
+    return { peerSwaps };
   },
 
   // Overwrite games/{roomId}.players exactly (used when a player leaves and the

@@ -1010,6 +1010,12 @@ window.joinRoom = async function(roomId) {
     if (res.ok) {
       players = res.players;
       updatedStatus = res.status;
+      // Same player back on a different device (synced Player ID, new
+      // per-device peerId): re-key the game state to this device BEFORE
+      // adopting it, so the turn, score column, and tallies follow the player.
+      if (res.oldPeerId && window.firebaseGameBackend.migrateGamePeerId) {
+        await window.firebaseGameBackend.migrateGamePeerId(roomId, res.oldPeerId, myPeerId);
+      }
     } else if (res.reason === 'full') {
       hideLoading();
       return alert('This game room is full or already in progress.');
@@ -1023,20 +1029,36 @@ window.joinRoom = async function(roomId) {
       // Fallback (transient/transaction error): the previous read-modify-write path.
       players = room.players || [];
       const existingPlayerIndex = players.findIndex(p => p.uuid === myUuid || p.peerId === myPeerId);
+      const prevEntry = existingPlayerIndex >= 0 ? players[existingPlayerIndex] : null;
+      const oldPeerId = prevEntry && prevEntry.peerId && prevEntry.peerId !== myPeerId
+        ? prevEntry.peerId : null;
       if (existingPlayerIndex < 0) players.push(me);
       else players[existingPlayerIndex] = me;
       const isFullNow = players.length >= maxPlayers;
       updatedStatus = isFullNow ? 'in-progress' : room.status;
-      await window.firebaseGameBackend.updateRoom(roomId, {
+      const roomUpdates = {
         players: players,
         status: updatedStatus
-      });
+      };
+      if (oldPeerId && room.host === oldPeerId) roomUpdates.host = myPeerId;
+      await window.firebaseGameBackend.updateRoom(roomId, roomUpdates);
+      if (oldPeerId && window.firebaseGameBackend.migrateGamePeerId) {
+        await window.firebaseGameBackend.migrateGamePeerId(roomId, oldPeerId, myPeerId);
+      }
     }
 
     // Merge (not overwrite) the roster into the game node so two concurrent
     // joiners can't erase each other, then sync the room status.
     if (window.firebaseGameBackend.syncGamePlayers) {
-      await window.firebaseGameBackend.syncGamePlayers(roomId, players);
+      const syncRes = await window.firebaseGameBackend.syncGamePlayers(roomId, players);
+      // Second chance for device-switch migration: if the game roster still
+      // held a swapped-out peerId (e.g. an earlier join updated the lobby but
+      // died before migrating), re-key the game state now.
+      if (syncRes && syncRes.peerSwaps && window.firebaseGameBackend.migrateGamePeerId) {
+        for (const s of syncRes.peerSwaps) {
+          await window.firebaseGameBackend.migrateGamePeerId(roomId, s.oldPeerId, s.newPeerId);
+        }
+      }
       await window.firebaseGameBackend.updateGameState(roomId, { status: updatedStatus });
     } else {
       await window.firebaseGameBackend.updateGameState(roomId, { players: players, status: updatedStatus });
