@@ -1116,9 +1116,19 @@ function setupGameUI(gameType, isRejoin = false) {
     document.body.classList.remove('bg-five-dice');
     const room = activeRooms[currentRoomId] || {};
     if (window.BGGame && bgContainer) {
+      // Seat assignment. hostUuid is stable across sessions/devices; peerId can go
+      // stale, and the old `(room.host || gameHost || myPeerId) === myPeerId`
+      // fallback made EVERYONE host when room data hadn't synced yet — which is
+      // why the board sometimes rendered 180° backwards at game start. Fall back
+      // to the `isHost` flag committed at create/join time, never to myPeerId.
+      const amBgHost =
+        room.hostUuid != null ? room.hostUuid === myUuid :
+        room.host     != null ? room.host === myPeerId :
+        gameHost      != null ? gameHost === myPeerId :
+        isHost;
       window.BGGame.enter({
         container: bgContainer,
-        isHost: (room.host || gameHost || myPeerId) === myPeerId,
+        isHost: amBgHost,
         aiLevel: (room.maxPlayers === 1 || window.gameMaxPlayers === 1) ? (room.bgLevel || window._bgLevel || 'normal') : null,
         matchTarget: room.bgTarget || window._bgTarget || 1
       });
