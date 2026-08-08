@@ -1713,3 +1713,181 @@ body.dice3d-active .fd-die {
   .bg-ui .bg-topbar { top: 30px; font-size: 0.72rem; }
   .bg-btn { padding: 11px 24px; font-size: 1.05rem; }
 }
+
+/* --- Admin Dashboard ------------------------------------------------------
+   Reached only through the hidden gauge icon in the lobby header. */
+
+/* The tap target must not advertise itself: no pointer cursor, and no text
+   selection when it's tapped ten times in a row. */
+#lobby-secret-tap {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Sits immediately left of the hamburger, which is at right: 12px. Deliberately
+   NOT .menu-btn: that class is what the menu system binds dropdowns to. */
+.dash-icon {
+  position: absolute;
+  right: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #7ec8ff;
+  padding: 4px 8px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dash-icon:active { opacity: 0.6; }
+.dash-icon.hidden { display: none; }
+
+.dash-container {
+  flex: 1;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 20px 40px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dash-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dash-signed-in {
+  font-size: 0.8rem;
+  color: #9fb3c8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-mini-btn {
+  flex-shrink: 0;
+  background-color: #33475f;
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.dash-mini-btn:active { opacity: 0.7; }
+
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.dash-stat {
+  background-color: #1f3247;
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.dash-stat-num {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.dash-stat-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #9fb3c8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dash-h2 {
+  font-size: 1rem;
+  color: #cfe0f0;
+  margin: 26px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #2c4257;
+}
+
+.dash-list { display: flex; flex-direction: column; gap: 8px; }
+
+.dash-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #1f3247;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.dash-row-text { flex: 1; min-width: 0; }
+
+.dash-row-main {
+  color: #fff;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-row-sub {
+  margin-top: 3px;
+  color: #9fb3c8;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-del {
+  flex-shrink: 0;
+  background-color: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.dash-del:active { opacity: 0.7; }
+
+.dash-empty {
+  color: #7b8fa3;
+  font-style: italic;
+  font-size: 0.9rem;
+  padding: 6px 2px;
+}
+
+.dash-activity .dash-row { padding: 10px 14px; }
+
+.dash-note {
+  color: #9fb3c8;
+  font-size: 0.8rem;
+  margin: 4px 0 20px;
+  line-height: 1.5;
+}
+
+.dash-login-error {
+  color: #ff8b95;
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+  text-align: center;
+}
+.dash-login-error.hidden { display: none; }
+
+/* An orphan is game data with no lobby room — worth flagging, since it is
+   invisible to players and only the dashboard can clear it. */
+.dash-row.dash-orphan { border-left: 3px solid #e0a33e; }

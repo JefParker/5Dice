@@ -1,6 +1,14 @@
 {
   "rules": {
-    ".read": false,
+    // Admin dashboard read access. Players sign in ANONYMOUSLY, so their token
+    // has no email claim; the only way to hold one is to sign in with the
+    // email/password account created by hand in the Firebase console. That
+    // makes this grant admin-only without hard-coding an address here.
+    //
+    // Read only. The dashboard's delete buttons still go through the ordinary
+    // per-room write rules below — no request can flatten the tree in one shot,
+    // for the admin any more than for anyone else.
+    ".read": "auth != null && auth.token.email != null",
     ".write": false,
 
     // NOTE on identity: sign-in is anonymous, and one player deliberately shares

@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=35">
+  <link rel="stylesheet" href="styles.css?v=36">
   <link rel="stylesheet" href="skins.css?v=5">
   <link rel="manifest" href="manifest.json">
   <!-- Not deferred: applies the saved skin before first paint. -->
@@ -17,7 +17,15 @@
     <!-- Screen A: Lobby -->
     <div id="screen-lobby" class="screen active">
       <header class="top-header" style="position: relative;">
-        <h1>🎲 Lobby 🎲</h1>
+        <h1>🎲 <span id="lobby-secret-tap">Lobby</span> 🎲</h1>
+        <button id="dash-icon-btn" class="dash-icon hidden" aria-label="Dashboard" title="Dashboard">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M3.5 18a9 9 0 1 1 17 0"></path>
+            <path d="M12 14.5 16.5 9"></path>
+            <circle cx="12" cy="14.5" r="1.6" fill="currentColor" stroke="none"></circle>
+            <path d="M5.6 13.2h1.6M12 6.4V8M18.4 13.2h-1.6"></path>
+          </svg>
+        </button>
         <button class="menu-btn" data-menu="lobby" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
       </header>
       <div class="content-layout">
@@ -383,6 +391,42 @@
       </div>
     </div>
 
+    <!-- Screen E: Dashboard (admin only; reached via the hidden gauge icon) -->
+    <div id="screen-dashboard" class="screen hidden">
+      <header class="top-header" style="position: relative;">
+        <h1>📊 Dashboard</h1>
+        <button class="menu-btn" data-menu="dashboard" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
+      </header>
+      <div class="dash-container">
+        <div class="dash-bar">
+          <span id="dash-signed-in" class="dash-signed-in"></span>
+          <button id="btn-dash-refresh" class="dash-mini-btn" type="button">↻ Refresh</button>
+        </div>
+
+        <div id="dash-stats" class="dash-stats"></div>
+
+        <h2 class="dash-h2">Game Rooms</h2>
+        <div id="dash-rooms" class="dash-list"></div>
+
+        <h2 class="dash-h2">Score Sheet Rooms</h2>
+        <div id="dash-score-rooms" class="dash-list"></div>
+
+        <h2 class="dash-h2">Recent Activity</h2>
+        <div id="dash-activity" class="dash-list dash-activity"></div>
+
+        <h2 class="dash-h2">Data</h2>
+        <button id="btn-dash-backup" class="capsule-button btn-primary" type="button">⬇ Download JSON Backup</button>
+        <button id="btn-dash-clear" class="capsule-button btn-danger" type="button">Clear All Databases</button>
+        <p class="dash-note">
+          Clearing removes every game room, its events, the lobby and its chat, voice
+          signaling, and the Score Sheet's saved rooms. It cannot be undone &mdash;
+          download a backup first.
+        </p>
+
+        <button id="btn-dash-signout" class="capsule-button" type="button">Sign out of Dashboard</button>
+      </div>
+    </div>
+
     <!-- Screen B: Setup -->
     <div id="screen-setup" class="screen hidden">
       <header class="top-header">
@@ -609,11 +653,47 @@
       </div>
     </div>
     
+    <!-- Dashboard Login Modal -->
+    <div id="dash-login-modal" class="overlay hidden">
+      <div class="overlay-content">
+        <h2>📊 Dashboard Login</h2>
+        <p style="margin: 12px 0 16px;">Sign in with the administrator account.</p>
+        <input type="email" id="dash-email" class="capsule-input" placeholder="Email"
+               autocomplete="off" autocapitalize="none" spellcheck="false">
+        <input type="password" id="dash-password" class="capsule-input" placeholder="Password"
+               autocomplete="off">
+        <p id="dash-login-error" class="dash-login-error hidden"></p>
+        <div class="action-group">
+          <button id="btn-dash-login" class="capsule-button btn-success" style="margin-bottom: 0;">Log In</button>
+          <button id="btn-dash-login-cancel" class="capsule-button" style="margin-bottom: 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clear All Databases Confirmation -->
+    <div id="dash-clear-modal" class="overlay hidden">
+      <div class="overlay-content">
+        <h2 class="dlg-danger">Clear ALL Databases?</h2>
+        <p style="margin: 15px 0;">
+          This permanently deletes <strong class="dlg-strong">every game room, all game
+          events, the lobby and its chat history, voice signaling, and every Score Sheet
+          room</strong> &mdash; for all players, not just you. It cannot be undone.
+        </p>
+        <p style="margin: 15px 0;">Type <strong class="dlg-strong">CLEAR</strong> to confirm.</p>
+        <input type="text" id="dash-clear-confirm" class="capsule-input" placeholder="CLEAR"
+               autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <div class="action-group">
+          <button id="btn-dash-clear-confirm" class="capsule-button btn-danger" style="margin-bottom: 0;" disabled>Clear Everything</button>
+          <button id="btn-dash-clear-cancel" class="capsule-button" style="margin-bottom: 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=27"></script>
+  <script type="module" src="firebase-game-backend.js?v=28"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=24"></script>
@@ -622,7 +702,7 @@
   <script src="backgammon3d.js?v=12"></script>
   <script src="bg-game.js?v=16"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=49"></script>
+  <script src="app.js?v=50"></script>
   <script src="voice-chat.js?v=1"></script>
 </body>
 </html>

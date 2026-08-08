@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, orderByChild, endAt, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -16,7 +16,16 @@ let authError = null;
 
 async function ensureAuth() {
   try {
-    await signInAnonymously(auth);
+    // Wait for a persisted session before minting an anonymous one. The admin
+    // dashboard signs in with email/password, and Firebase restores that
+    // session on reload — calling signInAnonymously() unconditionally would
+    // replace it with a fresh anonymous user and silently sign the admin out
+    // every time the page loaded.
+    const existing = await new Promise((resolve) => {
+      const unsub = onAuthStateChanged(auth, (u) => { unsub(); resolve(u); },
+        () => resolve(null));
+    });
+    if (!existing) await signInAnonymously(auth);
     authError = null;
   } catch (err) {
     authError = err;
@@ -606,8 +615,162 @@ window.firebaseGameBackend = {
       gameEventsUnsubscribe();
       gameEventsUnsubscribe = null;
     }
+  },
+
+  // -------------------------------------------------------------------------
+  // Admin dashboard
+  //
+  // "Admin" means signed in with email/password. Players sign in anonymously
+  // and their token carries no email, so `auth.token.email != null` in the
+  // security rules distinguishes the two without hard-coding an address.
+  // -------------------------------------------------------------------------
+
+  // Resolves once the initial sign-in (restored session or fresh anonymous)
+  // has settled, so callers can ask isAdmin() and get a real answer.
+  whenAuthReady: async () => { await authPromise; },
+
+  isAdmin: () => !!(auth.currentUser && auth.currentUser.email),
+
+  adminEmail: () => (auth.currentUser && auth.currentUser.email) || null,
+
+  adminSignIn: async (email, password) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      authError = null;
+      return { ok: true };
+    } catch (err) {
+      // Firebase returns distinct codes, but for a login box they all mean the
+      // same thing to the user; only the network case is worth separating.
+      const net = err && err.code === 'auth/network-request-failed';
+      return { ok: false, reason: net ? 'network' : 'credentials', code: err && err.code };
+    }
+  },
+
+  // Drop admin rights and go back to being an ordinary anonymous player, so
+  // gameplay continues to work in the same tab.
+  adminSignOut: async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error('adminSignOut failed:', e);
+    }
+    authPromise = ensureAuth();
+    await authPromise;
+  },
+
+  // Whole-tree read. Only succeeds for an email-authenticated admin: the root
+  // read rule requires a token with an email claim.
+  fetchAllData: async () => {
+    if (!(await requireAuth())) return null;
+    try {
+      const snap = await get(ref(db, '/'));
+      return snap.exists() ? snap.val() : {};
+    } catch (e) {
+      console.error('fetchAllData failed:', e);
+      return null;
+    }
+  },
+
+  // Delete one lobby room and everything hanging off it.
+  deleteRoomCompletely: async (roomId) => {
+    if (!(await requireAuth())) return { ok: false };
+    if (!roomId) return { ok: false };
+    try {
+      await Promise.all([
+        remove(ref(db, `lobby/rooms/${roomId}`)).catch(() => {}),
+        remove(ref(db, `games/${roomId}`)).catch(() => {}),
+        remove(ref(db, `gameEvents/${roomId}`)).catch(() => {})
+      ]);
+      await clearVoiceRoom(roomId);
+      return { ok: true };
+    } catch (e) {
+      console.error('deleteRoomCompletely failed:', e);
+      return { ok: false };
+    }
+  },
+
+  // Delete a single Score Sheet room (the /rooms tree the Score app owns).
+  deleteScoreRoom: async (roomId) => {
+    if (!(await requireAuth())) return { ok: false };
+    if (!roomId) return { ok: false };
+    try {
+      await remove(ref(db, `rooms/${roomId}`));
+      return { ok: true };
+    } catch (e) {
+      console.error('deleteScoreRoom failed:', e);
+      return { ok: false };
+    }
+  },
+
+  // Wipe everything: game rooms, their events, the lobby and its chat, voice
+  // signaling, and the Score Sheet's own /rooms tree.
+  //
+  // Deliberately child-by-child rather than remove('/'): the rules grant writes
+  // per room and never at a node root, precisely so no single request can flatten
+  // the database. That protection applies to the admin too, so this walks the
+  // children it is allowed to delete.
+  clearAllDatabases: async () => {
+    if (!(await requireAuth())) return { ok: false, reason: 'auth' };
+    const counts = { games: 0, gameEvents: 0, lobbyRooms: 0, chats: 0, scoreRooms: 0, voiceRooms: 0 };
+    const failures = [];
+    const childKeys = async (path) => {
+      try {
+        const snap = await get(ref(db, path));
+        if (!snap.exists()) return [];
+        const v = snap.val();
+        return (v && typeof v === 'object') ? Object.keys(v) : [];
+      } catch (e) {
+        failures.push(path);
+        return [];
+      }
+    };
+    const wipe = async (basePath, countKey) => {
+      const keys = await childKeys(basePath);
+      for (const k of keys) {
+        try {
+          await remove(ref(db, `${basePath}/${k}`));
+          counts[countKey]++;
+        } catch (e) {
+          failures.push(`${basePath}/${k}`);
+        }
+      }
+    };
+
+    await wipe('games', 'games');
+    await wipe('gameEvents', 'gameEvents');
+    await wipe('lobby/rooms', 'lobbyRooms');
+    await wipe('lobby/chats', 'chats');
+    await wipe('rooms', 'scoreRooms');
+
+    // Voice grants writes only at members/$peerId and signals/$peerId, so the
+    // room node itself can't be removed in one call — empty it instead and the
+    // parent disappears with its last child.
+    for (const roomId of await childKeys('voice')) {
+      await clearVoiceRoom(roomId);
+      counts.voiceRooms++;
+    }
+
+    return { ok: failures.length === 0, counts, failures };
   }
 };
+
+// Empty voice/{roomId} the only way the rules allow: one member and one signal
+// inbox at a time.
+async function clearVoiceRoom(roomId) {
+  const kids = async (path) => {
+    try {
+      const snap = await get(ref(db, path));
+      return snap.exists() && snap.val() && typeof snap.val() === 'object'
+        ? Object.keys(snap.val()) : [];
+    } catch (e) { return []; }
+  };
+  for (const peerId of await kids(`voice/${roomId}/members`)) {
+    await remove(ref(db, `voice/${roomId}/members/${peerId}`)).catch(() => {});
+  }
+  for (const peerId of await kids(`voice/${roomId}/signals`)) {
+    await remove(ref(db, `voice/${roomId}/signals/${peerId}`)).catch(() => {});
+  }
+}
 
 window.firebaseGameBackend.init();
 window.dispatchEvent(new CustomEvent('firebaseGameReady'));
