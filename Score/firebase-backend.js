@@ -166,36 +166,11 @@ window.firebaseBackend = {
         return JSON.stringify(arr);
     },
 
-    getAllRooms: async () => {
-        if (!(await requireAuth())) return [];
-        await window.firebaseBackend.cleanupOldRooms();
-        const snapshot = await get(ref(db, 'rooms'));
-        const roomList = [];
-        if (snapshot.exists()) {
-            const rooms = snapshot.val();
-            for (let roomId in rooms) {
-                const roomData = rooms[roomId];
-                let playerNames = [];
-                if (roomData && roomData.scores) {
-                    for (let pid in roomData.scores) {
-                        const p = roomData.scores[pid];
-                        if (p.score) {
-                            try {
-                                const parsedScore = typeof p.score === 'string' ? JSON.parse(p.score) : p.score;
-                                if (parsedScore.Name) playerNames.push(parsedScore.Name);
-                            } catch(e) {}
-                        }
-                    }
-                }
-                roomList.push({
-                    id: roomId,
-                    players: playerNames,
-                    lastEntered: roomData.lastEntered || 0
-                });
-            }
-        }
-        return roomList;
-    },
+    // getAllRooms() was removed on 2026-08-08 with the "Get Room List" menu item.
+    // It read the whole /rooms node and handed every room id and player name to
+    // any anonymous visitor, who could then join any of them. Listing rooms is
+    // now the admin Dashboard's job. The 48h sweep does not depend on it — it
+    // also runs on every room join, below.
 
     clearRoom: async (room) => {
         if (!(await requireAuth())) return;

@@ -650,23 +650,8 @@ html[data-skin],
 }
 [data-skin] .share-close-btn:hover { background: var(--sk-menu-hover); color: var(--sk-text); }
 
-[data-skin] .room-list-item {
-  background: var(--sk-panel);
-  border: 1px solid var(--sk-border);
-  border-radius: var(--sk-radius);
-}
-[data-skin] .room-list-item:hover { background: var(--sk-panel-2); border-color: var(--sk-accent); }
-[data-skin] .room-link    { color: var(--sk-accent); }
-[data-skin] .room-players,
-[data-skin] .room-lastplayed,
-[data-skin] .room-list-note { color: var(--sk-text-muted) !important; }
-[data-skin] .room-list-error { color: var(--sk-danger) !important; }
 [data-skin] .share-room-id { color: var(--sk-accent) !important; }
 [data-skin] .share-modal-note { color: var(--sk-text-muted) !important; }
-[data-skin] .room-setup-btn {
-  background: var(--sk-accent) !important;
-  color: var(--sk-accent-text) !important;
-}
 
 /* ============================================================================
    SKIN-SPECIFIC FLOURISHES

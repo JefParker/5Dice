@@ -374,11 +374,6 @@ const PromptClearRoom = () => {
         ClearRoomInServerDB();
 };
 
-const MenuRoomList = () => {
-    if (contextMenu) contextMenu.style.visibility = null;
-    ShowRoomListModal();
-};
-
 // "More" reveals the score-sheet-specific actions inside the hamburger panel.
 const ToggleScoreMore = (ev) => {
     if (ev) ev.stopPropagation();
@@ -597,7 +592,6 @@ const ShowScoreMain = () => {
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); ToggleDiceRack();'>Dice</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); RefreshLeaders();'>Refresh Leaders</button>";
     sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); PromptClearRoom();'>Clear Room</button>";
-    sPage += "<button type='button' role='menuitem' class='ScoreMenuItem ScoreSubItem' onclick='CloseScoreMenu(); MenuRoomList();'>Get Room List</button>";
     sPage += "</div>";
     sPage += "</nav>";
 
@@ -1900,9 +1894,6 @@ const MakeContextMenuHTML = (sWindowShowing) => {
     sPage += "<li class='context-link' id='ClearRoom'>";
     sPage += "<span class='context-label'>Clear Room</span>";
     sPage += "</li>";
-    sPage += "<li class='context-link' id='GetRoomList'>";
-    sPage += "<span class='context-label'>Get Room List</span>";
-    sPage += "</li>";
 
     sPage += "</ul>";
     return sPage;
@@ -2001,83 +1992,6 @@ window.shareToEmail = () => {
     window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
 };
 
-// --- ROOM LIST MODAL HANDLERS ---
-// Human-readable "time since last activity" from a lastEntered timestamp (ms).
-const formatTimeAgo = (ts) => {
-    if (!ts || typeof ts !== 'number') return 'unknown';
-    let diff = Date.now() - ts;
-    if (diff < 0) diff = 0;
-    const min = 60000, hr = 3600000, day = 86400000;
-    if (diff < min) return 'just now';
-    if (diff < hr) { const n = Math.floor(diff / min); return n + 'm ago'; }
-    if (diff < day) { const n = Math.floor(diff / hr); return n + 'h ago'; }
-    const n = Math.floor(diff / day);
-    return n + 'd ago';
-};
-
-window.ShowRoomListModal = async () => {
-    const modalEl = document.getElementById('room-list-modal');
-    const containerEl = document.getElementById('room-list-container');
-    if (!modalEl || !containerEl) return;
-
-    containerEl.innerHTML = `<p class="room-list-note" style="text-align: center;">Loading active rooms...</p>`;
-    modalEl.classList.remove('hidden');
-    modalEl.style.display = 'flex';
-
-    try {
-        let rooms = [];
-        if (window.firebaseBackend && typeof window.firebaseBackend.getAllRooms === 'function') {
-            rooms = await window.firebaseBackend.getAllRooms();
-        }
-
-        if (!rooms || rooms.length === 0) {
-            containerEl.innerHTML = `
-                <div style="text-align: center; padding: 15px 0;">
-                    <p class="room-list-note" style="margin-bottom: 12px;">No active game rooms found.</p>
-                    <button class="room-setup-btn" onclick="hideRoomListModal(); ShowEnterID();">Set Up New Room</button>
-                </div>
-            `;
-            return;
-        }
-
-        // Sort rooms by lastEntered descending or numerically
-        rooms.sort((a, b) => (b.lastEntered || 0) - (a.lastEntered || 0));
-
-        let html = '';
-        rooms.forEach(r => {
-            const playerStr = (r.players && r.players.length > 0) ? r.players.join(', ') : 'Waiting...';
-            const lastPlayed = formatTimeAgo(r.lastEntered);
-            html += `
-                <div class="room-list-item" onclick="joinRoomFromList('${r.id}')">
-                    <span class="room-link">Room #${r.id}</span>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
-                        <span class="room-players">👥 ${playerStr}</span>
-                        <span class="room-lastplayed" style="font-size: 0.72rem;">🕐 ${lastPlayed}</span>
-                    </div>
-                </div>
-            `;
-        });
-        containerEl.innerHTML = html;
-    } catch (err) {
-        console.error("Error fetching rooms:", err);
-        containerEl.innerHTML = `<p class="room-list-error" style="text-align: center;">Failed to load rooms.</p>`;
-    }
-};
-
-window.hideRoomListModal = () => {
-    const modalEl = document.getElementById('room-list-modal');
-    if (modalEl) {
-        modalEl.classList.add('hidden');
-        modalEl.style.display = 'none';
-    }
-};
-
-window.joinRoomFromList = (roomId) => {
-    hideRoomListModal();
-    g_objUserData.GameID = roomId;
-    ShowEnterID();
-};
-
 const InitializeContextMenu = (sWindowShowing) => {
     contextMenu = document.querySelector(".context");
     if (!contextMenu) return;
@@ -2100,14 +2014,6 @@ const InitializeContextMenu = (sWindowShowing) => {
 
     const clearRoomBtn = document.querySelector("#ClearRoom");
     if (clearRoomBtn) clearRoomBtn.addEventListener("click", PromptClearRoom);
-
-    const getRoomListBtn = document.querySelector("#GetRoomList");
-    if (getRoomListBtn) {
-        getRoomListBtn.addEventListener("click", (ev) => {
-            if (ev) ev.stopPropagation();
-            MenuRoomList();
-        });
-    }
 
     // Register the document-level handlers only once. InitializeContextMenu runs on
     // every ShowScoreMain() render; without this guard the listeners stack up and leak.
