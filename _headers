@@ -1,0 +1,18 @@
+# Cloudflare Pages header rules.
+#
+# Why this exists: on 2026-08-08 a deploy shipped an index.html referencing
+# app.js?v=50 while the edge still held the PREVIOUS app.js. Browsers stored
+# that stale body under the new ?v=50 url and, because assets were served with
+# max-age=14400, kept serving it for four hours. Version-bumping — the entire
+# cache-busting strategy this app relies on — silently failed, and the app ran
+# code that did not match its own HTML.
+#
+# no-cache does not mean "don't store": it means "revalidate before use". An
+# unchanged file still costs only a 304, so this is cheap, and a stale body can
+# never survive a reload again.
+#
+# NOTE: a zone-level "Browser Cache TTL" set in the Cloudflare dashboard
+# overrides these headers. It must be set to "Respect Existing Headers" for
+# this file to take effect.
+/*
+  Cache-Control: no-cache
