@@ -9,6 +9,14 @@ if (!myPeerId) {
 localStorage.setItem('myPeerId', myPeerId);
 window.myPeerId = myPeerId;
 
+// The version this file IS, as opposed to the one index.html asked for. The
+// tripwire at the bottom of index.html compares the two: on 2026-08-08 the edge
+// served an old app.js body under a freshly bumped ?v= url, so the page ran code
+// that didn't match its own HTML and the bump — the whole cache-busting strategy
+// — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
+// checks all three agree.
+window.__appJsVersion = 53;
+
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
   return String(str == null ? '' : str)
@@ -17,6 +25,19 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// A room's player roster, always as a dense array.
+//
+// RTDB hands an array back as a JS array only when its keys run 0..n-1; a gap
+// anywhere and it arrives as a plain object. Our own writes can't produce that
+// (removePlayerFromRoom rebuilds with .filter), but the rules let any client
+// write the node, and the failure was disproportionate: renderRooms() called
+// .some() on an object, threw, and blanked the whole lobby list.
+function asPlayerList(players) {
+  if (Array.isArray(players)) return players.filter(Boolean);
+  if (players && typeof players === 'object') return Object.values(players).filter(Boolean);
+  return [];
 }
 
 function generateDarkColor() {
@@ -927,7 +948,7 @@ function renderRooms() {
 
   rooms.forEach(r => {
     if (!r || !r.id) return;
-    const playerList = r.players || [];
+    const playerList = asPlayerList(r.players);
     const isPlayer = playerList.some(p => p.uuid === myUuid || p.peerId === myPeerId);
 
     if (r.status === 'in-progress' && !isPlayer) {
@@ -2214,6 +2235,15 @@ showScreen = function (screenId) {
   return _dashBaseShowScreen(screenId);
 };
 
+// The passkey row only makes sense when this device actually has one sealed.
+function dashSyncPasskeyLogin() {
+  const wrap = document.getElementById('dash-passkey-signin-wrap');
+  if (!wrap) return;
+  const pk = window.dashPasskey;
+  const show = !!(pk && pk.supported() && pk.hasCredential());
+  wrap.classList.toggle('hidden', !show);
+}
+
 if (dashIconBtn) {
   dashIconBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2222,8 +2252,14 @@ if (dashIconBtn) {
     if (err) err.classList.add('hidden');
     document.getElementById('dash-email').value = '';
     document.getElementById('dash-password').value = '';
+    dashSyncPasskeyLogin();
     dashLoginModal.classList.remove('hidden');
-    setTimeout(() => document.getElementById('dash-email').focus(), 50);
+    // With a passkey on the device the email field isn't the obvious next step,
+    // and focusing it pops the keyboard over the passkey button on a phone.
+    const pk = window.dashPasskey;
+    if (!(pk && pk.supported() && pk.hasCredential())) {
+      setTimeout(() => document.getElementById('dash-email').focus(), 50);
+    }
   });
 }
 
@@ -2240,7 +2276,33 @@ if (btnDashLoginCancel) {
   });
 }
 
+// Shared tail of every successful sign-in, password or passkey.
+function dashOnSignedIn() {
+  dashCloseLogin();
+  dashAuthed = true;
+  dashIconShown = false;
+  if (dashIconBtn) dashIconBtn.classList.add('hidden');
+  showToast('Signed in to Dashboard');
+  openDashboard();
+}
+
+// Show a login error. `keepGate` leaves the gauge alone: a bad password should
+// cost you the icon, but a mis-tapped Face ID prompt shouldn't make you tap the
+// header ten more times.
+function dashLoginFail(msg, keepGate) {
+  const errEl = document.getElementById('dash-login-error');
+  errEl.innerText = msg;
+  errEl.classList.remove('hidden');
+  if (keepGate) return;
+  // Leave the message up briefly so it's clear what happened rather than
+  // everything vanishing at once.
+  setTimeout(() => { dashCloseLogin(); dashResetGate(); }, 1600);
+}
+
+let dashLoginBusy = false;
+
 async function dashAttemptLogin() {
+  if (dashLoginBusy) return;          // Enter and the button can both fire
   const emailEl = document.getElementById('dash-email');
   const passEl = document.getElementById('dash-password');
   const errEl = document.getElementById('dash-login-error');
@@ -2248,39 +2310,30 @@ async function dashAttemptLogin() {
   const email = emailEl.value.trim();
   const password = passEl.value;
 
-  const fail = (msg) => {
-    errEl.innerText = msg;
-    errEl.classList.remove('hidden');
-    // A failed attempt costs you the icon, as specified — but leave the message
-    // up briefly so it's clear what happened rather than everything vanishing.
-    setTimeout(() => { dashCloseLogin(); dashResetGate(); }, 1600);
-  };
-
   if (!email || !password) {
     errEl.innerText = 'Enter both an email and a password.';
     errEl.classList.remove('hidden');
     return;
   }
 
+  dashLoginBusy = true;
   btn.disabled = true;
   btn.innerText = 'Checking...';
   const res = await window.firebaseGameBackend.adminSignIn(email, password);
+  dashLoginBusy = false;
   btn.disabled = false;
   btn.innerText = 'Log In';
 
   if (!res.ok) {
-    fail(res.reason === 'network'
+    // A network failure isn't a wrong password — don't confiscate the gauge.
+    const net = res.reason === 'network';
+    dashLoginFail(net
       ? 'Could not reach the server. Check your connection.'
-      : 'Incorrect email or password.');
+      : 'Incorrect email or password.', net);
     return;
   }
 
-  dashCloseLogin();
-  dashAuthed = true;
-  dashIconShown = false;
-  if (dashIconBtn) dashIconBtn.classList.add('hidden');
-  showToast('Signed in to Dashboard');
-  openDashboard();
+  dashOnSignedIn();
 }
 
 const btnDashLogin = document.getElementById('btn-dash-login');
@@ -2290,14 +2343,125 @@ if (btnDashLogin) btnDashLogin.addEventListener('click', dashAttemptLogin);
   if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') dashAttemptLogin(); });
 });
 
+// --- passkey sign-in --------------------------------------------------------
+
+const btnDashPasskeySignin = document.getElementById('btn-dash-passkey-signin');
+if (btnDashPasskeySignin) {
+  btnDashPasskeySignin.addEventListener('click', async () => {
+    if (dashLoginBusy) return;
+    const pk = window.dashPasskey;
+    if (!pk) return;
+
+    dashLoginBusy = true;
+    btnDashPasskeySignin.disabled = true;
+    btnDashPasskeySignin.innerText = '🔑 Waiting for passkey...';
+
+    const restore = () => {
+      dashLoginBusy = false;
+      btnDashPasskeySignin.disabled = false;
+      btnDashPasskeySignin.innerText = '🔑 Sign in with Passkey';
+    };
+
+    const unlocked = await pk.authenticate();
+    if (!unlocked.ok) {
+      restore();
+      // Cancelling is the common case and shouldn't punish anyone; a corrupt or
+      // mismatched blob means the passkey is no longer usable, so drop it and
+      // fall back to the password fields that are already on screen.
+      const recoverable = unlocked.reason === 'cancelled';
+      if (unlocked.reason === 'corrupt' || unlocked.reason === 'decrypt-failed' ||
+          unlocked.reason === 'wrong-credential' || unlocked.reason === 'prf-unavailable') {
+        pk.forget();
+        dashSyncPasskeyLogin();
+      }
+      dashLoginFail(pk.describeReason(unlocked.reason), true);
+      if (!recoverable) console.warn('Passkey sign-in failed:', unlocked.reason);
+      return;
+    }
+
+    const res = await window.firebaseGameBackend.adminSignIn(unlocked.email, unlocked.password);
+    restore();
+
+    if (!res.ok) {
+      if (res.reason === 'network') {
+        dashLoginFail('Could not reach the server. Check your connection.', true);
+        return;
+      }
+      // The passkey unlocked fine but Firebase rejected what was inside: the
+      // password was changed elsewhere. The stored blob is now useless.
+      pk.forget();
+      dashSyncPasskeyLogin();
+      dashLoginFail('The saved password is no longer valid. Sign in below and set the passkey up again.', true);
+      return;
+    }
+
+    dashOnSignedIn();
+  });
+}
+
 // --- Dashboard screen ------------------------------------------------------
 
 function openDashboard() {
   if (!dashAuthed) return;
   showScreen('screen-dashboard');
   const who = document.getElementById('dash-signed-in');
-  if (who) who.innerText = 'Signed in as ' + (window.firebaseGameBackend.adminEmail() || 'admin');
+  if (who) {
+    // The UID is here so it can be copied into the root .read rule in
+    // database.rules.json, which currently trusts any email-bearing token.
+    const uid = window.firebaseGameBackend.adminUid && window.firebaseGameBackend.adminUid();
+    who.innerText = 'Signed in as ' + (window.firebaseGameBackend.adminEmail() || 'admin') +
+      (uid ? '  ·  uid ' + uid : '');
+  }
+  // Opening the dashboard counts as using it, so the window slides forward.
+  window.firebaseGameBackend.touchAdminSession();
+  dashRenderSignInSection();
   refreshDashboard();
+}
+
+// The "Sign-In" block: how long this session lasts, and the passkey controls.
+function dashRenderSignInSection() {
+  const be = window.firebaseGameBackend;
+  const noteEl = document.getElementById('dash-session-note');
+  if (noteEl) {
+    const until = be.adminSessionExpiresAt && be.adminSessionExpiresAt();
+    const days = be.adminSessionDays || 30;
+    noteEl.innerText = until
+      ? `This sign-in lasts ${days} days from your last visit — currently through ` +
+        new Date(until).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+        '. Opening the Dashboard extends it.'
+      : `This sign-in lasts ${days} days from your last visit.`;
+  }
+
+  const setupBtn = document.getElementById('btn-dash-passkey-setup');
+  const forgetBtn = document.getElementById('btn-dash-passkey-forget');
+  const pkNote = document.getElementById('dash-passkey-note');
+  const pk = window.dashPasskey;
+  if (!setupBtn || !forgetBtn || !pkNote) return;
+
+  if (!pk || !pk.supported()) {
+    setupBtn.classList.add('hidden');
+    forgetBtn.classList.add('hidden');
+    pkNote.innerText = window.isSecureContext
+      ? "This browser doesn't support passkeys."
+      : 'Passkeys need a secure (https) connection.';
+    return;
+  }
+
+  const has = pk.hasCredential();
+  setupBtn.classList.toggle('hidden', has);
+  forgetBtn.classList.toggle('hidden', !has);
+
+  if (has) {
+    pkNote.innerText = pk.isHardwareBound()
+      ? `Passkey active on this device for ${pk.credentialLabel() || 'the admin account'}. ` +
+        'The saved password is encrypted with a key this device\'s passkey holds.'
+      : `Passkey active on this device for ${pk.credentialLabel() || 'the admin account'}. ` +
+        "This device can't bind the encryption key to the passkey, so the passkey acts " +
+        'as an unlock prompt rather than as encryption. Removing it clears the saved password.';
+  } else {
+    pkNote.innerText = 'A passkey lets you sign back in with Face ID, Touch ID, or your ' +
+      'screen lock instead of typing the password. It only covers this device.';
+  }
 }
 
 function dashAgo(ts) {
@@ -2343,48 +2507,70 @@ function dashEmpty(container, msg) {
   container.appendChild(p);
 }
 
+// The last successful read. Deletes mutate this and re-render, rather than
+// re-reading the database for every row that goes away.
+let dashData = null;
+// Guards against overlapping reads: each one takes a ticket, and a read whose
+// ticket has been superseded throws its result away instead of painting over a
+// newer one.
+let dashReadTicket = 0;
+
 async function refreshDashboard() {
+  const roomsEl = document.getElementById('dash-rooms');
+  if (!document.getElementById('dash-stats') || !roomsEl) return;
+
+  const ticket = ++dashReadTicket;
+  if (!dashData) {
+    roomsEl.innerHTML = '';
+    dashEmpty(roomsEl, 'Loading...');
+  }
+
+  const data = await window.firebaseGameBackend.fetchDashboardData();
+  if (ticket !== dashReadTicket) return;   // a newer refresh already landed
+
+  if (data === null) {
+    dashData = null;
+    ['dash-stats', 'dash-rooms', 'dash-score-rooms', 'dash-activity']
+      .forEach(id => { document.getElementById(id).innerHTML = ''; });
+    dashEmpty(roomsEl, 'Could not read the database. Are the security rules deployed?');
+    return;
+  }
+
+  dashData = data;
+  renderDashboard();
+}
+
+// Pure paint from dashData. Anything that changes the data calls this; nothing
+// in here touches the network.
+function renderDashboard() {
   const statsEl = document.getElementById('dash-stats');
   const roomsEl = document.getElementById('dash-rooms');
   const scoreEl = document.getElementById('dash-score-rooms');
   const actEl = document.getElementById('dash-activity');
-  if (!statsEl) return;
+  if (!statsEl || !dashData) return;
 
   statsEl.innerHTML = '';
   roomsEl.innerHTML = '';
   scoreEl.innerHTML = '';
   actEl.innerHTML = '';
-  dashEmpty(roomsEl, 'Loading...');
 
-  const data = await window.firebaseGameBackend.fetchAllData();
-  if (data === null) {
-    roomsEl.innerHTML = '';
-    dashEmpty(roomsEl, 'Could not read the database. Are the security rules deployed?');
-    return;
-  }
-  roomsEl.innerHTML = '';
-
-  const lobbyRooms = (data.lobby && data.lobby.rooms) || {};
-  const chats = (data.lobby && data.lobby.chats) || {};
-  const games = data.games || {};
-  const gameEvents = data.gameEvents || {};
-  const scoreRooms = data.rooms || {};
+  const { lobbyRooms, scoreRooms, orphanIds, orphanDetail,
+          recentChats, chatCount, eventCounts, recentEvents } = dashData;
 
   // --- stats ---
   let playerCount = 0, inProgress = 0;
   Object.values(lobbyRooms).forEach(r => {
-    playerCount += Array.isArray(r.players) ? r.players.filter(Boolean).length : 0;
-    if (r.status === 'in-progress') inProgress++;
+    playerCount += asPlayerList(r && r.players).length;
+    if (r && r.status === 'in-progress') inProgress++;
   });
-  let eventCount = 0;
-  Object.values(gameEvents).forEach(evs => { eventCount += Object.keys(evs || {}).length; });
+  const eventCount = Object.values(eventCounts).reduce((a, b) => a + b, 0);
 
   const stats = [
     ['Rooms', Object.keys(lobbyRooms).length],
     ['Players', playerCount],
     ['In Play', inProgress],
     ['Score Rooms', Object.keys(scoreRooms).length],
-    ['Chat Msgs', Object.keys(chats).length],
+    ['Chat Msgs', chatCount],
     ['Events', eventCount]
   ];
   stats.forEach(([label, n]) => {
@@ -2401,42 +2587,34 @@ async function refreshDashboard() {
     statsEl.appendChild(box);
   });
 
+  // Say so when the read was capped, rather than letting a truncated list read
+  // as a complete one.
+  if (dashData.truncated) {
+    dashEmpty(roomsEl, 'Some rooms were omitted — there are more than this view reads at once.');
+  }
+
   // --- game rooms (plus orphaned game data with no lobby room) ---
   const roomIds = Object.keys(lobbyRooms);
-  const orphanIds = Object.keys(games).concat(Object.keys(gameEvents))
-    .filter((id, i, arr) => arr.indexOf(id) === i && !lobbyRooms[id]);
-
   if (!roomIds.length && !orphanIds.length) {
     dashEmpty(roomsEl, 'No game rooms.');
   }
   roomIds.forEach(id => {
-    const r = lobbyRooms[id];
-    const names = (Array.isArray(r.players) ? r.players : [])
-      .filter(Boolean).map(p => p.name || '?').join(', ');
+    const r = lobbyRooms[id] || {};
+    const names = asPlayerList(r.players).map(p => (p && p.name) || '?').join(', ');
     const sub = [
       r.gameType || 'Unknown',
       r.status || 'open',
       names ? names : 'no players',
       dashAgo(r.lastActive)
     ].join(' · ');
-    roomsEl.appendChild(dashRow(r.name || id, sub, async (btn) => {
-      btn.disabled = true;
-      btn.textContent = '...';
-      await window.firebaseGameBackend.deleteRoomCompletely(id);
-      showToast('Room deleted');
-      refreshDashboard();
-    }));
+    roomsEl.appendChild(dashRow(r.name || id, sub,
+      dashDeleteHandler(id, 'Room deleted', () => dashForgetRoom(id))));
   });
   orphanIds.forEach(id => {
-    const g = games[id] || {};
+    const g = orphanDetail[id] || {};
     const sub = ['orphaned game data', g.gameType || 'unknown type', dashAgo(g.lastUpdated)].join(' · ');
-    roomsEl.appendChild(dashRow(id, sub, async (btn) => {
-      btn.disabled = true;
-      btn.textContent = '...';
-      await window.firebaseGameBackend.deleteRoomCompletely(id);
-      showToast('Orphaned data deleted');
-      refreshDashboard();
-    }, 'dash-orphan'));
+    roomsEl.appendChild(dashRow(id, sub,
+      dashDeleteHandler(id, 'Orphaned data deleted', () => dashForgetRoom(id)), 'dash-orphan'));
   });
 
   // --- score sheet rooms ---
@@ -2457,21 +2635,28 @@ async function refreshDashboard() {
     scoreEl.appendChild(dashRow('Room ' + id, sub, async (btn) => {
       btn.disabled = true;
       btn.textContent = '...';
-      await window.firebaseGameBackend.deleteScoreRoom(id);
+      const res = await window.firebaseGameBackend.deleteScoreRoom(id);
+      if (!res || !res.ok) {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+        showToast('Could not delete that Score room.', '#dc3545');
+        return;
+      }
       showToast('Score room deleted');
-      refreshDashboard();
+      delete dashData.scoreRooms[id];
+      renderDashboard();
     }));
   });
 
   // --- recent activity: lobby chat + game events, newest first ---
   const activity = [];
-  Object.values(chats).forEach(c => {
+  Object.values(recentChats).forEach(c => {
     if (!c) return;
     activity.push({ ts: c.timestamp || 0, main: (c.author || '?') + ': ' + (c.text || ''), sub: 'lobby chat' });
   });
-  Object.keys(gameEvents).forEach(roomId => {
+  Object.keys(recentEvents).forEach(roomId => {
     const roomName = (lobbyRooms[roomId] && lobbyRooms[roomId].name) || roomId;
-    Object.values(gameEvents[roomId] || {}).forEach(ev => {
+    Object.values(recentEvents[roomId] || {}).forEach(ev => {
       if (!ev) return;
       activity.push({ ts: ev.timestamp || 0, main: (ev.type || 'event') + ' — ' + roomName, sub: 'game event' });
     });
@@ -2483,6 +2668,38 @@ async function refreshDashboard() {
   });
 }
 
+// Shared delete button behaviour: report the failure instead of claiming the
+// row went away, and on success drop it locally rather than re-reading
+// everything.
+function dashDeleteHandler(roomId, successMsg, forget) {
+  return async (btn) => {
+    btn.disabled = true;
+    btn.textContent = '...';
+    const res = await window.firebaseGameBackend.deleteRoomCompletely(roomId);
+    if (!res || !res.ok) {
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+      showToast(res && res.reason === 'partial'
+        ? 'Partly deleted — some of that room could not be removed.'
+        : 'Could not delete that room.', '#dc3545');
+      return;
+    }
+    showToast(successMsg);
+    forget();
+    renderDashboard();
+  };
+}
+
+function dashForgetRoom(id) {
+  if (!dashData) return;
+  delete dashData.lobbyRooms[id];
+  delete dashData.orphanDetail[id];
+  delete dashData.eventCounts[id];
+  delete dashData.recentEvents[id];
+  dashData.orphanIds = dashData.orphanIds.filter(x => x !== id);
+  dashData.gameIds = dashData.gameIds.filter(x => x !== id);
+}
+
 const btnDashRefresh = document.getElementById('btn-dash-refresh');
 if (btnDashRefresh) btnDashRefresh.addEventListener('click', () => refreshDashboard());
 
@@ -2492,8 +2709,16 @@ const btnDashBackup = document.getElementById('btn-dash-backup');
 if (btnDashBackup) {
   btnDashBackup.addEventListener('click', async () => {
     btnDashBackup.disabled = true;
-    const data = await window.firebaseGameBackend.fetchAllData();
-    btnDashBackup.disabled = false;
+    // The backup is the one thing that genuinely wants the whole tree.
+    let data;
+    try {
+      data = await window.firebaseGameBackend.fetchAllData();
+    } catch (err) {
+      console.error('Backup read threw:', err);
+      data = null;
+    } finally {
+      btnDashBackup.disabled = false;
+    }
     if (data === null) { showToast('Backup failed — could not read the database.', '#dc3545'); return; }
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2539,8 +2764,19 @@ if (btnDashClearConfirm) {
     dashBusy = true;
     btnDashClearConfirm.disabled = true;
     btnDashClearConfirm.innerText = 'Clearing...';
-    const res = await window.firebaseGameBackend.clearAllDatabases();
-    dashBusy = false;
+    let res;
+    try {
+      res = await window.firebaseGameBackend.clearAllDatabases();
+    } catch (err) {
+      console.error('clearAllDatabases threw:', err);
+      res = null;
+    } finally {
+      // Without the finally, one rejection left dashBusy stuck true and Clear
+      // All dead until a reload.
+      dashBusy = false;
+      btnDashClearConfirm.disabled = false;
+      btnDashClearConfirm.innerText = 'Clear Everything';
+    }
     dashClearModal.classList.add('hidden');
     if (!res || res.reason === 'auth') {
       showToast('Not authorised — try signing in again.', '#dc3545');
@@ -2553,10 +2789,124 @@ if (btnDashClearConfirm) {
     } else {
       // Partial success is the interesting case: say so rather than claiming a
       // clean wipe. A live client can also re-create its room within seconds.
-      showToast(`Cleared ${total}, but ${res.failures.length} item(s) failed`, '#dc3545');
-      console.warn('clearAllDatabases failures:', res.failures);
+      const failures = res.failures || [];
+      showToast(`Cleared ${total}, but ${failures.length} item(s) failed`, '#dc3545');
+      console.warn('clearAllDatabases failures:', failures);
     }
+    // Everything on screen is now wrong; drop it so the reload shows a loading
+    // state rather than rows that no longer exist.
+    dashData = null;
     refreshDashboard();
+  });
+}
+
+// --- passkey setup / removal ------------------------------------------------
+
+const dashPasskeyModal = document.getElementById('dash-passkey-modal');
+const btnDashPasskeySetup = document.getElementById('btn-dash-passkey-setup');
+const btnDashPasskeyCreate = document.getElementById('btn-dash-passkey-create');
+const btnDashPasskeyCancel = document.getElementById('btn-dash-passkey-cancel');
+const btnDashPasskeyForget = document.getElementById('btn-dash-passkey-forget');
+
+function dashClosePasskeyModal() {
+  if (!dashPasskeyModal) return;
+  dashPasskeyModal.classList.add('hidden');
+  document.getElementById('dash-passkey-password').value = '';
+  document.getElementById('dash-passkey-error').classList.add('hidden');
+}
+
+if (btnDashPasskeySetup) {
+  btnDashPasskeySetup.addEventListener('click', async () => {
+    const pk = window.dashPasskey;
+    if (!pk || !pk.supported()) return;
+    // Warn before the password prompt rather than after, if there's no
+    // fingerprint reader / Hello / screen lock to talk to at all.
+    if (!(await pk.platformAvailable())) {
+      showToast('No passkey-capable lock found on this device.', '#dc3545');
+      return;
+    }
+    document.getElementById('dash-passkey-password').value = '';
+    document.getElementById('dash-passkey-error').classList.add('hidden');
+    btnDashPasskeyCreate.disabled = false;
+    btnDashPasskeyCreate.innerText = 'Create Passkey';
+    dashPasskeyModal.classList.remove('hidden');
+    setTimeout(() => document.getElementById('dash-passkey-password').focus(), 50);
+  });
+}
+
+if (btnDashPasskeyCancel) {
+  btnDashPasskeyCancel.addEventListener('click', dashClosePasskeyModal);
+}
+
+let dashPasskeyBusy = false;
+
+async function dashCreatePasskey() {
+  if (dashPasskeyBusy) return;
+  const pk = window.dashPasskey;
+  const be = window.firebaseGameBackend;
+  const passEl = document.getElementById('dash-passkey-password');
+  const errEl = document.getElementById('dash-passkey-error');
+  const password = passEl.value;
+  const email = be.adminEmail();
+
+  const fail = (msg) => {
+    errEl.innerText = msg;
+    errEl.classList.remove('hidden');
+  };
+
+  if (!password) { fail('Enter the administrator password.'); return; }
+  if (!email) { fail('You are no longer signed in. Sign in again first.'); return; }
+
+  dashPasskeyBusy = true;
+  btnDashPasskeyCreate.disabled = true;
+  btnDashPasskeyCreate.innerText = 'Checking...';
+
+  // Verify the password before sealing it, or a typo here turns into a passkey
+  // that fails every time it's used and nobody knows why.
+  const check = await be.adminSignIn(email, password);
+  if (!check.ok) {
+    dashPasskeyBusy = false;
+    btnDashPasskeyCreate.disabled = false;
+    btnDashPasskeyCreate.innerText = 'Create Passkey';
+    fail(check.reason === 'network'
+      ? 'Could not reach the server. Check your connection.'
+      : 'That password is not correct.');
+    return;
+  }
+
+  btnDashPasskeyCreate.innerText = 'Waiting for passkey...';
+  const res = await pk.register(email, password);
+  dashPasskeyBusy = false;
+  btnDashPasskeyCreate.disabled = false;
+  btnDashPasskeyCreate.innerText = 'Create Passkey';
+
+  if (!res.ok) {
+    fail(pk.describeReason(res.reason));
+    return;
+  }
+
+  dashClosePasskeyModal();
+  dashRenderSignInSection();
+  dashSyncPasskeyLogin();
+  showToast(res.prf ? 'Passkey ready' : 'Passkey ready (software-protected)');
+}
+
+if (btnDashPasskeyCreate) btnDashPasskeyCreate.addEventListener('click', dashCreatePasskey);
+const dashPasskeyPassEl = document.getElementById('dash-passkey-password');
+if (dashPasskeyPassEl) {
+  dashPasskeyPassEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') dashCreatePasskey(); });
+}
+
+if (btnDashPasskeyForget) {
+  btnDashPasskeyForget.addEventListener('click', () => {
+    const pk = window.dashPasskey;
+    if (!pk) return;
+    pk.forget();
+    dashRenderSignInSection();
+    dashSyncPasskeyLogin();
+    // The credential still exists in the platform's passkey list; only the
+    // browser's own settings can delete it there.
+    showToast('Passkey removed from this device');
   });
 }
 
@@ -2580,5 +2930,11 @@ window.addEventListener('firebaseGameReady', async () => {
   const be = window.firebaseGameBackend;
   if (!be || !be.whenAuthReady) return;
   await be.whenAuthReady();
-  if (be.isAdmin()) dashAuthed = true;
+  if (be.isAdmin()) {
+    dashAuthed = true;
+    be.touchAdminSession();
+  } else if (be.adminSessionWasExpired && be.adminSessionWasExpired()) {
+    // Explain the sudden demotion instead of just losing the menu item.
+    showToast('Dashboard session expired — sign in again.', '#e0a33e');
+  }
 });

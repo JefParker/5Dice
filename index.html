@@ -6,7 +6,7 @@
   <title>5 Dice</title>
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
-  <link rel="stylesheet" href="styles.css?v=37">
+  <link rel="stylesheet" href="styles.css?v=38">
   <link rel="stylesheet" href="skins.css?v=5">
   <link rel="manifest" href="manifest.json">
   <!-- Not deferred: applies the saved skin before first paint. -->
@@ -423,6 +423,18 @@
           download a backup first.
         </p>
 
+        <h2 class="dash-h2">Sign-In</h2>
+        <p id="dash-session-note" class="dash-note" style="margin-bottom: 12px;"></p>
+        <div id="dash-passkey-box">
+          <button id="btn-dash-passkey-setup" class="capsule-button btn-primary hidden" type="button">
+            🔑 Set Up a Passkey on This Device
+          </button>
+          <button id="btn-dash-passkey-forget" class="capsule-button btn-danger hidden" type="button">
+            Remove Passkey from This Device
+          </button>
+          <p id="dash-passkey-note" class="dash-note"></p>
+        </div>
+
         <button id="btn-dash-signout" class="capsule-button" type="button">Sign out of Dashboard</button>
       </div>
     </div>
@@ -657,15 +669,46 @@
     <div id="dash-login-modal" class="overlay hidden">
       <div class="overlay-content">
         <h2>📊 Dashboard Login</h2>
+
+        <!-- Shown only when a passkey is registered on this device. -->
+        <div id="dash-passkey-signin-wrap" class="hidden">
+          <button id="btn-dash-passkey-signin" class="capsule-button btn-primary" type="button">
+            🔑 Sign in with Passkey
+          </button>
+          <div class="dash-or"><span>or</span></div>
+        </div>
+
         <p style="margin: 12px 0 16px;">Sign in with the administrator account.</p>
         <input type="email" id="dash-email" class="capsule-input" placeholder="Email"
-               autocomplete="off" autocapitalize="none" spellcheck="false">
+               autocomplete="username" autocapitalize="none" spellcheck="false">
         <input type="password" id="dash-password" class="capsule-input" placeholder="Password"
-               autocomplete="off">
+               autocomplete="current-password">
         <p id="dash-login-error" class="dash-login-error hidden"></p>
         <div class="action-group">
           <button id="btn-dash-login" class="capsule-button btn-success" style="margin-bottom: 0;">Log In</button>
           <button id="btn-dash-login-cancel" class="capsule-button" style="margin-bottom: 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Passkey Setup (asks for the password so it can be sealed under the key) -->
+    <div id="dash-passkey-modal" class="overlay hidden">
+      <div class="overlay-content">
+        <h2>🔑 Set Up a Passkey</h2>
+        <p style="margin: 12px 0;">
+          Confirm the administrator password. It is encrypted with a key held by this
+          device's passkey and never leaves this browser.
+        </p>
+        <p class="dash-note" style="margin: 0 0 12px;">
+          You may be prompted twice &mdash; once to create the passkey, once to lock the
+          credentials to it.
+        </p>
+        <input type="password" id="dash-passkey-password" class="capsule-input"
+               placeholder="Administrator password" autocomplete="current-password">
+        <p id="dash-passkey-error" class="dash-login-error hidden"></p>
+        <div class="action-group">
+          <button id="btn-dash-passkey-create" class="capsule-button btn-success" style="margin-bottom: 0;">Create Passkey</button>
+          <button id="btn-dash-passkey-cancel" class="capsule-button" style="margin-bottom: 0;">Cancel</button>
         </div>
       </div>
     </div>
@@ -693,7 +736,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=29"></script>
+  <script type="module" src="firebase-game-backend.js?v=31"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=24"></script>
@@ -702,7 +745,54 @@
   <script src="backgammon3d.js?v=12"></script>
   <script src="bg-game.js?v=16"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="app.js?v=51"></script>
+  <!-- Before app.js: the dashboard login wiring reads window.dashPasskey. -->
+  <script src="passkey.js?v=1"></script>
+  <script src="app.js?v=53"></script>
   <script src="voice-chat.js?v=1"></script>
+
+  <!-- Stale-cache tripwire.
+       app.js stamps window.__appJsVersion with the version it actually is. The
+       expected version is read back off the script tag, so there is nothing
+       extra to keep in sync here. If they disagree, this page is running a body
+       that isn't the one it asked for: purge the caches, re-fetch past the HTTP
+       cache, and reload — once, guarded, so a genuine 404 can't loop. -->
+  <script>
+    (function () {
+      var tag = document.querySelector('script[src^="app.js?v="]');
+      var expected = tag ? parseInt(tag.getAttribute('src').split('?v=')[1], 10) : null;
+      if (!expected || window.__appJsVersion === expected) {
+        try { sessionStorage.removeItem('appVersionRetry'); } catch (e) {}
+        return;
+      }
+      var got = window.__appJsVersion;
+      var msg = 'app.js is v' + got + ' but this page asked for v' + expected + '.';
+      try {
+        if (sessionStorage.getItem('appVersionRetry')) {
+          console.error(msg + ' A purge and reload did not fix it — check the deploy.');
+          return;
+        }
+        sessionStorage.setItem('appVersionRetry', '1');
+      } catch (e) { return; }   // no sessionStorage means no loop guard; don't risk it
+
+      console.warn(msg + ' Purging caches and reloading.');
+      var jobs = [];
+      if (window.caches) {
+        jobs.push(caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        }));
+      }
+      if (navigator.serviceWorker) {
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }));
+      }
+      Promise.all(jobs)
+        // cache:'reload' bypasses the HTTP cache too, so the reload below can't
+        // pick the same poisoned body straight back up.
+        .then(function () { return fetch(tag.getAttribute('src'), { cache: 'reload' }); })
+        .catch(function () {})
+        .then(function () { location.reload(); });
+    })();
+  </script>
 </body>
 </html>

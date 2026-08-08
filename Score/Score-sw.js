@@ -1,13 +1,13 @@
 
- const staticCache = 'static-v260802b';
- const dynamicCache = 'dynamic-v260802b';
+ const staticCache = 'static-v260808b';
+ const dynamicCache = 'dynamic-v260808b';
  // Precache the SAME versioned URLs the page actually requests. When you bump a
  // ?v= number in index.html, bump it here too and bump the cache version
  // strings above.
  const assets = ['./', 'index.html',
-    'Score.js?v=23', 'firebase-backend.js?v=12', 'Score.css?v=9',
-    'forms.css', 'Score.json', '../dice3d.js?v=23',
-    '../skins.css?v=4', '../skins.js?v=1',
+    'Score.js?v=23', 'firebase-backend.js?v=13', 'Score.css?v=9',
+    'forms.css', 'Score.json', '../dice3d.js?v=24',
+    '../skins.css?v=5', '../skins.js?v=1',
     '../firebase-config.js',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',
     'https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400&display=swap',

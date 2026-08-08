@@ -38,6 +38,22 @@ deploy_rules_if_changed() {
   if [ "$changed" -eq 0 ]; then
     return 0
   fi
+  # The admin uid is pinned in the rules, and the Dashboard is where you read
+  # that uid off — so blocking the code push here would be a deadlock. Skip the
+  # RULES deploy and let the code go: deploy the app, sign in, copy the uid from
+  # the Dashboard header, paste it in, push again.
+  if grep -q 'PASTE_ADMIN_UID_HERE' database.rules.json; then
+    echo "⚠ database.rules.json still contains PASTE_ADMIN_UID_HERE — rules NOT deployed."
+    echo "  Deploying it as-is would pin root read to a uid that matches nobody and lock"
+    echo "  the Dashboard out of its own database."
+    echo
+    echo "  The code will still be pushed, so you can bootstrap: once this deploy is live,"
+    echo "  sign in to the Dashboard and the header prints the uid beside your email."
+    echo "  Paste it over both placeholders, then run ./push.sh again to deploy the rules."
+    echo
+    echo "  Until then the OLD rules stay live, including the loose root read."
+    return 0
+  fi
   if command -v firebase >/dev/null 2>&1; then
     echo "database.rules.json changed — deploying database rules..."
     if firebase deploy --only database; then
@@ -53,6 +69,36 @@ deploy_rules_if_changed() {
 }
 
 deploy_rules_if_changed
+
+# --- asset version sanity ----------------------------------------------------
+# app.js's version lives in three places: the ?v= in index.html, the precache
+# entry in sw.js, and the window.__appJsVersion stamp inside app.js itself (the
+# stale-cache tripwire compares the first and the third at runtime). They have
+# drifted before, which silently breaks offline. Catch it here instead.
+
+check_app_version() {
+  local in_html in_sw in_js
+  in_html=$(grep -o 'app\.js?v=[0-9]\+' index.html | head -1 | grep -o '[0-9]\+' || true)
+  in_sw=$(grep -o "app\.js?v=[0-9]\+" sw.js | head -1 | grep -o '[0-9]\+' || true)
+  in_js=$(grep -o 'window\.__appJsVersion *= *[0-9]\+' app.js | grep -o '[0-9]\+' || true)
+
+  if [ -z "$in_html" ] || [ -z "$in_sw" ] || [ -z "$in_js" ]; then
+    echo "⚠ Could not read an app.js version from index.html / sw.js / app.js — skipping the check."
+    return 0
+  fi
+  if [ "$in_html" != "$in_sw" ] || [ "$in_html" != "$in_js" ]; then
+    echo "✗ app.js version mismatch:"
+    echo "    index.html            v$in_html"
+    echo "    sw.js precache        v$in_sw"
+    echo "    window.__appJsVersion v$in_js"
+    echo "  All three must agree, or offline breaks and the stale-cache tripwire misfires."
+    echo "  Nothing was pushed."
+    exit 1
+  fi
+  echo "✓ app.js v$in_html consistent across index.html, sw.js, and app.js."
+}
+
+check_app_version
 
 # --- anything to do? ---------------------------------------------------------
 

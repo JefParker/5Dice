@@ -1,12 +1,84 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, orderByChild, endAt, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
+
+// ---------------------------------------------------------------------------
+// Admin session lifetime
+//
+// Firebase refresh tokens don't expire on their own, so in principle an admin
+// session lasts forever. Two things get in the way in practice:
+//
+//   1. Persistence has to actually be durable. getAuth() picks a default, and
+//      if IndexedDB is unavailable it can quietly land on session storage,
+//      which dies with the tab. We now pin the order explicitly.
+//   2. Safari (and iOS web apps) cap script-writable storage at 7 days of no
+//      interaction, so an untouched session can be evicted well inside the
+//      15 days we want. Nothing in JS can override that — the passkey path is
+//      the recovery route when it happens.
+//
+// On top of that we keep our own sliding window so a forgotten session on a
+// borrowed device doesn't stay admin forever. It's refreshed every time the
+// app loads with the admin signed in, so any admin who opens the app at least
+// once a month never sees a login box.
+// ---------------------------------------------------------------------------
+
+const ADMIN_SESSION_DAYS = 30;              // comfortably past the 15-day floor
+const ADMIN_SESSION_MS = ADMIN_SESSION_DAYS * 24 * 60 * 60 * 1000;
+const ADMIN_SESSION_KEY = 'dice.adminSession.v1';
+
+let adminSessionExpiredFlag = false;        // set when we time one out on load
+
+function adminSessionRead() {
+  try {
+    const raw = localStorage.getItem(ADMIN_SESSION_KEY);
+    if (!raw) return null;
+    const rec = JSON.parse(raw);
+    return (rec && typeof rec.last === 'number') ? rec : null;
+  } catch (e) { return null; }
+}
+
+function adminSessionTouch() {
+  try {
+    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ last: Date.now() }));
+  } catch (e) { /* private mode: fall back to Firebase's own lifetime */ }
+}
+
+function adminSessionClear() {
+  try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) {}
+}
+
+function adminSessionExpiresAt() {
+  const rec = adminSessionRead();
+  return rec ? rec.last + ADMIN_SESSION_MS : null;
+}
+
+// A missing record is NOT treated as expired: localStorage can be wiped
+// independently of the auth store, and locking an otherwise valid session out
+// because the bookmark went missing is the failure mode we're trying to fix.
+function adminSessionExpired() {
+  const rec = adminSessionRead();
+  if (!rec) return false;
+  return Date.now() - rec.last > ADMIN_SESSION_MS;
+}
+
+// Pin persistence to the most durable store the browser offers. Firebase
+// already tries this order by default, but stating it means a failure surfaces
+// here instead of silently degrading to a tab-lifetime session.
+async function pinPersistence() {
+  for (const p of [indexedDBLocalPersistence, browserLocalPersistence]) {
+    try {
+      await setPersistence(auth, p);
+      return;
+    } catch (e) { /* try the next one */ }
+  }
+  console.warn('No durable auth persistence available; session ends with the tab.');
+}
 
 // Anonymous auth with failure tracking. A failed sign-in used to be swallowed
 // into a resolved promise, so every method proceeded unauthenticated and then
@@ -16,6 +88,7 @@ let authError = null;
 
 async function ensureAuth() {
   try {
+    await pinPersistence();
     // Wait for a persisted session before minting an anonymous one. The admin
     // dashboard signs in with email/password, and Firebase restores that
     // session on reload — calling signInAnonymously() unconditionally would
@@ -25,11 +98,52 @@ async function ensureAuth() {
       const unsub = onAuthStateChanged(auth, (u) => { unsub(); resolve(u); },
         () => resolve(null));
     });
-    if (!existing) await signInAnonymously(auth);
+
+    if (existing && existing.email) {
+      if (adminSessionExpired()) {
+        // Past the window: drop to an ordinary anonymous player and let the UI
+        // say why rather than leaving a dead Dashboard item in the menu.
+        adminSessionExpiredFlag = true;
+        adminSessionClear();
+        await signOut(auth);
+        await signInAnonymously(auth);
+      } else {
+        adminSessionTouch();
+        // Bounded: startup must not hang behind a token round-trip on a bad
+        // connection. Same 3s ceiling getServerTimeOffset() uses.
+        await Promise.race([
+          refreshAdminToken(existing),
+          new Promise((r) => setTimeout(r, 3000))
+        ]);
+      }
+    } else if (!existing) {
+      await signInAnonymously(auth);
+    }
     authError = null;
   } catch (err) {
     authError = err;
     console.error("Anonymous auth failed:", err);
+  }
+}
+
+// Force a token refresh on load. Keeps the refresh token exercised and, more
+// usefully, tells us straight away if the account was disabled or deleted in
+// the console. Network failures are ignored — offline is not a revocation.
+async function refreshAdminToken(user) {
+  try {
+    await user.getIdToken(true);
+  } catch (err) {
+    const code = err && err.code;
+    const revoked = code === 'auth/user-token-expired' ||
+                    code === 'auth/user-disabled' ||
+                    code === 'auth/user-not-found' ||
+                    code === 'auth/invalid-user-token';
+    if (revoked) {
+      adminSessionExpiredFlag = true;
+      adminSessionClear();
+      try { await signOut(auth); } catch (e) {}
+      await signInAnonymously(auth);
+    }
   }
 }
 
@@ -93,7 +207,11 @@ function getServerTimeOffset() {
 
 window.firebaseGameBackend = {
   isConnected: false,
-  authPromise: authPromise,
+
+  // A getter, not a snapshot: authPromise is reassigned on a retry and on admin
+  // sign-out, and a captured value would have anyone awaiting a promise that
+  // settled two sessions ago.
+  get authPromise() { return authPromise; },
 
   init: async (onStatusChange) => {
     if (!(await requireAuth())) return;
@@ -633,9 +751,31 @@ window.firebaseGameBackend = {
 
   adminEmail: () => (auth.currentUser && auth.currentUser.email) || null,
 
+  // Shown in the dashboard so the admin UID can be copied into
+  // database.rules.json — see the note on the root .read rule there.
+  adminUid: () => (auth.currentUser && auth.currentUser.uid) || null,
+
+  // When the last load timed a stale admin session out, so the UI can explain
+  // the sudden logout. One-shot: reading it clears it.
+  adminSessionWasExpired: () => {
+    const was = adminSessionExpiredFlag;
+    adminSessionExpiredFlag = false;
+    return was;
+  },
+
+  // Epoch ms the current admin session lapses, or null if there isn't one.
+  adminSessionExpiresAt,
+
+  // Slide the window forward. Called whenever the dashboard is actually used.
+  touchAdminSession: () => { if (auth.currentUser && auth.currentUser.email) adminSessionTouch(); },
+
+  adminSessionDays: ADMIN_SESSION_DAYS,
+
   adminSignIn: async (email, password) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      adminSessionTouch();
+      adminSessionExpiredFlag = false;
       authError = null;
       return { ok: true };
     } catch (err) {
@@ -649,6 +789,7 @@ window.firebaseGameBackend = {
   // Drop admin rights and go back to being an ordinary anonymous player, so
   // gameplay continues to work in the same tab.
   adminSignOut: async () => {
+    adminSessionClear();
     try {
       await signOut(auth);
     } catch (e) {
@@ -658,8 +799,8 @@ window.firebaseGameBackend = {
     await authPromise;
   },
 
-  // Whole-tree read. Only succeeds for an email-authenticated admin: the root
-  // read rule requires a token with an email claim.
+  // Whole-tree read. Only the JSON backup wants this — the dashboard uses
+  // fetchDashboardData() below, which reads a great deal less.
   fetchAllData: async () => {
     if (!(await requireAuth())) return null;
     try {
@@ -671,21 +812,60 @@ window.firebaseGameBackend = {
     }
   },
 
-  // Delete one lobby room and everything hanging off it.
-  deleteRoomCompletely: async (roomId) => {
-    if (!(await requireAuth())) return { ok: false };
-    if (!roomId) return { ok: false };
+  // Everything the dashboard actually renders, and nothing else.
+  //
+  // The old version read the whole tree on every refresh. The expensive nodes
+  // are `games` (full live state, including serialized backgammon boards) and
+  // `gameEvents` (every event ever fired), and the dashboard wants a key list
+  // from the first and the newest handful from the second. So: shallow key
+  // reads for the counts, bounded queries for the content, and full reads only
+  // for the small nodes it genuinely renders in full.
+  //
+  // Falls back to the whole-tree read if the REST shallow call can't be made,
+  // so the dashboard degrades to "slow" rather than "broken".
+  fetchDashboardData: async () => {
+    if (!(await requireAuth())) return null;
     try {
+      return await readDashboardData();
+    } catch (e) {
+      console.warn('Scoped dashboard read failed; falling back to a full read.', e);
+      try {
+        const snap = await get(ref(db, '/'));
+        return shapeDashboardFromFullTree(snap.exists() ? snap.val() : {});
+      } catch (e2) {
+        console.error('fetchDashboardData failed:', e2);
+        return null;
+      }
+    }
+  },
+
+  // Delete one lobby room and everything hanging off it. Reports which parts
+  // failed instead of claiming success unconditionally — the caller shows a
+  // toast either way, and a silent failure reads as a successful delete until
+  // the row reappears.
+  deleteRoomCompletely: async (roomId) => {
+    if (!(await requireAuth())) return { ok: false, reason: 'auth' };
+    if (!roomId) return { ok: false, reason: 'error' };
+    try {
+      const failed = [];
+      const tryRemove = async (path) => {
+        try { await remove(ref(db, path)); } catch (e) { failed.push(path); }
+      };
       await Promise.all([
-        remove(ref(db, `lobby/rooms/${roomId}`)).catch(() => {}),
-        remove(ref(db, `games/${roomId}`)).catch(() => {}),
-        remove(ref(db, `gameEvents/${roomId}`)).catch(() => {})
+        tryRemove(`lobby/rooms/${roomId}`),
+        tryRemove(`games/${roomId}`),
+        tryRemove(`gameEvents/${roomId}`)
       ]);
-      await clearVoiceRoom(roomId);
+      const voice = await clearVoiceRoom(roomId);
+      if (!voice.ok) failed.push(`voice/${roomId}`);
+      if (failed.length) {
+        console.warn('deleteRoomCompletely could not remove:', failed);
+        return { ok: false, reason: 'partial', failed };
+      }
       return { ok: true };
     } catch (e) {
       console.error('deleteRoomCompletely failed:', e);
-      return { ok: false };
+      return { ok: false, reason: 'error' };
     }
   },
 
@@ -755,21 +935,152 @@ window.firebaseGameBackend = {
 };
 
 // Empty voice/{roomId} the only way the rules allow: one member and one signal
-// inbox at a time.
+// inbox at a time. Returns { ok } so deleteRoomCompletely can tell the truth.
 async function clearVoiceRoom(roomId) {
+  let ok = true;
   const kids = async (path) => {
     try {
       const snap = await get(ref(db, path));
       return snap.exists() && snap.val() && typeof snap.val() === 'object'
         ? Object.keys(snap.val()) : [];
-    } catch (e) { return []; }
+    } catch (e) { ok = false; return []; }
   };
   for (const peerId of await kids(`voice/${roomId}/members`)) {
-    await remove(ref(db, `voice/${roomId}/members/${peerId}`)).catch(() => {});
+    try { await remove(ref(db, `voice/${roomId}/members/${peerId}`)); } catch (e) { ok = false; }
   }
   for (const peerId of await kids(`voice/${roomId}/signals`)) {
-    await remove(ref(db, `voice/${roomId}/signals/${peerId}`)).catch(() => {});
+    try { await remove(ref(db, `voice/${roomId}/signals/${peerId}`)); } catch (e) { ok = false; }
   }
+  return { ok };
+}
+
+// ---------------------------------------------------------------------------
+// Scoped dashboard read
+// ---------------------------------------------------------------------------
+
+// The JS SDK has no shallow read, so the keys-only listing goes through the
+// REST API. Returns an array of child keys.
+async function shallowKeys(path) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('not signed in');
+  const token = await user.getIdToken();
+  const url = `${firebaseConfig.databaseURL}/${path}.json?shallow=true&auth=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`shallow read of ${path} failed: ${res.status}`);
+  const val = await res.json();
+  return (val && typeof val === 'object') ? Object.keys(val) : [];
+}
+
+// How much recent material the activity feed pulls. It renders 25 rows, so
+// there is no point reading deeper than this.
+const DASH_ACTIVITY_DEPTH = 30;
+// A sane ceiling on per-room detail lookups, so a database full of orphans
+// can't turn one refresh into hundreds of requests. Truncation is reported.
+const DASH_DETAIL_LIMIT = 60;
+
+async function readDashboardData() {
+  const [lobbyRoomsSnap, scoreRoomsSnap, chatIds, gameIds, eventRoomIds] = await Promise.all([
+    get(ref(db, 'lobby/rooms')),
+    get(ref(db, 'rooms')),
+    shallowKeys('lobby/chats'),
+    shallowKeys('games'),
+    shallowKeys('gameEvents')
+  ]);
+
+  const lobbyRooms = (lobbyRoomsSnap.exists() && lobbyRoomsSnap.val()) || {};
+  const scoreRooms = (scoreRoomsSnap.exists() && scoreRoomsSnap.val()) || {};
+
+  // Newest chat messages only. Push keys sort chronologically, so plain
+  // limitToLast is both correct and index-free.
+  const chatSnap = await get(query(ref(db, 'lobby/chats'), limitToLast(DASH_ACTIVITY_DEPTH)));
+  const recentChats = (chatSnap.exists() && chatSnap.val()) || {};
+
+  // Per room: an exact event count from the keys, and the newest few bodies.
+  const eventRooms = eventRoomIds.slice(0, DASH_DETAIL_LIMIT);
+  const eventCounts = {};
+  const recentEvents = {};
+  await Promise.all(eventRooms.map(async (roomId) => {
+    const [keys, snap] = await Promise.all([
+      shallowKeys(`gameEvents/${roomId}`),
+      get(query(ref(db, `gameEvents/${roomId}`), limitToLast(DASH_ACTIVITY_DEPTH)))
+    ]);
+    eventCounts[roomId] = keys.length;
+    recentEvents[roomId] = (snap.exists() && snap.val()) || {};
+  }));
+
+  // Only orphans need their game node read — everything else is described by
+  // its lobby room.
+  const orphanIds = gameIds.concat(eventRoomIds)
+    .filter((id, i, arr) => arr.indexOf(id) === i && !lobbyRooms[id]);
+  const orphanDetail = {};
+  await Promise.all(orphanIds.slice(0, DASH_DETAIL_LIMIT).map(async (id) => {
+    try {
+      const snap = await get(ref(db, `games/${id}`));
+      const v = (snap.exists() && snap.val()) || {};
+      orphanDetail[id] = { gameType: v.gameType, lastUpdated: v.lastUpdated };
+    } catch (e) {
+      orphanDetail[id] = {};
+    }
+  }));
+
+  return {
+    lobbyRooms,
+    scoreRooms,
+    gameIds,
+    orphanIds,
+    orphanDetail,
+    recentChats,
+    chatCount: chatIds.length,
+    eventCounts,
+    recentEvents,
+    truncated: (eventRoomIds.length > DASH_DETAIL_LIMIT) || (orphanIds.length > DASH_DETAIL_LIMIT)
+  };
+}
+
+// Same shape, derived from a whole-tree snapshot — the offline/REST-blocked
+// path. Keeping one shape means the renderer has no idea which one it got.
+function shapeDashboardFromFullTree(data) {
+  const lobbyRooms = (data.lobby && data.lobby.rooms) || {};
+  const chats = (data.lobby && data.lobby.chats) || {};
+  const games = data.games || {};
+  const gameEvents = data.gameEvents || {};
+
+  const eventCounts = {};
+  const recentEvents = {};
+  Object.keys(gameEvents).forEach((roomId) => {
+    const evs = gameEvents[roomId] || {};
+    const keys = Object.keys(evs);
+    eventCounts[roomId] = keys.length;
+    const slice = {};
+    keys.slice(-DASH_ACTIVITY_DEPTH).forEach((k) => { slice[k] = evs[k]; });
+    recentEvents[roomId] = slice;
+  });
+
+  const gameIds = Object.keys(games);
+  const orphanIds = gameIds.concat(Object.keys(gameEvents))
+    .filter((id, i, arr) => arr.indexOf(id) === i && !lobbyRooms[id]);
+  const orphanDetail = {};
+  orphanIds.forEach((id) => {
+    const g = games[id] || {};
+    orphanDetail[id] = { gameType: g.gameType, lastUpdated: g.lastUpdated };
+  });
+
+  const chatKeys = Object.keys(chats);
+  const recentChats = {};
+  chatKeys.slice(-DASH_ACTIVITY_DEPTH).forEach((k) => { recentChats[k] = chats[k]; });
+
+  return {
+    lobbyRooms,
+    scoreRooms: data.rooms || {},
+    gameIds,
+    orphanIds,
+    orphanDetail,
+    recentChats,
+    chatCount: chatKeys.length,
+    eventCounts,
+    recentEvents,
+    truncated: false
+  };
 }
 
 window.firebaseGameBackend.init();

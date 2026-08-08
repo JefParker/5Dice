@@ -1891,3 +1891,22 @@ body.dice3d-active .fd-die {
 /* An orphan is game data with no lobby room — worth flagging, since it is
    invisible to players and only the dashboard can clear it. */
 .dash-row.dash-orphan { border-left: 3px solid #e0a33e; }
+
+/* "or" divider between the passkey button and the email/password fields. */
+.dash-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
+  color: #7b8fa3;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dash-or::before,
+.dash-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: rgba(159, 179, 200, 0.28);
+}

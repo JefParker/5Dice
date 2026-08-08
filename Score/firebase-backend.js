@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, set, get, child, remove, push, onChildAdded, onValue, onDisconnect, serverTimestamp, query, limitToLast, orderByChild, endAt, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 // NOTE: App Check is NOT enforced. The imports were dead weight (imported,
 // never initialized) and have been removed. If abuse ever becomes a problem,
 // wire initializeAppCheck + ReCaptchaV3Provider here AND enable enforcement in
@@ -20,13 +20,37 @@ const auth = getAuth(app);
 // running unauthenticated.
 let authError = null;
 
+// Firebase Auth state is shared across the whole origin, so this module and the
+// main app's firebase-game-backend.js are looking at the same session. This used
+// to call signInAnonymously() unconditionally, which meant that opening the
+// Score Sheet — a menu item on every screen, including the Dashboard's —
+// replaced a signed-in admin's session with a fresh anonymous user and logged
+// them out. Adopt whatever session already exists; anonymous is only the
+// fallback, and an email-authenticated admin satisfies every rule an anonymous
+// player does.
 async function ensureAuth() {
     try {
-        await signInAnonymously(auth);
+        await pinPersistence();
+        const existing = await new Promise((resolve) => {
+            const unsub = onAuthStateChanged(auth, (u) => { unsub(); resolve(u); },
+                () => resolve(null));
+        });
+        if (!existing) await signInAnonymously(auth);
         authError = null;
     } catch (err) {
         authError = err;
         console.error("Anonymous auth failed:", err);
+    }
+}
+
+// Match the main app: pin the most durable store rather than letting a missing
+// IndexedDB silently downgrade the session to tab lifetime.
+async function pinPersistence() {
+    for (const p of [indexedDBLocalPersistence, browserLocalPersistence]) {
+        try {
+            await setPersistence(auth, p);
+            return;
+        } catch (e) { /* try the next one */ }
     }
 }
 
