@@ -55,25 +55,33 @@
       // Right-hand rail: my dice above, the Auto-Roll and Flat switches below.
       // Kept in one column so the group stays centred on the board edge as the
       // dice count changes between two and four.
+      //
+      // The switches sit in their own box rather than loose in the rail. That
+      // is what lets landscape pull the two apart — dice against the right
+      // edge, switches against the left — by flipping the rail to a row
+      // without the readout and the switches drifting into the middle of the
+      // board between them.
       '<div class="bg-rail">' +
         '<div id="bg-dice-readout" class="bg-dice-readout hidden"></div>' +
-        // The input is nested inside the label, which is association enough — a
-        // `for` as well makes a click on the input itself get forwarded back by
-        // the label and toggle twice in some browsers.
-        '<label class="bg-rail-toggle" title="Roll automatically at the start of your turn">' +
-          '<span class="bg-rail-toggle-label">AUTO<br>ROLL</span>' +
-          '<span class="bg-switch">' +
-            '<input type="checkbox" id="bg-autoroll-toggle">' +
-            '<span class="bg-switch-slider"></span>' +
-          '</span>' +
-        '</label>' +
-        '<label class="bg-rail-toggle" title="Keep the board flat between turns">' +
-          '<span class="bg-rail-toggle-label">FLAT</span>' +
-          '<span class="bg-switch">' +
-            '<input type="checkbox" id="bg-flat-toggle">' +
-            '<span class="bg-switch-slider"></span>' +
-          '</span>' +
-        '</label>' +
+        '<div class="bg-switches">' +
+          // The input is nested inside the label, which is association enough — a
+          // `for` as well makes a click on the input itself get forwarded back by
+          // the label and toggle twice in some browsers.
+          '<label class="bg-rail-toggle" title="Roll automatically at the start of your turn">' +
+            '<span class="bg-rail-toggle-label">AUTO<br>ROLL</span>' +
+            '<span class="bg-switch">' +
+              '<input type="checkbox" id="bg-autoroll-toggle">' +
+              '<span class="bg-switch-slider"></span>' +
+            '</span>' +
+          '</label>' +
+          '<label class="bg-rail-toggle" title="Keep the board flat between turns">' +
+            '<span class="bg-rail-toggle-label">FLAT</span>' +
+            '<span class="bg-switch">' +
+              '<input type="checkbox" id="bg-flat-toggle">' +
+              '<span class="bg-switch-slider"></span>' +
+            '</span>' +
+          '</label>' +
+        '</div>' +
       '</div>' +
       '<div id="bg-cube-dialog" class="bg-cube-dialog hidden">' +
         '<div id="bg-cube-text"></div>' +
