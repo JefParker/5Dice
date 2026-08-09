@@ -229,6 +229,7 @@
     if (typeof window.updateGameBackground === 'function') window.updateGameBackground();
 
     maybeAutoRoll();
+    maybeAutoPlayForced();
   }
 
   // ---------------------------------------------------------------------------
@@ -395,6 +396,62 @@
     else view.clearHighlights();
   }
 
+  // ---------------------------------------------------------------------------
+  // Forced moves
+  // ---------------------------------------------------------------------------
+  // When the whole position offers exactly ONE legal move, there is no decision
+  // to make — hunting for the single checker that can play is busywork, and on
+  // a bad roll with a checker on the bar it happens constantly. Play it. Undo is
+  // on screen the whole time, so nothing is taken away.
+  //
+  // Cascades naturally: applying the move re-renders, which re-arms this, so a
+  // turn that is forced end to end plays itself one hop at a time.
+  //
+  // The one thing that must NOT happen is fighting Undo. A forced move that is
+  // taken back leaves a position whose only legal move is... the one just taken
+  // back, so auto-play would slam it straight back down and the button would
+  // look broken. So Undo blocks auto-play until the player does something else:
+  // moves a checker by hand (applyMyMoves clears it) or ends the turn (the
+  // turn/phase check below clears it).
+  const AUTO_MOVE_DELAY = 420;
+  let autoMoveTimer = null;
+  let autoMoveBlocked = false;
+  let autoMoveToasted = false;
+
+  function cancelAutoMove() { clearTimeout(autoMoveTimer); autoMoveTimer = null; }
+
+  function autoMoveAllowed() {
+    return !!state && !busy && !autoMoveBlocked && selected === null &&
+      state.turn === myColor && state.phase === 'moving' &&
+      window.gameStarted !== false;
+  }
+
+  function maybeAutoPlayForced() {
+    // Not my move any more: forget an Undo block, it belonged to that turn.
+    if (!state || state.turn !== myColor || state.phase !== 'moving') {
+      autoMoveBlocked = false;
+      autoMoveToasted = false;
+      return cancelAutoMove();
+    }
+    if (!autoMoveAllowed()) return cancelAutoMove();
+    if (window.BG.legalMoves(state).length !== 1) return cancelAutoMove();
+    // Already counting down — leave it be. refreshUi() runs many times a turn
+    // and restarting the timer on each repaint could hold the move off forever.
+    if (autoMoveTimer) return;
+    autoMoveTimer = setTimeout(() => {
+      autoMoveTimer = null;
+      // The position may have moved on while the timer was pending.
+      if (!autoMoveAllowed()) return;
+      const moves = window.BG.legalMoves(state);
+      if (moves.length !== 1) return;
+      if (!autoMoveToasted && window.showToast) {
+        autoMoveToasted = true;
+        window.showToast('Only one legal move — played for you.', '#8a4a25');
+      }
+      applyMyMoves([moves[0]], true, true);
+    }, AUTO_MOVE_DELAY);
+  }
+
   function otherPeerId() {
     const other = (window.roomPlayerDetails || []).find(p => p.peerId !== window.myPeerId);
     return other ? other.peerId : window.myPeerId;
@@ -539,6 +596,9 @@
     const m = state.turnMoves[state.turnMoves.length - 1];
     state = window.BG.undoMove(state);
     selected = null;
+    // Don't let auto-play immediately re-make what was just taken back.
+    autoMoveBlocked = true;
+    cancelAutoMove();
     if (view) view.clearHighlights();
     // Previewed moves are provisional, so an undo has to reach the opponent too
     // — otherwise their board keeps a checker we've already taken back, and only
@@ -696,8 +756,12 @@
   // the destination, so flying it anywhere would undo what you just did.
   let myAnimGen = 0;
 
-  function applyMyMoves(moves, animate) {
+  function applyMyMoves(moves, animate, auto) {
     if (!moves || !moves.length) return;
+    // A move the player made by hand lifts an Undo's block on auto-play: the
+    // position has changed on purpose, so anything forced from here is fair game.
+    if (!auto) autoMoveBlocked = false;
+    cancelAutoMove();
     const before = state;                   // the position still on screen
     for (const m of moves) state = window.BG.applyMove(state, m);
     selected = null;
@@ -748,12 +812,15 @@
     }
     const opts = legalFromZone(zone);
 
-    // Bearing off when that is this checker's ONLY move: one tap on the checker
-    // does it. Asking for a second tap on the tray added a step that could not
-    // have gone any other way. If the checker can also move within the board
-    // (say a 3 bears off and a 1 is still live) the choice is real, so fall
-    // through and let the player pick a destination as usual.
-    if (opts.length === 1 && opts[0].to === 'off') {
+    // Only one place this checker can go: one tap sends it there. A second tap
+    // on the single lit target could not have chosen anything else, so it was
+    // never a decision — just a step. That covers bearing off with the checker's
+    // last legal die as well as any ordinary point-to-point move.
+    //
+    // Two-step combos count as separate destinations, so a checker that can play
+    // one die now and both dice together still offers a real choice and falls
+    // through to the usual pick-a-target flow.
+    if (opts.length === 1) {
       applyMyMoves(opts[0].moves, true);
       return;
     }
@@ -1241,6 +1308,9 @@
       clearTimeout(aiTimer);
       clearTimeout(openingTimer);
       cancelAutoRoll();
+      cancelAutoMove();
+      autoMoveBlocked = false;
+      autoMoveToasted = false;
       clearAnimQueue();
       previewedThisTurn = false;
       if (view) { view.destroy(); view = null; }
