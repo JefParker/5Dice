@@ -52,18 +52,25 @@
         '<button id="bg-btn-undo" class="bg-btn hidden">Undo</button>' +
         '<button id="bg-btn-done" class="bg-btn bg-btn-done hidden">Done</button>' +
       '</div>' +
-      // Right-hand rail: my dice above, the Auto-Roll switch below. Kept in one
-      // column so the pair stays centred on the board edge as the dice count
-      // changes between two and four.
+      // Right-hand rail: my dice above, the Auto-Roll and Flat switches below.
+      // Kept in one column so the group stays centred on the board edge as the
+      // dice count changes between two and four.
       '<div class="bg-rail">' +
         '<div id="bg-dice-readout" class="bg-dice-readout hidden"></div>' +
         // The input is nested inside the label, which is association enough — a
         // `for` as well makes a click on the input itself get forwarded back by
         // the label and toggle twice in some browsers.
-        '<label class="bg-autoroll" title="Roll automatically at the start of your turn">' +
-          '<span class="bg-autoroll-label">AUTO<br>ROLL</span>' +
+        '<label class="bg-rail-toggle" title="Roll automatically at the start of your turn">' +
+          '<span class="bg-rail-toggle-label">AUTO<br>ROLL</span>' +
           '<span class="bg-switch">' +
             '<input type="checkbox" id="bg-autoroll-toggle">' +
+            '<span class="bg-switch-slider"></span>' +
+          '</span>' +
+        '</label>' +
+        '<label class="bg-rail-toggle" title="Keep the board flat between turns">' +
+          '<span class="bg-rail-toggle-label">FLAT</span>' +
+          '<span class="bg-switch">' +
+            '<input type="checkbox" id="bg-flat-toggle">' +
             '<span class="bg-switch-slider"></span>' +
           '</span>' +
         '</label>' +
@@ -86,6 +93,11 @@
     if (arEl) {
       arEl.checked = autoRollPref();
       arEl.addEventListener('change', e => setBgAutoRoll(e.target.checked));
+    }
+    const flEl = el('bg-flat-toggle');
+    if (flEl) {
+      flEl.checked = flatPref();
+      flEl.addEventListener('change', e => setBgFlat(e.target.checked));
     }
   }
 
@@ -149,6 +161,8 @@
     // this board's own override if it has one, otherwise the Settings value.
     const arEl = el('bg-autoroll-toggle');
     if (arEl) arEl.checked = autoRollPref();
+    const flEl = el('bg-flat-toggle');
+    if (flEl) flEl.checked = flatPref();
 
     renderDiceReadout();
 
@@ -195,9 +209,11 @@
     showIdleHints();
 
     // Tip the board flat to face you on your turn, and lean it back when it
-    // isn't yours — a wordless "you're up".
+    // isn't yours — a wordless "you're up". With the Flat switch on (default)
+    // the board never leans: you keep looking straight down at it.
     if (view && typeof view.setFlat === 'function') {
-      view.setFlat(started && myTurn && state.phase !== 'over' && state.phase !== 'opening');
+      view.setFlat(flatPref() ||
+        (started && myTurn && state.phase !== 'over' && state.phase !== 'opening'));
     }
 
     window.myTurn = myTurn && (moving || rolling);
@@ -300,6 +316,25 @@
     try { localStorage.setItem('bgAutoRoll', on ? 'true' : 'false'); } catch (e) {}
     if (!on) cancelAutoRoll();
     refreshUi();   // repaints the status line and picks up a waiting roll
+  }
+
+  // ---------------------------------------------------------------------------
+  // Flat board
+  // ---------------------------------------------------------------------------
+  // The board normally tips flat on your turn and leans back into the seated
+  // three-quarter view when it isn't yours. That swing is handsome but it moves
+  // the whole board under your hands twice a turn, so the Flat switch (below
+  // Auto-Roll) pins it flat: you stay looking straight down for the whole game.
+  // Default ON; the answer is remembered per device.
+  function flatPref() {
+    let v = null;
+    try { v = localStorage.getItem('bgFlatBoard'); } catch (e) {}
+    return v !== 'false';
+  }
+
+  function setBgFlat(on) {
+    try { localStorage.setItem('bgFlatBoard', on ? 'true' : 'false'); } catch (e) {}
+    refreshUi();   // swings the camera to match straight away
   }
 
   function autoRollAllowed() {

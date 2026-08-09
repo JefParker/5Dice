@@ -1399,14 +1399,15 @@ body.dice3d-active .fd-die {
 }
 
 /* The right-hand rail. Deliberately narrow — the bear-off trays live under this
-   edge — and the rail itself takes no pointer events, so a tap that misses the
-   switch still reaches the tray. The rail box IS the Auto-Roll switch: the dice
-   hang above it, out of flow, so the switch stays in exactly the same place
-   whether there are no dice, two, or four. A control you reach for should not
-   move under your thumb. */
+   edge — and the rail itself takes no pointer events, so a tap that misses a
+   switch still reaches the tray. The rail box is the Auto-Roll and Flat
+   switches, stacked; the dice hang above it, out of flow, so the switches stay
+   in exactly the same place whether there are no dice, two, or four. A control
+   you reach for should not move under your thumb. */
 .bg-rail {
   position: absolute; right: 4px; top: 50%;
   transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
   pointer-events: none;
   z-index: 15;
 }
@@ -1443,7 +1444,7 @@ body.dice3d-active .fd-die {
    readable for the whole turn. */
 .bg-die-spent { opacity: 0.85; box-shadow: none; }
 
-.bg-autoroll {
+.bg-rail-toggle {
   pointer-events: auto;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 8px 5px;
@@ -1453,7 +1454,7 @@ body.dice3d-active .fd-die {
   cursor: pointer;
   user-select: none; -webkit-user-select: none;
 }
-.bg-autoroll-label {
+.bg-rail-toggle-label {
   font-size: 0.5rem; font-weight: 700; line-height: 1.15;
   letter-spacing: 0.06em; text-align: center;
   color: rgba(255,255,255,0.8);
@@ -1481,11 +1482,11 @@ body.dice3d-active .fd-die {
    (width-constrained, so the board fills the full width) and short landscape.
    Take as little of the bear-off tray as we can and still be tappable. */
 @media (max-width: 560px), (orientation: landscape) and (max-height: 560px) {
-  .bg-rail { right: 2px; }
+  .bg-rail { right: 2px; gap: 4px; }
   .bg-dice-readout { bottom: calc(100% + 6px); padding: 5px 4px; gap: 4px; border-radius: 10px; }
   .bg-die { width: 19px; height: 19px; border-radius: 4px; }
-  .bg-autoroll { padding: 6px 5px; gap: 4px; }
-  .bg-autoroll-label { font-size: 0.42rem; letter-spacing: 0.03em; }
+  .bg-rail-toggle { padding: 6px 5px; gap: 4px; }
+  .bg-rail-toggle-label { font-size: 0.42rem; letter-spacing: 0.03em; }
   .bg-switch { width: 19px; height: 34px; }
   .bg-switch-slider::before { width: 13px; height: 13px; left: 3px; bottom: 3px; }
   .bg-switch input:checked + .bg-switch-slider::before { transform: translateY(-15px); }
