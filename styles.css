@@ -1713,22 +1713,35 @@ body.dice3d-active .fd-die {
      the screen's height, so it never fills the width — there are empty gutters
      down both sides. A centred row at the bottom sat squarely on the two home
      boards and hid the checkers under it, which is the one place you need to
-     see while Undo and Done are on screen. Stack them in the right-hand gutter
-     instead, and send the dice/switch rail to the left gutter so the two
-     columns don't fight over the same strip.
+     see while Undo and Done are on screen.
+     The right-hand gutter takes both columns. The rail stays put — vertically
+     centred, which is as high as it can go, since the dice readout hangs above
+     it and needs the room — so the buttons go UNDER it, hard against the
+     bottom. At most two are ever on screen at once (Double+Roll, or
+     Undo+Done), and two stacked clear the rail on anything down to a ~320px
+     landscape viewport.
      Sizes are trimmed here: the narrowest landscape handsets leave about 75px
      a side, and these have to clear the board within that. */
   .bg-ui .bg-actions {
-    bottom: auto; left: auto;
-    top: 50%; right: 4px;
-    transform: translateY(-50%);
+    top: auto; left: auto;
+    bottom: 6px; right: 4px;
     flex-direction: column;
     align-items: flex-end;
+    justify-content: flex-end;
     gap: 8px;
   }
-  .bg-rail { left: 2px; right: auto; }
   .bg-ui .bg-topbar { top: 30px; font-size: 0.72rem; }
-  .bg-btn { padding: 11px 14px; font-size: 0.9rem; min-width: 68px; }
+  .bg-btn { padding: 9px 12px; font-size: 0.85rem; min-width: 66px; }
+  /* Four dice (doubles) hanging above a vertically centred rail need ~98px of
+     headroom, and a 360px-tall landscape viewport hasn't got it — the top die
+     was being cut off by the edge. Shrink them here; the column now fits with
+     room to spare and the buttons still clear the rail underneath. */
+  .bg-dice-readout { padding: 4px; gap: 3px; }
+  .bg-die { width: 16px; height: 16px; }
+  /* ...and the top of that column runs straight into the floating ☰ button,
+     which landscape parks at top-right. The gutter is wide enough to step the
+     rail inboard of it — still nowhere near the board, still on the right. */
+  .bg-rail { right: 44px; }
 }
 
 /* --- Admin Dashboard ------------------------------------------------------
