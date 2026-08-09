@@ -1398,27 +1398,28 @@ body.dice3d-active .fd-die {
   50%      { box-shadow: 0 0 0 8px rgba(63,127,178,0); }
 }
 
-/* The right-hand rail. Deliberately narrow — the bear-off trays live under this
-   edge — and the rail itself takes no pointer events, so a tap that misses a
-   switch still reaches the tray. The rail box is the Auto-Roll and Flat
-   switches, stacked; the dice hang above it, out of flow, so the switches stay
-   in exactly the same place whether there are no dice, two, or four. A control
-   you reach for should not move under your thumb. */
+/* The rail spans both edges of the board and puts one thing at each end:
+   switches always on the LEFT, dice always on the RIGHT. Same sides in every
+   orientation — a control that swaps sides when you turn the phone is a
+   control you have to hunt for. Both ends are deliberately narrow, since the
+   bear-off trays live under them, and the rail itself takes no pointer events,
+   so a tap that misses a switch still reaches the tray.
+   Reversed row because the readout comes first in the markup: it belongs at
+   the right end, and the switches — one box, so they can never drift apart
+   into the middle of the board — at the left. */
 .bg-rail {
-  position: absolute; right: 4px; top: 50%;
+  position: absolute; left: 4px; right: 4px; top: 50%;
   transform: translateY(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  display: flex; flex-direction: row-reverse;
+  justify-content: space-between; align-items: center;
   pointer-events: none;
   z-index: 15;
 }
 
 /* My dice for this turn: four of them on doubles, darkened as they're played.
-   Anchored by its BOTTOM just above the switch, so it grows upward. */
+   Centred on the board's right edge, so the block grows evenly both ways as
+   the count changes between two and four. */
 .bg-dice-readout {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   padding: 6px 5px;
   border-radius: 12px;
@@ -1427,8 +1428,8 @@ body.dice3d-active .fd-die {
 }
 .bg-die {
   position: relative;
-  width: 22px; height: 22px;
-  border-radius: 5px;
+  width: 30px; height: 30px;
+  border-radius: 6px;
   border: 1px solid;
   box-shadow: 0 1px 2px rgba(0,0,0,0.5);
   transition: background 0.2s, border-color 0.2s;
@@ -1487,10 +1488,10 @@ body.dice3d-active .fd-die {
    (width-constrained, so the board fills the full width) and short landscape.
    Take as little of the bear-off tray as we can and still be tappable. */
 @media (max-width: 560px), (orientation: landscape) and (max-height: 560px) {
-  .bg-rail { right: 2px; }
+  .bg-rail { left: 2px; right: 2px; }
   .bg-switches { gap: 4px; }
-  .bg-dice-readout { bottom: calc(100% + 6px); padding: 5px 4px; gap: 4px; border-radius: 10px; }
-  .bg-die { width: 19px; height: 19px; border-radius: 4px; }
+  .bg-dice-readout { padding: 5px 4px; gap: 4px; border-radius: 10px; }
+  .bg-die { width: 26px; height: 26px; border-radius: 5px; }
   .bg-rail-toggle { padding: 6px 5px; gap: 4px; }
   .bg-rail-toggle-label { font-size: 0.42rem; letter-spacing: 0.03em; }
   .bg-switch { width: 19px; height: 34px; }
@@ -1739,25 +1740,9 @@ body.dice3d-active .fd-die {
   .bg-ui .bg-topbar { top: 30px; font-size: 0.72rem; }
   .bg-btn { padding: 9px 12px; font-size: 0.85rem; min-width: 66px; }
 
-  /* The rail splits across both gutters. Stretched edge to edge and laid out
-     as a reversed row, its two children land in opposite corners of the
-     screen: the dice hard against the right, level with the middle of the
-     board, and the switches against the left. Nothing lands in between,
-     because the switches share one box.
-     The readout goes back into flow to be a flex item, which also drops the
-     "grows upward" anchoring it needs when it hangs above the switches — here
-     it is centred on its own and simply grows both ways. */
-  .bg-rail {
-    left: 2px; right: 2px;
-    flex-direction: row-reverse;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .bg-dice-readout {
-    position: static;
-    transform: none;
-    bottom: auto; left: auto;
-  }
+  /* The rail needs no landscape special-casing: switches left, dice right is
+     the base layout now, and here the gutters are wide enough that both ends
+     clear the board entirely. */
 }
 
 /* --- Admin Dashboard ------------------------------------------------------
