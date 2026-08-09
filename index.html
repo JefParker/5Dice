@@ -308,6 +308,7 @@
               <li><strong>Create a New Game Room</strong> to name a room, pick the game, and set how many players you're waiting for. Your room card shows up in your color.</li>
               <li>Tap any card with seats left to join. Seats are claimed atomically, so two people can never grab the same last seat.</li>
               <li>Play starts when the room fills &mdash; or the host can tap <strong>Start now</strong> once at least 2 people are in.</li>
+              <li>While a seat is still free, the &#9776; menu inside the game offers <strong>Invite Players</strong> &mdash; text someone the link and it drops them straight into your room.</li>
               <li>Games in progress are hidden from everyone but their players. If you're mid-game, your room shows a <strong>Rejoin Game</strong> card.</li>
               <li>The host can delete a room with the <strong>✕</strong> when nobody else is in it, or after it's gone idle for 15 minutes.</li>
               <li>Rooms nobody enters for <strong>48 hours</strong> are removed automatically, so the lobby doesn't fill up with abandoned games.</li>
@@ -748,7 +749,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <!-- Before app.js: the dashboard login wiring reads window.dashPasskey. -->
   <script src="passkey.js?v=1"></script>
-  <script src="app.js?v=53"></script>
+  <script src="app.js?v=54"></script>
   <script src="voice-chat.js?v=1"></script>
 
   <!-- Stale-cache tripwire.

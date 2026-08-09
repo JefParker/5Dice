@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 53;
+window.__appJsVersion = 54;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -365,6 +365,8 @@ function startLobbyFirebase() {
   window.firebaseGameBackend.listenRooms((rooms) => {
     activeRooms = rooms || {};
     renderRooms();
+    // A ?join= link can only be acted on once the room it names is in hand.
+    tryPendingInviteJoin();
     updateDiagnostics();
   });
 
@@ -477,6 +479,128 @@ document.querySelector('.main-content').addEventListener('click', () => {
   }
 });
 
+// --- INVITE LINK ---
+// A room that still has a seat can be handed out as a link. The ☰ menu inside a
+// game offers it; on a phone that opens the share sheet, so the link can go
+// straight into a text, and whoever taps it lands in this room.
+
+function roomSeatsLeft(room) {
+  if (!room) return 0;
+  const maxP = room.maxPlayers || 0;
+  if (maxP <= 1) return 0;                // solo / vs-computer rooms seat nobody
+  if (room.status !== 'open') return 0;   // started, or the roster got locked
+  return Math.max(0, maxP - asPlayerList(room.players).length);
+}
+
+function canInviteToCurrentRoom() {
+  if (!currentRoomId) return false;
+  const room = activeRooms[currentRoomId];
+  if (room) return roomSeatsLeft(room) > 0;
+  // The lobby snapshot can lag the room we just created — fall back to what this
+  // client knows rather than hiding the invite during those first few seconds.
+  const maxP = window.gameMaxPlayers || 0;
+  return maxP > 1 && Math.max(gamePlayers.length, 1) < maxP;
+}
+
+function inviteLinkFor(roomId) {
+  // Keep whatever directory the app is served from, but drop an explicit
+  // index.html so the shared link is the tidy one.
+  const path = window.location.pathname.replace(/index\.html$/i, '');
+  return window.location.origin + path + '?join=' + encodeURIComponent(roomId);
+}
+
+async function shareInvite() {
+  if (!currentRoomId) return;
+  const room = activeRooms[currentRoomId] || {};
+  const url = inviteLinkFor(currentRoomId);
+  const gameName = room.gameType || currentGameType || 'a game';
+  const text = `${myName || 'A friend'} started ${gameName} on 5Dice — tap to take a seat.`;
+
+  // The share sheet is the whole point on a phone: it hands the link to
+  // Messages with the text already written.
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: '5Dice', text, url });
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;  // sheet dismissed — not a failure
+      // No share target / blocked: fall through to the clipboard.
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Invite link copied — paste it into a text');
+  } catch (err) {
+    // Clipboard denied (or no secure context): show it so it can be copied by hand.
+    window.prompt('Copy this invite link:', url);
+  }
+}
+
+// --- INVITE DEEP LINK ---
+// ?join=<roomId> is where a texted invite lands. The lobby's room list arrives
+// asynchronously, so the id waits here until the snapshot shows it up — or until
+// we give up on it.
+
+const INVITE_WAIT_MS = 15000;
+
+let pendingJoinRoomId = null;
+let inviteWaitArmed = false;
+
+function readInviteFromUrl() {
+  let roomId = null;
+  try {
+    roomId = new URLSearchParams(window.location.search).get('join');
+  } catch (e) { /* ancient browser — no deep link, no harm */ }
+  if (!roomId) return null;
+  // Drop the param straight away so a later refresh lands on the lobby instead
+  // of trying to re-join a room we've since left.
+  history.replaceState(null, '', window.location.pathname + window.location.hash);
+  return roomId;
+}
+
+// Start the clock. Held back until there's a display name, because on first run
+// the invite waits behind the Settings screen.
+function armInviteWait() {
+  const roomId = pendingJoinRoomId;
+  if (!roomId || inviteWaitArmed || !myName) return;
+  inviteWaitArmed = true;
+  showLoading('Finding the game…');
+  tryPendingInviteJoin();
+  setTimeout(() => {
+    if (pendingJoinRoomId !== roomId) return;   // already handled
+    pendingJoinRoomId = null;
+    inviteWaitArmed = false;
+    hideLoading();
+    showToast("That invite didn't lead anywhere — the game may have ended.", '#dc3545');
+  }, INVITE_WAIT_MS);
+}
+
+function tryPendingInviteJoin() {
+  const roomId = pendingJoinRoomId;
+  if (!roomId || !myName) return;
+  if (currentRoomId === roomId) {             // already seated (double-tapped link)
+    pendingJoinRoomId = null;
+    inviteWaitArmed = false;
+    hideLoading();
+    return;
+  }
+  const room = activeRooms[roomId];
+  if (!room) return;                          // not in the snapshot yet — keep waiting
+
+  pendingJoinRoomId = null;
+  inviteWaitArmed = false;
+  hideLoading();
+
+  // Someone who was already in this room gets back in even once it's started;
+  // everyone else needs a seat to still be free.
+  const alreadyIn = asPlayerList(room.players).some(p => p.uuid === myUuid || p.peerId === myPeerId);
+  if (!alreadyIn && roomSeatsLeft(room) === 0) {
+    showToast(room.status === 'open' ? 'That game is full.' : 'That game has already started.', '#dc3545');
+    return;
+  }
+  window.joinRoom(roomId);
+}
+
 // --- APP MENU ---
 // One ☰ per screen. The items are generated per screen so the menu never offers
 // you the page you're already on.
@@ -489,6 +613,7 @@ let menuReturnScreen = 'screen-lobby';
 let dashAuthed = false;
 
 const MENU_ACTIONS = {
+  invite:     { icon: '🔗',  label: 'Invite Players' },
   lobby:      { icon: '🏠',  label: 'Lobby' },
   game:       { icon: '🎲',  label: 'Back to Game' },
   leaveGame:  { icon: '🚪',  label: 'Leave Room' },
@@ -503,11 +628,15 @@ function menuItemsFor(menuName) {
   const backItem = (menuReturnScreen === 'screen-game') ? 'game' : 'lobby';
   // Dashboard is appended to every menu, but only once signed in as admin.
   const admin = (items) => (dashAuthed ? items.concat(['dashboard']) : items);
+  // Invite goes first, and only while the current room still has a free seat.
+  const invited = (items) => (canInviteToCurrentRoom() ? ['invite'].concat(items) : items);
   switch (menuName) {
     case 'lobby':     return admin(['settings', 'about', 'scoreSheet']);
     case 'settings':  return admin([backItem, 'about', 'scoreSheet']);
     case 'about':     return admin([backItem, 'settings', 'scoreSheet']);
-    case 'game':      return admin(['leaveGame', 'settings', 'about', 'scoreSheet']);
+    // Sharing a seat is the first thing you want while a room is still filling,
+    // so it sits at the top — and disappears the moment there's nowhere to sit.
+    case 'game':      return admin(invited(['leaveGame', 'settings', 'about', 'scoreSheet']));
     case 'dashboard': return ['lobby', 'settings', 'about', 'scoreSheet'];
     default:          return admin(['lobby']);
   }
@@ -571,6 +700,8 @@ function leaveSettings(target) {
       showScreen('screen-lobby');
     }
     startLobbyFirebase();
+    // First run via an invite link: now that there's a name, go get the room.
+    armInviteWait();
   }
 }
 
@@ -580,6 +711,9 @@ function runMenuAction(key) {
   const onSettings = settingsScreen && settingsScreen.classList.contains('active');
 
   switch (key) {
+    case 'invite':
+      shareInvite();
+      break;
     case 'lobby':
     case 'game':
       // Leaving Settings saves first so a changed name sticks.
@@ -2141,6 +2275,10 @@ setInterval(() => {
     if (window.firebaseGameBackend) window.firebaseGameBackend.cleanupOldRooms();
   }
 }, 60000);
+// A texted invite (?join=<roomId>) is read before anything else so the param is
+// off the url whichever way the app starts up.
+pendingJoinRoomId = readInviteFromUrl();
+
 if (!myName) {
   document.getElementById('settings-player-id-section').style.display = 'none';
   // No lobby to go back to until a name is set — hide the menu on first run.
@@ -2151,8 +2289,12 @@ if (!myName) {
   const colorPicker = document.getElementById('player-color-picker');
   if (colorPicker) colorPicker.value = myColor;
   showScreen('screen-settings');
+  // Arriving on an invite with no name yet: say why Settings is in the way. The
+  // join itself is armed by leaveSettings() once the name is saved.
+  if (pendingJoinRoomId) showToast('Pick a name and you\'ll drop straight into the game.');
 } else {
   startLobbyFirebase();
+  armInviteWait();
 
   // Deep links, so the Score Sheet (a separate page) can jump straight here.
   const landingHash = (window.location.hash || '').toLowerCase();

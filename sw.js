@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v136';
+const CACHE_NAME = '5dice-cache-v137';
 
 // Precache the SAME versioned URLs index.html actually requests. Unversioned
 // entries used to coexist with runtime-cached ?v= entries, and the offline
@@ -10,7 +10,7 @@ const urlsToCache = [
   './styles.css?v=44',
   './skins.css?v=6',
   './skins.js?v=1',
-  './app.js?v=53',
+  './app.js?v=54',
   './passkey.js?v=1',
   './voice-chat.js?v=1',
   './five-dice.js?v=38',
@@ -64,7 +64,10 @@ self.addEventListener('fetch', event => {
         // cache them so three.js/cannon.js/confetti work offline.
         const isCdnOpaque = networkResponse && networkResponse.type === 'opaque' &&
           CDN_HOSTS.includes(new URL(event.request.url).hostname);
-        if (isBasicOk || isCdnOpaque) {
+        // An invite link (?join=<roomId>) is a one-shot url — caching each one
+        // would pile up a copy of index.html per invite for no benefit.
+        const isInvite = new URL(event.request.url).searchParams.has('join');
+        if ((isBasicOk || isCdnOpaque) && !isInvite) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseToCache).catch(() => {});
