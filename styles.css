@@ -1404,22 +1404,29 @@ body.dice3d-active .fd-die {
    control you have to hunt for. Both ends are deliberately narrow, since the
    bear-off trays live under them, and the rail itself takes no pointer events,
    so a tap that misses a switch still reaches the tray.
-   Reversed row because the readout comes first in the markup: it belongs at
-   the right end, and the switches — one box, so they can never drift apart
-   into the middle of the board — at the left. */
+   Each end is pinned to its own edge rather than spaced apart by the flex
+   layout. Spacing them was what made the switches hop: the readout is display:
+   none whenever it isn't your roll, and a lone item under space-between goes
+   to the start of the line — the right — so the switches slid across the
+   screen and back several times a turn. Pinned, they cannot move. */
 .bg-rail {
   position: absolute; left: 4px; right: 4px; top: 50%;
-  transform: translateY(-50%);
-  display: flex; flex-direction: row-reverse;
-  justify-content: space-between; align-items: center;
   pointer-events: none;
   z-index: 15;
+}
+/* The two switches as one block, so they move as a unit. */
+.bg-switches {
+  position: absolute; left: 0; top: 0;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 
 /* My dice for this turn: four of them on doubles, darkened as they're played.
    Centred on the board's right edge, so the block grows evenly both ways as
    the count changes between two and four. */
 .bg-dice-readout {
+  position: absolute; right: 0; top: 0;
+  transform: translateY(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   padding: 6px 5px;
   border-radius: 12px;
@@ -1444,11 +1451,6 @@ body.dice3d-active .fd-die {
 /* A played die drops back rather than disappearing — the roll you got stays
    readable for the whole turn. */
 .bg-die-spent { opacity: 0.85; box-shadow: none; }
-
-/* The two switches as one block, so landscape can move them as a unit. */
-.bg-switches {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-}
 
 .bg-rail-toggle {
   pointer-events: auto;

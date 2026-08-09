@@ -287,7 +287,11 @@ class Backgammon3D {
   _buildDice() {
     // Two dice with pip textures, tumbled by a local cannon world. Each die is
     // skinned in the colour of whoever is rolling it — see _setDieSkin().
-    this.diceSize = 0.62;
+    // Sized against the checkers (0.84 across) rather than a real dice set,
+    // which would be about half this. On a phone the board is a few hundred
+    // pixels wide and a realistic die is a handful of pixels with pips too
+    // small to read at a glance — the number is the whole point of the object.
+    this.diceSize = 0.9;
     this.dice = [];
     this.world = new CANNON.World();
     this.world.allowSleep = true;
