@@ -413,7 +413,11 @@
   // look broken. So Undo blocks auto-play until the player does something else:
   // moves a checker by hand (applyMyMoves clears it) or ends the turn (the
   // turn/phase check below clears it).
-  const AUTO_MOVE_DELAY = 420;
+  // A move you didn't make yourself needs room to be read: a beat long enough to
+  // notice the board is about to act on its own, then a hop at half the usual
+  // speed so the eye can follow which checker went where.
+  const AUTO_MOVE_DELAY = 700;
+  const AUTO_MOVE_ANIM_MS = 520;   // 2x the normal 260ms hop
   let autoMoveTimer = null;
   let autoMoveBlocked = false;
   let autoMoveToasted = false;
@@ -788,7 +792,7 @@
       const countAtTarget = (m.to === 'off' || m.hit) ? 0 : Math.abs(s.points[m.to] || 0);
       s = window.BG.applyMove(s, m);
       view.animateMove(m.from === 'bar' ? 'bar' : m.from, m.to === 'off' ? 'off' : m.to,
-        myColor, countAtTarget, step);
+        myColor, countAtTarget, step, auto ? AUTO_MOVE_ANIM_MS : 0);
     };
     step();
   }

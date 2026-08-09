@@ -680,7 +680,9 @@ class Backgammon3D {
   }
 
   // Animate a single checker hop from zone to zone; view-only, then done().
-  animateMove(fromZone, toZone, color, countsAtTarget, done) {
+  // `ms` overrides the hop duration — a move the app plays FOR you is worth
+  // slowing down, since you didn't drive it and have to read what happened.
+  animateMove(fromZone, toZone, color, countsAtTarget, done, ms) {
     if (typeof document !== 'undefined' && document.hidden) { if (done) done(); return; }
     // Find the top checker of `color` on fromZone.
     let mesh = null;
@@ -699,7 +701,8 @@ class Backgammon3D {
     // either flew the wrong disc or silently skipped. setState() rewrites every
     // zone on the next repaint, so this only has to hold until then.
     mesh.userData.zone = toZone;
-    const anim = { mesh, from, to, start: performance.now(), dur: 260, done, toZone };
+    const dur = ms > 0 ? ms : 260;
+    const anim = { mesh, from, to, start: performance.now(), dur, done, toZone };
     this.moveAnims = this.moveAnims || [];
     this.moveAnims.push(anim);
     // Watchdog: rAF can be paused (occluded window) even when document.hidden
@@ -712,7 +715,7 @@ class Backgammon3D {
         this.needsRender = true;
         if (anim.done) anim.done();
       }
-    }, 1400);
+    }, Math.max(1400, dur * 2));
   }
 
   // ---------------------------------------------------------------------------
