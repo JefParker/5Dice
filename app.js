@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 54;
+window.__appJsVersion = 55;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -509,6 +509,44 @@ function inviteLinkFor(roomId) {
   return window.location.origin + path + '?join=' + encodeURIComponent(roomId);
 }
 
+// Is there really a share sheet behind navigator.share?
+//
+// Having the API is not evidence that it works. Chrome 151 on desktop Linux
+// exposes navigator.share AND answers true to canShare(), but the call rejects
+// with AbortError immediately and no sheet ever appears — which used to leave
+// the invite doing nothing at all. So gate on the device actually being a
+// phone/tablet rather than on feature detection.
+function hasShareSheet() {
+  if (!navigator.share) return false;
+  if (navigator.userAgentData) return !!navigator.userAgentData.mobile;
+  // iPadOS reports a Mac user agent, so touch points are the tell there.
+  return /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) ||
+         (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
+async function copyInviteLink(url) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+      return true;
+    }
+  } catch (err) { /* blocked — try the old way below */ }
+  // execCommand is deprecated but it's still what works when the async
+  // clipboard is unavailable (permission denied, or a non-secure origin).
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) return true;
+  } catch (err) { /* fall through */ }
+  return false;
+}
+
 async function shareInvite() {
   if (!currentRoomId) return;
   const room = activeRooms[currentRoomId] || {};
@@ -516,22 +554,25 @@ async function shareInvite() {
   const gameName = room.gameType || currentGameType || 'a game';
   const text = `${myName || 'A friend'} started ${gameName} on 5Dice — tap to take a seat.`;
 
-  // The share sheet is the whole point on a phone: it hands the link to
-  // Messages with the text already written.
-  if (navigator.share) {
+  // On a phone the sheet is the whole point: it hands the link to Messages with
+  // the text already written.
+  if (hasShareSheet()) {
+    const startedAt = Date.now();
     try {
       await navigator.share({ title: '5Dice', text, url });
       return;
     } catch (err) {
-      if (err && err.name === 'AbortError') return;  // sheet dismissed — not a failure
-      // No share target / blocked: fall through to the clipboard.
+      // Dismissing a sheet takes a human a moment. An instant AbortError means
+      // no sheet ever opened, so copy instead of going quiet.
+      const reallyDismissed = err && err.name === 'AbortError' && (Date.now() - startedAt) > 400;
+      if (reallyDismissed) return;
     }
   }
-  try {
-    await navigator.clipboard.writeText(url);
+
+  if (await copyInviteLink(url)) {
     showToast('Invite link copied — paste it into a text');
-  } catch (err) {
-    // Clipboard denied (or no secure context): show it so it can be copied by hand.
+  } else {
+    // Last resort: put it somewhere it can be copied by hand.
     window.prompt('Copy this invite link:', url);
   }
 }
