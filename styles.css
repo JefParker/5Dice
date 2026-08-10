@@ -1607,6 +1607,38 @@ body.dice3d-active .fd-die {
 }
 
 /* ------------------------------------------------------------------ */
+/* Desktop backgammon: the action buttons belong UNDER the board.      */
+/*                                                                     */
+/* The board container is only as tall as the board, and .bg-actions   */
+/* was pinned to its bottom edge — which is the two home boards, the   */
+/* one part of the board you're studying while Undo and Done are on    */
+/* screen. On a desktop the page below the board is empty, so put them */
+/* there instead of on top of the checkers.                            */
+/*                                                                     */
+/* Getting out of the container means giving up its overflow clip, so  */
+/* the rounded corners move to the canvas — the only child that needed */
+/* them. The strip below is reserved whether or not any button is      */
+/* showing, so the page doesn't jump as they come and go through the   */
+/* turn.                                                               */
+/*                                                                     */
+/* min-height keeps this clear of the landscape-phone rules below,     */
+/* which deliberately stack the same buttons in the right-hand gutter. */
+/* ------------------------------------------------------------------ */
+@media (min-width: 768px) and (min-height: 561px) {
+  #backgammon-container {
+    overflow: visible;
+    margin-bottom: 78px;
+  }
+  #backgammon-container canvas { border-radius: 12px; }
+
+  .bg-ui .bg-actions {
+    top: 100%;
+    bottom: auto;
+    margin-top: 16px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Landscape phones: immersive game screen.                            */
 /* A handset in landscape has ~350px of height, and the header + footer*/
 /* were eating a third of it. Hide the chrome and give every pixel to  */
