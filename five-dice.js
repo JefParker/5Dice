@@ -436,8 +436,8 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     commitDiv.innerHTML = `
       <div>Score ${score} in ${cat}?</div>
       <div class="fd-commit-buttons">
-        <button id="btn-fd-commit">Commit</button>
         <button id="btn-fd-undo">Undo</button>
+        <button id="btn-fd-commit">Commit</button>
       </div>
     `;
     document.getElementById('five-dice-container').appendChild(commitDiv);
