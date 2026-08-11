@@ -100,6 +100,7 @@ class Backgammon3D {
 
     this._resize();
     this._animate();
+    this.setBoardSkin('leather');
   }
 
   // ---------------------------------------------------------------------------
@@ -116,13 +117,20 @@ class Backgammon3D {
     const frameCol = 0x5b3a1e, feltCol = 0x1f5c3d;
     const ptColA = 0xd9c49a, ptColB = 0x8a4a25;
 
+    // Every part a board skin can repaint is kept on `this` — setBoardSkin()
+    // swaps materials on these rather than rebuilding the board.
+    this.frameMeshes = [];
+    this.trayMeshes = [];
+
     // Base slab + felt
     const base = new THREE.Mesh(new THREE.BoxGeometry((fhx + this.TRAY_W + 0.5) * 2, 0.5, dh * 2 + 1.0), this._mat(frameCol));
     base.position.y = -0.27;
     g.add(base);
+    this.frameMeshes.push(base);
     const felt = new THREE.Mesh(new THREE.BoxGeometry(fhx * 2, 0.06, dh * 2), this._mat(feltCol));
     felt.position.y = -0.03;
     g.add(felt);
+    this.feltMesh = felt;
 
     // Rails
     const railH = 0.42, railT = 0.5;
@@ -130,6 +138,7 @@ class Backgammon3D {
       const r = new THREE.Mesh(new THREE.BoxGeometry(w, railH, d), this._mat(frameCol));
       r.position.set(x, railH / 2 - 0.05, z);
       g.add(r);
+      this.frameMeshes.push(r);
     };
     mkRail(fhx * 2 + railT * 2, railT, 0, dh + railT / 2);
     mkRail(fhx * 2 + railT * 2, railT, 0, -(dh + railT / 2));
@@ -141,6 +150,8 @@ class Backgammon3D {
     const barMesh = new THREE.Mesh(new THREE.BoxGeometry(this.BAR_W, 0.34, dh * 2), this._mat(0x6b4423));
     barMesh.position.y = 0.14;
     g.add(barMesh);
+    this.barMesh = barMesh;
+    this.BAR_TOP_Y = 0.31;
 
     // Bear-off trays (right of the right rail)
     const trayX = fhx + railT + this.TRAY_W / 2;
@@ -148,6 +159,7 @@ class Backgammon3D {
       const t = new THREE.Mesh(new THREE.BoxGeometry(this.TRAY_W, 0.1, dh - 0.4), this._mat(0x3a2513));
       t.position.set(trayX, 0.0, z);
       g.add(t);
+      this.trayMeshes.push(t);
     };
     mkTray(dh / 2 + 0.15);   // white tray (front/bottom)
     mkTray(-dh / 2 - 0.15);  // black tray (back/top)
@@ -191,6 +203,134 @@ class Backgammon3D {
     mkZone('bar', 0, 0, this.BAR_W, dh * 2);
     mkZone('offW', trayX, dh / 2 + 0.15, this.TRAY_W, dh - 0.4);
     mkZone('offB', trayX, -dh / 2 - 0.15, this.TRAY_W, dh - 0.4);
+
+    // Remember what each part was painted with, so switching back to the
+    // classic skin is just handing these materials out again.
+    this._boardSkin = 'classic';
+    for (const m of this.frameMeshes.concat(this.trayMeshes, [this.feltMesh, this.barMesh])) {
+      m.userData.classicMat = m.material;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Board skins
+  // ---------------------------------------------------------------------------
+
+  // 'classic' is the painted board built above. 'leather' re-skins it from
+  // images/Leather_Board.png — one overhead photograph of a real board, sliced
+  // up at load time and mapped onto the geometry we already have.
+  //
+  // The playing field goes on as ONE piece per half (felt and its six points
+  // together) rather than as a texture per triangle: half the photo maps onto
+  // half the felt, both hold exactly six points of equal width, so the painted
+  // triangles land precisely where _pointBase puts the checkers — no lining-up
+  // by hand, and it stays true if the board's proportions are ever retuned.
+  //
+  // Crop boxes are pixels of the 1241x864 export, scaled if a larger one is
+  // dropped in its place.
+  static get LEATHER_CROPS() {
+    return {
+      fieldL:  [136,  62, 437, 750],  // felt half + its 6 points, left of the bar
+      fieldR:  [667,  62, 438, 750],  // and right of it
+      bar:     [573,  62,  94, 750],
+      leather: [585, 120,  70, 580]   // plain hide, for the frame, rails and trays
+    };
+  }
+
+  // Swap the board's look. Loading is lazy and asynchronous: the leather photo
+  // is fetched the first time it's asked for, and the board stays on the skin it
+  // has until the bytes arrive — so a slow connection shows a playable classic
+  // board rather than a blank one, and a failed load simply never switches.
+  setBoardSkin(name) {
+    if (name !== 'leather') { this._applySkin('classic'); return; }
+    if (this._leather) { this._applySkin('leather'); return; }
+    if (this._leatherPending) return;
+    this._leatherPending = true;
+    const img = new Image();
+    img.onload = () => {
+      this._leatherPending = false;
+      if (this.destroyed) return;
+      try {
+        this._leather = this._sliceLeather(img);
+        this._applySkin('leather');
+      } catch (e) {
+        // A broken slice must not take the board down with it.
+        this._leather = null;
+      }
+    };
+    img.onerror = () => { this._leatherPending = false; };
+    img.src = 'images/Leather_Board.png';
+  }
+
+  // Cut the photo into textures and build the two field panels that carry them.
+  _sliceLeather(img) {
+    const CROPS = Backgammon3D.LEATHER_CROPS;
+    const s = (img.naturalWidth || img.width) / 1241;
+    const cut = (box, repeat) => {
+      const [x, y, w, h] = box;
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * s));
+      c.height = Math.max(1, Math.round(h * s));
+      c.getContext('2d').drawImage(img, Math.round(x * s), Math.round(y * s),
+                                   c.width, c.height, 0, 0, c.width, c.height);
+      const t = new THREE.CanvasTexture(c);
+      if (repeat) {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(repeat[0], repeat[1]);
+      }
+      return t;
+    };
+
+    const L = {
+      // Lambert with a white base colour lets the texture through untinted while
+      // still taking the scene's lighting, so the board tips into the light the
+      // same way the checkers do.
+      fieldL: this._mat(0xffffff, { map: cut(CROPS.fieldL) }),
+      fieldR: this._mat(0xffffff, { map: cut(CROPS.fieldR) }),
+      bar:    this._mat(0xffffff, { map: cut(CROPS.bar) }),
+      frame:  this._mat(0xffffff, { map: cut(CROPS.leather, [4, 1]) }),
+      // The trays are the same hide, tinted down so they read as recesses. The
+      // photo's own tray is no good as a source: its dividers and shading are
+      // baked in, and tiled across a tray they came out as a row of slats.
+      tray:   this._mat(0x8a6552, { map: cut(CROPS.leather) }),
+      // The felt slab is only ever seen edge-on once the field panels cover it.
+      feltEdge: this._mat(0x14301f),
+      panels: []
+    };
+
+    // Field panels: one per felt half, laid just above the felt. The bar's is
+    // laid on top of the bar block, which stands proud of them.
+    const fhx = this.FELT_HALF_X, dh = this.DEPTH_HALF, half = fhx - this.BAR_W / 2;
+    const mkPanel = (w, d, x, y, mat) => {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+      p.rotation.x = -Math.PI / 2;
+      p.position.set(x, y, 0);
+      p.visible = false;
+      this.group.add(p);
+      L.panels.push(p);
+      return p;
+    };
+    mkPanel(half, dh * 2, -(this.BAR_W / 2 + half / 2), 0.008, L.fieldL);
+    mkPanel(half, dh * 2, this.BAR_W / 2 + half / 2, 0.008, L.fieldR);
+    mkPanel(this.BAR_W, dh * 2, 0, this.BAR_TOP_Y + 0.002, L.bar);
+    return L;
+  }
+
+  _applySkin(name) {
+    if (name === this._boardSkin) return;
+    const leather = name === 'leather' ? this._leather : null;
+    if (name === 'leather' && !leather) return;
+    // Classic materials are the ones the meshes were built with, so restoring
+    // is just handing them back.
+    this.pointMeshes.forEach(m => { m.visible = !leather; });
+    if (this._leather) this._leather.panels.forEach(p => { p.visible = !!leather; });
+    const set = (mesh, mat) => { mesh.material = mat || mesh.userData.classicMat; };
+    for (const m of this.frameMeshes) set(m, leather && leather.frame);
+    for (const m of this.trayMeshes) set(m, leather && leather.tray);
+    set(this.feltMesh, leather && leather.feltEdge);
+    set(this.barMesh, leather && leather.frame);
+    this._boardSkin = name;
+    this.needsRender = true;
   }
 
   // Board position of a point's base: x center and which side (1 = front/bottom
@@ -233,7 +373,10 @@ class Backgammon3D {
     const { x, side } = this._pointBase(zone);
     const layer = Math.floor(k / 5);
     const slot = k % 5;
-    const z = side * (dh - 0.75 - this.CHK_R - slot * (this.CHK_R * 2 * 0.92)) * 1 + side * 0.3;
+    // Seat the bottom checker against the base of the point rather than a third
+    // of a checker up it: on a painted board the wide end of the triangle used
+    // to stick out below the pile, which read as the point being off-centre.
+    const z = side * (dh - this.CHK_R - 0.08 - slot * (this.CHK_R * 2 * 0.92));
     return new THREE.Vector3(x, this.CHK_H / 2 + layer * (this.CHK_H + 0.005), z);
   }
 
@@ -304,10 +447,11 @@ class Backgammon3D {
   // flat at y≈0; the bar is a raised block. A checker that's in the air (dragged
   // or mid-hop) drops its shadow on the felt, not on wherever it started.
   _shadowGroundY(c) {
-    if (c.userData.zone !== 'bar') return 0.012;
-    if (this.drag && this.drag.mesh === c) return 0.012;
-    if (this.moveAnims && this.moveAnims.some(a => a.mesh === c)) return 0.012;
-    return 0.312; // just clear of the bar's top face
+    const felt = 0.018; // clear of the points and of the leather field panels
+    if (c.userData.zone !== 'bar') return felt;
+    if (this.drag && this.drag.mesh === c) return felt;
+    if (this.moveAnims && this.moveAnims.some(a => a.mesh === c)) return felt;
+    return this.BAR_TOP_Y + 0.008;
   }
 
   // Park each shadow under its checker. Called once per rendered frame, so it
