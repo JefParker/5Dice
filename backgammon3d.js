@@ -285,14 +285,17 @@ class Backgammon3D {
   }
 
   // The board the player last chose. Kept here rather than in the settings
-  // screen so a board built before the UI has run still comes up right.
+  // screen so a board built before the UI has run still comes up right. A
+  // stored choice always wins; DEFAULT_SKIN is only for a player who has never
+  // picked one, so changing it never overrides anybody's board.
   static get SKIN_KEY() { return 'bgBoardSkin'; }
+  static get DEFAULT_SKIN() { return 'wood'; }
   static savedSkinId() {
     try {
       const id = localStorage.getItem(Backgammon3D.SKIN_KEY);
       if (id === 'classic' || Backgammon3D.skinById(id)) return id;
     } catch (e) {}
-    return 'leather-green';
+    return Backgammon3D.DEFAULT_SKIN;
   }
 
   // Swap the board's look. Loading is lazy and asynchronous: a skin's photo is
