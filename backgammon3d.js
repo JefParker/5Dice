@@ -111,6 +111,26 @@ class Backgammon3D {
     return new THREE.MeshLambertMaterial(Object.assign({ color }, opts));
   }
 
+  // EXPOSURE. A flat, face-up surface in this scene receives ambient 0.55 +
+  // sun 0.79 + fill 0.18 = 1.51x. Anything authored at its true colour is
+  // therefore rendered half again too bright, and everything above 0xa8 clips
+  // to white — which is why a player who picked white and one who picked cream
+  // used to get identical discs. Scaling a colour by 1/1.51 hands a face-up
+  // surface back the colour that was actually chosen, and still lets it darken
+  // as it turns away from the light.
+  //
+  // This applies to what is RENDERED. Colours handed to HTML (see dieSkinCss)
+  // are the true ones, since nothing lights those.
+  static get EXPOSURE() { return 1 / 1.514; }
+
+  _exposed(col) {
+    return new THREE.Color(col).multiplyScalar(Backgammon3D.EXPOSURE);
+  }
+
+  _exposedCss(css) {
+    return '#' + this._exposed(css).getHexString();
+  }
+
   _buildBoard() {
     const g = this.group;
     const fhx = this.FELT_HALF_X, dh = this.DEPTH_HALF;
@@ -326,14 +346,11 @@ class Backgammon3D {
       return t;
     };
 
-    // EXPOSURE. A flat, face-up surface here receives ambient 0.55 + sun 0.79 +
-    // fill 0.18 = 1.51x. That suits the classic board, whose colours are
-    // authored dark, but a photograph arrives with its own lighting already in
-    // it — at 1.51x a cream field clipped to white and lost all its grain, and
-    // the brown frame came out bright orange. Tinting by 1/1.51 hands a
-    // face-up surface back its true colours and still lets the board darken as
-    // it tips away from the light.
-    const EXP = 0xa8a8a8;
+    // A photograph arrives with its own lighting already in it, so it needs the
+    // same exposure as everything else here: at full brightness a cream field
+    // clipped to white and lost all its grain, and a brown frame came out
+    // bright orange. See Backgammon3D.EXPOSURE.
+    const EXP = this._exposed(0xffffff);
     const L = {
       fieldL: this._mat(EXP, { map: cut(skin.fieldL) }),
       fieldR: this._mat(EXP, { map: cut(skin.fieldR) }),
@@ -343,13 +360,13 @@ class Backgammon3D {
       // narrow strip: tiling it across a long rail banded visibly, so it
       // stretches instead — leather is uniform enough that the softness reads
       // as grain rather than blur.
-      frame:  this._mat(0xc8c8c8, { map: cut(skin.material) }),
+      frame:  this._mat(this._exposed(0xffffff).multiplyScalar(1.19), { map: cut(skin.material) }),
       // The trays are the same stock, darkened so they read as recesses. The
       // tint is neutral grey rather than a brown: it has to sit right on steel
       // and stone as well as on leather. The photo's own tray is no good as a
       // source — its dividers and shading are baked in, and tiled across a tray
       // they came out as a row of slats.
-      tray:   this._mat(0x5e5e5e, { map: cut(skin.material) }),
+      tray:   this._mat(this._exposed(0xffffff).multiplyScalar(0.56), { map: cut(skin.material) }),
       // The felt slab is only ever seen edge-on once the field panels cover it.
       feltEdge: this._mat(0x2a2a2a),
       panels: []
@@ -445,12 +462,18 @@ class Backgammon3D {
     // their face textures, so they need to know when those colours went stale.
     this._skinRev = 0;
     const geo = new THREE.CylinderGeometry(this.CHK_R, this.CHK_R, this.CHK_H, 28);
+    // The colours as CHOSEN, before exposure. The materials below hold the
+    // dimmed-for-lighting version, so anything that needs to know what colour a
+    // side actually is — the dice skins, the HTML dice readout — reads these
+    // rather than working backwards from a material.
+    this.trueColW = new THREE.Color(0xf2e9d8);
+    this.trueColB = new THREE.Color(0x3b2f2f);
     // Kept on `this` and SHARED by every checker of a side, so setCheckerColors()
     // can recolour a whole side by touching two materials.
-    const matW = this.faceMatW = this._mat(0xf2e9d8);
-    const matB = this.faceMatB = this._mat(0x3b2f2f);
-    const rimW = this.rimMatW = this._mat(0xd8c9a8);
-    const rimB = this.rimMatB = this._mat(0x241c1c);
+    const matW = this.faceMatW = this._mat(this._exposed(this.trueColW));
+    const matB = this.faceMatB = this._mat(this._exposed(this.trueColB));
+    const rimW = this.rimMatW = this._mat(this._exposed(this.trueColW).multiplyScalar(0.62));
+    const rimB = this.rimMatB = this._mat(this._exposed(this.trueColB).multiplyScalar(0.62));
     for (let i = 0; i < 30; i++) {
       const isW = i < 15;
       const mesh = new THREE.Mesh(geo, [isW ? rimW : rimB, isW ? matW : matB, isW ? matW : matB]);
@@ -547,13 +570,14 @@ class Backgammon3D {
   // string or number); pass null to leave that side alone. The rim is a
   // darkened copy of the face so a checker still reads as a disc, not a blob.
   setCheckerColors(wCol, bCol) {
-    const apply = (face, rim, col) => {
+    const apply = (face, rim, trueCol, col) => {
       if (col == null) return;
-      face.color.set(col);
+      trueCol.set(col);
+      face.color.copy(this._exposed(trueCol));
       rim.color.copy(face.color).multiplyScalar(0.62);
     };
-    apply(this.faceMatW, this.rimMatW, wCol);
-    apply(this.faceMatB, this.rimMatB, bCol);
+    apply(this.faceMatW, this.rimMatW, this.trueColW, wCol);
+    apply(this.faceMatB, this.rimMatB, this.trueColB, bCol);
     // Each side's dice are painted that side's checker colour, and the pips are
     // baked into a canvas texture — so a recolour has to throw the cached skins
     // away and repaint, not just tint a material.
@@ -632,8 +656,12 @@ class Backgammon3D {
   //
   // The luminance formula matches bg-game.js's relLuminance(), which is what
   // decides how far a custom roster colour gets darkened — so the two agree.
+  // The scheme in TRUE colours. Which way the pips go is a judgement about the
+  // colour the player actually picked, so it is decided here, before exposure —
+  // otherwise dimming a mid-tone for the lights could flip a light die to dark
+  // pips and back as the roster changed.
   _dieSkin(side) {
-    const body = (side === 'b' ? this.faceMatB : this.faceMatW).color.clone();
+    const body = (side === 'b' ? this.trueColB : this.trueColW).clone();
     const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
     if (lum(body) < 0.06) body.lerp(new THREE.Color(1, 1, 1), 0.18);
     const light = lum(body) > 0.45;
@@ -653,6 +681,10 @@ class Backgammon3D {
   // match the ones on the felt exactly — including a custom roster colour.
   // _placeDiceStatic dims a die through material.color, which MULTIPLIES the
   // face texture, so the spent variants are the same per-channel multiply.
+  //
+  // TRUE colours, deliberately: the felt die is painted dark and then lit back
+  // up to this, while an HTML swatch is lit by nothing at all. Exposing these
+  // too would leave the readout a shade darker than the die it stands for.
   dieSkinCss(side) {
     const s = this._dieSkin(side === 'b' ? 'b' : 'w');
     const f = ((s.dim >> 16) & 255) / 255;   // dim is a grey: all channels equal
@@ -679,7 +711,13 @@ class Backgammon3D {
     if (!die.skins[side]) {
       const s = this._dieSkin(side);
       const faces = [];
-      for (let v = 1; v <= 6; v++) faces.push(this._dieFace(v, s.body, s.pip, s.border));
+      // The die's colour lives in its texture, not its material — the material
+      // colour is reserved for dimming a spent die — so exposure is applied
+      // here, as the faces are painted.
+      for (let v = 1; v <= 6; v++) {
+        faces.push(this._dieFace(v, this._exposedCss(s.body),
+                                 this._exposedCss(s.pip), this._exposedCss(s.border)));
+      }
       // BoxGeometry order: +x,-x,+y,-y,+z,-z → faces 3,4,1,6,2,5 (opposite faces sum 7)
       die.skins[side] = [2, 3, 0, 5, 1, 4].map(f => faces[f]);
       (die.dims || (die.dims = {}))[side] = s.dim;
