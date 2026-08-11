@@ -334,6 +334,14 @@ function performRoll() {
   if (btn.classList.contains('is-rolling')) return;
   btn.classList.add('is-rolling');
 
+  // You cannot hold a die before you have thrown it, so the first roll of a
+  // turn always throws all five. That is the rule of the game, and it also
+  // means any stale hold that survived the turn hand-off is harmless: without
+  // it, a held die would keep the value it was reset to, which is 1.
+  if (window.fiveDiceState.rollsLeft === 3) {
+    window.fiveDiceState.held = [false, false, false, false, false];
+  }
+
   let unheldIndices = [];
   let finalValues = [];
   for (let i = 0; i < 5; i++) {
@@ -573,6 +581,18 @@ function broadcast5DiceScore(category, score) {
 }
 
 window.handle5DiceMessage = function(msg) {
+  // A roll or a hold describes the dice of whoever is ON ROLL. If it is MY
+  // turn then that is me, and a message still in flight from the previous
+  // player's turn must not touch my dice — it used to land in the gap between
+  // the turn hand-off and my first roll, leaving their holds switched on over
+  // my freshly-reset 1s, which the roll then dutifully kept.
+  //
+  // sync5DiceState already refuses Firebase echoes on my own turn for exactly
+  // this reason ("local player is authoritative for active turn"); the peer
+  // messages need the same rule. Scores are different: they carry the other
+  // player's result and hand the turn over, so they always apply.
+  if (window.myTurn && (msg.type === '5DICE_ROLL' || msg.type === '5DICE_HOLD')) return;
+
   if (msg.type === '5DICE_ROLL') {
     const playArea = document.getElementById('fd-play-area');
     if (playArea) playArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
