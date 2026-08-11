@@ -643,13 +643,16 @@ body.bg-five-dice {
      rather than leaving you to scroll for the last category. --fd-shrink takes
      back the space the scale frees up, since a transform doesn't change layout.
      Scaling the board and not the dice row is deliberate: the 3D dice track the
-     .fd-die boxes, so their sizing is left well alone. */
+     .fd-die boxes, so their sizing is left well alone.
+
+     No transition on purpose. The size is settled once, as the board first
+     comes up, and animating it only drew the eye to a resize that should
+     never be watched happening. */
   --fd-sq: 1;
   --fd-shrink: 0px;
   transform: scale(var(--fd-sq));
   transform-origin: top center;
   margin-bottom: calc(-1 * var(--fd-shrink));
-  transition: transform 0.2s ease, margin-bottom 0.2s ease;
 }
 
 .fd-sec-label {
@@ -1693,8 +1696,7 @@ body.dice3d-active .fd-die {
 
 @media (prefers-reduced-motion: reduce) {
   #screen-game .top-header,
-  #screen-game .app-footer,
-  .fd-board { transition: none; }
+  #screen-game .app-footer { transition: none; }
 }
 
 /* ------------------------------------------------------------------ */

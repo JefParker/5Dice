@@ -681,6 +681,7 @@ window.cleanup5DiceGame = function() {
   // Never leave the chrome swept away for the next screen — you'd come back to
   // a game with no header and no way to reach the ☰ menu.
   showGameChrome();
+  fdFitKey = null;   // next game measures itself once, fresh
 };
 
 // ---------------------------------------------------------------------------
@@ -694,6 +695,12 @@ window.cleanup5DiceGame = function() {
 // and starts being unreadable, so it is left alone and scrolls as before.
 const FD_MIN_SQUEEZE = 0.82;
 
+// The viewport the current squeeze was worked out for. The board is sized ONCE,
+// when it first comes up with its rows in place, and then left alone — a board
+// that re-measured on every repaint visibly wiggled as scores went in. Only a
+// genuine change of viewport (rotating the phone) earns a fresh measurement.
+let fdFitKey = null;
+
 function fdGameScreen() { return document.getElementById('screen-game'); }
 function fdScrollBox() {
   const s = fdGameScreen();
@@ -706,22 +713,33 @@ function fdOnFiveDice() {
 }
 
 // Shrink the board by just enough to clear the overflow, or leave it be.
+// Runs once per viewport; see fdFitKey.
 function fitFiveDiceBoard() {
   const board = document.getElementById('fd-board');
   const box = fdScrollBox();
   if (!board || !box || !fdOnFiveDice()) return;
+  if (board.classList.contains('hidden')) return;   // opponent's turn: scorecard is up
+
+  const key = window.innerWidth + 'x' + window.innerHeight;
+  if (key === fdFitKey) return;                     // already sized for this screen
 
   // Measure unsqueezed: the previous fit is not a starting point, or the board
   // would ratchet smaller every time this runs.
   board.style.setProperty('--fd-sq', '1');
   board.style.setProperty('--fd-shrink', '0px');
 
-  const over = box.scrollHeight - box.clientHeight;
+  // Don't let a half-built board set the size for the whole game — its rows
+  // have to be in before the measurement means anything.
   const natural = board.offsetHeight;
-  if (over <= 0 || natural <= 0) return;          // already fits
+  if (natural < 200) return;
+
+  fdFitKey = key;                                   // measured: this is the one
+
+  const over = box.scrollHeight - box.clientHeight;
+  if (over <= 0) return;                            // already fits
 
   const needed = (natural - over) / natural;
-  if (needed < FD_MIN_SQUEEZE) return;            // too far off to rescue
+  if (needed < FD_MIN_SQUEEZE) return;              // too far off to rescue
 
   board.style.setProperty('--fd-sq', String(needed));
   board.style.setProperty('--fd-shrink', (natural * (1 - needed)) + 'px');
@@ -754,8 +772,9 @@ function toggleGameChrome() {
   if (header) s.style.setProperty('--chrome-top', header.offsetHeight + 'px');
   if (footer) s.style.setProperty('--chrome-bottom', footer.offsetHeight + 'px');
   s.classList.toggle('chrome-hidden');
-  // The board just gained (or lost) both bars' worth of room.
-  window.scheduleFiveDiceFit();
+  // Deliberately NOT re-fitting here. The board keeps the size it was given;
+  // re-measuring would resize it every time the bars moved, which is the
+  // wiggling this is meant to avoid. Hiding the bars just gives it more room.
 }
 
 // A tap on the BACKGROUND toggles the chrome. Anything you could be aiming at
@@ -764,7 +783,12 @@ function toggleGameChrome() {
 (function bindChromeTap() {
   const box = fdScrollBox();
   if (!box) return;
-  const IGNORE = '.fd-cat, .fd-die, .fd-roll-btn, .fd-commit-overlay, button, a, input, select, textarea, #fd-scorecard, #backgammon-container';
+  // The whole play area is off limits, not just the dice themselves. A 3D die
+  // is drawn on an overlay canvas and spills past the .fd-die box it tracks, so
+  // tapping the die you can SEE often lands in the gap beside it — which used to
+  // read as a background tap and flap the bars on every hold.
+  const IGNORE = '.fd-play-area, .fd-cat, .fd-die, .fd-roll-btn, .fd-commit-overlay,' +
+                 ' button, a, input, select, textarea, #fd-scorecard, #backgammon-container';
   let sx = 0, sy = 0, moved = false;
   box.addEventListener('pointerdown', (e) => {
     sx = e.clientX; sy = e.clientY; moved = false;
