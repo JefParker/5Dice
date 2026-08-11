@@ -208,6 +208,10 @@ function update5DiceUI() {
   // Every path that starts a turn ends up here, so this is the one place that
   // reliably catches "it's my turn and nothing's been rolled yet".
   if (window.maybeAutoRoll5Dice) window.maybeAutoRoll5Dice();
+
+  // The board's height moves with it — a scored row grows a tick, the scorecard
+  // swaps in and out — so re-check the fit whenever it has been repainted.
+  if (window.scheduleFiveDiceFit) window.scheduleFiveDiceFit();
 }
 
 // --- Scorecard skin helpers ---
@@ -674,7 +678,111 @@ window.cleanup5DiceGame = function() {
     window.dice3d.destroy();
     window.dice3d = null;
   }
+  // Never leave the chrome swept away for the next screen — you'd come back to
+  // a game with no header and no way to reach the ☰ menu.
+  showGameChrome();
 };
+
+// ---------------------------------------------------------------------------
+// SCREEN FIT
+// Two related things, both about the board being boxed in on a phone: sweeping
+// the header and footer out of the way on a tap, and shrinking a board that is
+// only just too tall so the last row isn't behind a scroll.
+// ---------------------------------------------------------------------------
+
+// How far the board may be squeezed. Below this it stops being "nearly fits"
+// and starts being unreadable, so it is left alone and scrolls as before.
+const FD_MIN_SQUEEZE = 0.82;
+
+function fdGameScreen() { return document.getElementById('screen-game'); }
+function fdScrollBox() {
+  const s = fdGameScreen();
+  return s ? s.querySelector('.game-container') : null;
+}
+function fdOnFiveDice() {
+  const c = document.getElementById('five-dice-container');
+  const s = fdGameScreen();
+  return !!c && !c.classList.contains('hidden') && !!s && !s.classList.contains('hidden');
+}
+
+// Shrink the board by just enough to clear the overflow, or leave it be.
+function fitFiveDiceBoard() {
+  const board = document.getElementById('fd-board');
+  const box = fdScrollBox();
+  if (!board || !box || !fdOnFiveDice()) return;
+
+  // Measure unsqueezed: the previous fit is not a starting point, or the board
+  // would ratchet smaller every time this runs.
+  board.style.setProperty('--fd-sq', '1');
+  board.style.setProperty('--fd-shrink', '0px');
+
+  const over = box.scrollHeight - box.clientHeight;
+  const natural = board.offsetHeight;
+  if (over <= 0 || natural <= 0) return;          // already fits
+
+  const needed = (natural - over) / natural;
+  if (needed < FD_MIN_SQUEEZE) return;            // too far off to rescue
+
+  board.style.setProperty('--fd-sq', String(needed));
+  board.style.setProperty('--fd-shrink', (natural * (1 - needed)) + 'px');
+}
+
+// Collapsed into one call per frame: update5DiceUI, resize and the chrome
+// toggle can all ask for a fit in the same tick.
+let fdFitPending = false;
+window.scheduleFiveDiceFit = function() {
+  if (fdFitPending) return;
+  fdFitPending = true;
+  requestAnimationFrame(() => {
+    fdFitPending = false;
+    fitFiveDiceBoard();
+  });
+};
+
+function showGameChrome() {
+  const s = fdGameScreen();
+  if (s) s.classList.remove('chrome-hidden');
+}
+
+function toggleGameChrome() {
+  const s = fdGameScreen();
+  if (!s) return;
+  // Measure each bar so it collapses by exactly its own height, whatever the
+  // breakpoint or skin has made of it.
+  const header = s.querySelector('.top-header');
+  const footer = s.querySelector('.app-footer');
+  if (header) s.style.setProperty('--chrome-top', header.offsetHeight + 'px');
+  if (footer) s.style.setProperty('--chrome-bottom', footer.offsetHeight + 'px');
+  s.classList.toggle('chrome-hidden');
+  // The board just gained (or lost) both bars' worth of room.
+  window.scheduleFiveDiceFit();
+}
+
+// A tap on the BACKGROUND toggles the chrome. Anything you could be aiming at
+// is excluded, and a drag is not a tap — without the slop test, flicking the
+// scorecard up and down would flap the bars on every scroll.
+(function bindChromeTap() {
+  const box = fdScrollBox();
+  if (!box) return;
+  const IGNORE = '.fd-cat, .fd-die, .fd-roll-btn, .fd-commit-overlay, button, a, input, select, textarea, #fd-scorecard, #backgammon-container';
+  let sx = 0, sy = 0, moved = false;
+  box.addEventListener('pointerdown', (e) => {
+    sx = e.clientX; sy = e.clientY; moved = false;
+  });
+  box.addEventListener('pointermove', (e) => {
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (dx * dx + dy * dy > 196) moved = true;   // same slop as the board drag
+  });
+  box.addEventListener('click', (e) => {
+    if (moved) return;
+    if (!fdOnFiveDice()) return;
+    if (e.target.closest && e.target.closest(IGNORE)) return;
+    toggleGameChrome();
+  });
+})();
+
+window.addEventListener('resize', () => window.scheduleFiveDiceFit());
+window.addEventListener('orientationchange', () => window.scheduleFiveDiceFit());
 
 window.reset5DiceGame = function(firstTurnId = null) {
   window._fd_celebrated = false; // new game → a fresh celebration is allowed

@@ -637,6 +637,19 @@ body.bg-five-dice {
   flex-direction: column;
   gap: 4px;
   padding: 12px 12px 4px;
+
+  /* SQUEEZE TO FIT. When the board is a little taller than the screen — a row
+     or two over — fitFiveDiceBoard() (five-dice.js) shrinks it by just enough
+     rather than leaving you to scroll for the last category. --fd-shrink takes
+     back the space the scale frees up, since a transform doesn't change layout.
+     Scaling the board and not the dice row is deliberate: the 3D dice track the
+     .fd-die boxes, so their sizing is left well alone. */
+  --fd-sq: 1;
+  --fd-shrink: 0px;
+  transform: scale(var(--fd-sq));
+  transform-origin: top center;
+  margin-bottom: calc(-1 * var(--fd-shrink));
+  transition: transform 0.2s ease, margin-bottom 0.2s ease;
 }
 
 .fd-sec-label {
@@ -1646,6 +1659,42 @@ body.dice3d-active .fd-die {
     bottom: auto;
     margin-top: 16px;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tap the background to sweep the chrome out of the way.               */
+/* The header and footer are the two solid bars boxing in the board.    */
+/* A tap on empty space slides them off the top and bottom edges; a     */
+/* second tap slides them back. The negative margin matches each bar's  */
+/* own height (measured into --chrome-top/--chrome-bottom by            */
+/* five-dice.js), so the space is handed to the board as they go rather */
+/* than left behind as a gap — and both properties animate together, so */
+/* it reads as one movement.                                            */
+/*                                                                      */
+/* The ☰ menu rides up with the header. That's the trade: a single tap  */
+/* anywhere brings it straight back, and leaving the screen resets it,  */
+/* so you can never arrive at a game with no way out.                   */
+/* ------------------------------------------------------------------ */
+#screen-game .top-header,
+#screen-game .app-footer {
+  transition: transform 0.28s ease, margin 0.28s ease;
+  will-change: transform;
+}
+
+#screen-game.chrome-hidden .top-header {
+  transform: translateY(-100%);
+  margin-top: calc(-1 * var(--chrome-top, 56px));
+}
+
+#screen-game.chrome-hidden .app-footer {
+  transform: translateY(100%);
+  margin-bottom: calc(-1 * var(--chrome-bottom, 42px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #screen-game .top-header,
+  #screen-game .app-footer,
+  .fd-board { transition: none; }
 }
 
 /* ------------------------------------------------------------------ */
