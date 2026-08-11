@@ -8,3 +8,6 @@ node_modules/
 # regenerate those from these if the art changes.
 images/Board_*.png
 images/Leather_Board.png
+
+# Screenshots dropped in the folder to show someone a bug.
+Screenshot*.png

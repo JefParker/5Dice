@@ -326,20 +326,30 @@ class Backgammon3D {
       return t;
     };
 
+    // EXPOSURE. A flat, face-up surface here receives ambient 0.55 + sun 0.79 +
+    // fill 0.18 = 1.51x. That suits the classic board, whose colours are
+    // authored dark, but a photograph arrives with its own lighting already in
+    // it — at 1.51x a cream field clipped to white and lost all its grain, and
+    // the brown frame came out bright orange. Tinting by 1/1.51 hands a
+    // face-up surface back its true colours and still lets the board darken as
+    // it tips away from the light.
+    const EXP = 0xa8a8a8;
     const L = {
-      // Lambert with a white base colour lets the texture through untinted while
-      // still taking the scene's lighting, so the board tips into the light the
-      // same way the checkers do.
-      fieldL: this._mat(0xffffff, { map: cut(skin.fieldL) }),
-      fieldR: this._mat(0xffffff, { map: cut(skin.fieldR) }),
-      bar:    this._mat(0xffffff, { map: cut(skin.bar) }),
-      frame:  this._mat(0xffffff, { map: cut(skin.material, [4, 1]) }),
+      fieldL: this._mat(EXP, { map: cut(skin.fieldL) }),
+      fieldR: this._mat(EXP, { map: cut(skin.fieldR) }),
+      bar:    this._mat(EXP, { map: cut(skin.bar) }),
+      // The frame is mostly upright faces, which catch far less than a face-up
+      // one, so it is held a little brighter than true exposure. Its patch is a
+      // narrow strip: tiling it across a long rail banded visibly, so it
+      // stretches instead — leather is uniform enough that the softness reads
+      // as grain rather than blur.
+      frame:  this._mat(0xc8c8c8, { map: cut(skin.material) }),
       // The trays are the same stock, darkened so they read as recesses. The
       // tint is neutral grey rather than a brown: it has to sit right on steel
       // and stone as well as on leather. The photo's own tray is no good as a
       // source — its dividers and shading are baked in, and tiled across a tray
       // they came out as a row of slats.
-      tray:   this._mat(0x8f8f8f, { map: cut(skin.material) }),
+      tray:   this._mat(0x5e5e5e, { map: cut(skin.material) }),
       // The felt slab is only ever seen edge-on once the field panels cover it.
       feltEdge: this._mat(0x2a2a2a),
       panels: []
