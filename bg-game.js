@@ -1131,6 +1131,12 @@
   window.BGGame = {
     active: false,
 
+    // Settings changed the board underfoot. No-op when no board is up — the
+    // next one reads the saved choice for itself.
+    setBoardSkin(id) {
+      if (view) view.setBoardSkin(id);
+    },
+
     // Enter a backgammon room.
     // opts: { container, isHost, aiLevel, matchTarget, cubeEnabled, existingJson }
     enter(opts) {

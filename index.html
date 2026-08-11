@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#1a2a40">
   <link rel="apple-touch-icon" href="images/icon-192x192.png">
   <link rel="stylesheet" href="styles.css?v=45">
-  <link rel="stylesheet" href="skins.css?v=6">
+  <link rel="stylesheet" href="skins.css?v=7">
   <link rel="manifest" href="manifest.json">
   <!-- Not deferred: applies the saved skin before first paint. -->
   <script src="skins.js?v=1"></script>
@@ -89,6 +89,14 @@
               <span class="skin-swatch sw-steampunk"></span>Steampunk
             </button>
           </div>
+        </div>
+
+        <div class="settings-section" style="margin-top: 20px;">
+          <label>Backgammon Board</label>
+          <p class="small-hint" style="text-align: left; margin: 4px 0 0;">The board you play on. Only you see your choice &mdash; your opponent keeps theirs.</p>
+          <!-- Filled in by app.js from Backgammon3D.BOARD_SKINS, so the board
+               list lives in one place. -->
+          <div class="board-options" id="board-options"></div>
         </div>
 
         <div class="settings-section" style="margin-top: 20px;">
@@ -745,11 +753,11 @@
   <script src="five-dice.js?v=39"></script>
   <script src="backgammon.js?v=2"></script>
   <script src="backgammon3d.js?v=17"></script>
-  <script src="bg-game.js?v=20"></script>
+  <script src="bg-game.js?v=21"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <!-- Before app.js: the dashboard login wiring reads window.dashPasskey. -->
   <script src="passkey.js?v=1"></script>
-  <script src="app.js?v=55"></script>
+  <script src="app.js?v=56"></script>
   <script src="voice-chat.js?v=1"></script>
 
   <!-- Stale-cache tripwire.

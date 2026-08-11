@@ -2,3 +2,9 @@
 node_modules/
 .firebase/
 *-mockup.html
+
+# Board art masters: ~10 MB each, and push.sh stages everything. What ships is
+# the converted images/board-*.jpg (and images/thumb-*.jpg for the picker) —
+# regenerate those from these if the art changes.
+images/Board_*.png
+images/Leather_Board.png

@@ -741,3 +741,57 @@ html[data-skin],
   color: var(--sk-text);
   background: var(--sk-panel-2);
 }
+
+/* Board picker: same buttons as the skin picker, but there are seven of them,
+   so they wrap into a grid instead of sharing one row. */
+.board-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.board-option {
+  padding: 8px 6px 10px;
+  border-radius: 12px;
+  border: 2px solid #4a4a4a;
+  background: #333;
+  color: #ccc;
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.board-option[aria-pressed="true"] {
+  border-color: #4a90e2;
+  color: #fff;
+  background: #3d3d3d;
+}
+
+.board-swatch {
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: block;
+  background-size: cover;
+  background-position: center;
+  /* The plain painted board has no photo to show. */
+  background-color: #1f5c3d;
+}
+
+[data-skin] .board-option {
+  background: var(--sk-panel);
+  border-color: var(--sk-border);
+  color: var(--sk-text-muted);
+}
+[data-skin] .board-option[aria-pressed="true"] {
+  border-color: var(--sk-accent);
+  color: var(--sk-text);
+  background: var(--sk-panel-2);
+}

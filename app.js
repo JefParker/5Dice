@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 55;
+window.__appJsVersion = 56;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -905,6 +905,56 @@ window.addEventListener('storage', (e) => {
 });
 
 syncSkinPicker();
+
+// --- BACKGAMMON BOARD PICKER ---
+// The board list lives in Backgammon3D so the crop boxes and the picker can
+// never disagree; this only renders it. The choice is local to this device —
+// it changes nothing either player's game state depends on, so there is
+// nothing to sync and an opponent keeps whatever board they picked.
+function buildBoardPicker() {
+  const wrap = document.getElementById('board-options');
+  if (!wrap || !window.Backgammon3D) return;
+  const options = window.Backgammon3D.BOARD_SKINS.concat(
+    [{ id: 'classic', label: 'Classic', thumb: null }]);
+  wrap.innerHTML = '';
+  for (const o of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'board-option';
+    btn.dataset.boardValue = o.id;
+    const sw = document.createElement('span');
+    sw.className = 'board-swatch';
+    if (o.thumb) sw.style.backgroundImage = 'url("' + o.thumb + '")';
+    btn.appendChild(sw);
+    btn.appendChild(document.createTextNode(o.label));
+    btn.addEventListener('click', () => setBoardChoice(o.id));
+    wrap.appendChild(btn);
+  }
+  syncBoardPicker();
+}
+
+function syncBoardPicker() {
+  if (!window.Backgammon3D) return;
+  const current = window.Backgammon3D.savedSkinId();
+  document.querySelectorAll('.board-option').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.boardValue === current));
+  });
+}
+
+function setBoardChoice(id) {
+  if (!window.Backgammon3D) return;
+  try { localStorage.setItem(window.Backgammon3D.SKIN_KEY, id); } catch (e) {}
+  syncBoardPicker();
+  // Repaint a board that's already on screen, so picking one mid-game shows up
+  // straight away rather than waiting for the next room.
+  if (window.BGGame && window.BGGame.setBoardSkin) window.BGGame.setBoardSkin(id);
+}
+
+window.addEventListener('storage', (e) => {
+  if (window.Backgammon3D && e.key === window.Backgammon3D.SKIN_KEY) syncBoardPicker();
+});
+
+buildBoardPicker();
 
 const hintsToggleEl = document.getElementById('hints-toggle');
 if (hintsToggleEl) {

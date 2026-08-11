@@ -100,7 +100,7 @@ class Backgammon3D {
 
     this._resize();
     this._animate();
-    this.setBoardSkin('leather');
+    this.setBoardSkin(Backgammon3D.savedSkinId());
   }
 
   // ---------------------------------------------------------------------------
@@ -216,9 +216,9 @@ class Backgammon3D {
   // Board skins
   // ---------------------------------------------------------------------------
 
-  // 'classic' is the painted board built above. 'leather' re-skins it from
-  // images/Leather_Board.png — one overhead photograph of a real board, sliced
-  // up at load time and mapped onto the geometry we already have.
+  // 'classic' is the painted board built above. Every other skin re-skins it
+  // from an overhead photograph of a real board, sliced up at load time and
+  // mapped onto the geometry we already have.
   //
   // The playing field goes on as ONE piece per half (felt and its six points
   // together) rather than as a texture per triangle: half the photo maps onto
@@ -226,46 +226,91 @@ class Backgammon3D {
   // triangles land precisely where _pointBase puts the checkers — no lining-up
   // by hand, and it stays true if the board's proportions are ever retuned.
   //
-  // Crop boxes are pixels of the 1241x864 export, scaled if a larger one is
-  // dropped in its place.
-  static get LEATHER_CROPS() {
-    return {
-      fieldL:  [136,  62, 437, 750],  // felt half + its 6 points, left of the bar
-      fieldR:  [667,  62, 438, 750],  // and right of it
-      bar:     [573,  62,  94, 750],
-      leather: [585, 120,  70, 580]   // plain hide, for the frame, rails and trays
-    };
+  // That makes the crop boxes the whole job, and only the HORIZONTAL ones have
+  // to be exact: `field` must span first-point-centre minus half a pitch to
+  // last-point-centre plus half a pitch, or the painted points drift off the
+  // checkers. The vertical span only stretches the triangles a few percent, so
+  // it is measured to the field's edge and left there. `material` is a patch of
+  // the board's own frame stock, taken from the bar, for the rails and trays.
+  //
+  // Boxes are pixels of an image `ref` wide, and scale with whatever is loaded.
+  static get BOARD_SKINS() {
+    // The five modern boards are the same render in different materials, so
+    // they share a grid; only the field's top and bottom edge differ.
+    const modern = (id, label, file, y, h) => ({
+      id, label, file: 'images/' + file, thumb: 'images/thumb-' + id + '.jpg', ref: 1600,
+      fieldL: [176.5, y, 569, h],
+      fieldR: [855,   y, 569, h],
+      bar:    [745.5, y, 109.5, h],
+      material: [752, 150, 96, 800]
+    });
+    return [
+      modern('leather-green', 'Green Leather',  'board-leather-green.jpg',  80, 964),
+      modern('leather-blue',  'Blue Leather',   'board-leather-blue.jpg',   80, 964),
+      modern('wood',          'Polished Wood',  'board-polished-wood.jpg',  62, 1002),
+      modern('stone',         'Polished Stone', 'board-polished-stone.jpg', 80, 996),
+      modern('steel',         'Steel',          'board-steel.jpg',          50, 1022),
+      { id: 'leather-vintage', label: 'Vintage Leather',
+        file: 'images/board-leather-vintage.jpg',
+        thumb: 'images/thumb-leather-vintage.jpg', ref: 1241,
+        fieldL: [136, 62, 437, 750],
+        fieldR: [667, 62, 437, 750],
+        bar:    [573, 62,  94, 750],
+        material: [585, 120, 70, 580] }
+    ];
   }
 
-  // Swap the board's look. Loading is lazy and asynchronous: the leather photo
-  // is fetched the first time it's asked for, and the board stays on the skin it
-  // has until the bytes arrive — so a slow connection shows a playable classic
-  // board rather than a blank one, and a failed load simply never switches.
-  setBoardSkin(name) {
-    if (name !== 'leather') { this._applySkin('classic'); return; }
-    if (this._leather) { this._applySkin('leather'); return; }
-    if (this._leatherPending) return;
-    this._leatherPending = true;
+  static skinById(id) {
+    return Backgammon3D.BOARD_SKINS.filter(s => s.id === id)[0] || null;
+  }
+
+  // The board the player last chose. Kept here rather than in the settings
+  // screen so a board built before the UI has run still comes up right.
+  static get SKIN_KEY() { return 'bgBoardSkin'; }
+  static savedSkinId() {
+    try {
+      const id = localStorage.getItem(Backgammon3D.SKIN_KEY);
+      if (id === 'classic' || Backgammon3D.skinById(id)) return id;
+    } catch (e) {}
+    return 'leather-green';
+  }
+
+  // Swap the board's look. Loading is lazy and asynchronous: a skin's photo is
+  // fetched the first time it is asked for, and the board stays on the skin it
+  // has until the bytes arrive — so a slow connection shows a playable board
+  // rather than a blank one, and a failed load simply never switches.
+  //
+  // Sliced skins are kept once built: flipping through the picker re-shows a
+  // skin instantly instead of re-cutting it, and the browser cache means only
+  // the first look at each board costs anything.
+  setBoardSkin(id) {
+    const skin = Backgammon3D.skinById(id);
+    if (!skin) { this._applySkin('classic'); return; }
+    this._skins = this._skins || {};
+    if (this._skins[id]) { this._applySkin(id); return; }
+    // Remember the latest request so a slow load that lands after the user has
+    // moved on doesn't yank the board back to a skin they already left.
+    this._skinWanted = id;
+    if (this._skinPending === id) return;
+    this._skinPending = id;
     const img = new Image();
     img.onload = () => {
-      this._leatherPending = false;
+      if (this._skinPending === id) this._skinPending = null;
       if (this.destroyed) return;
       try {
-        this._leather = this._sliceLeather(img);
-        this._applySkin('leather');
+        this._skins[id] = this._sliceSkin(img, skin);
       } catch (e) {
-        // A broken slice must not take the board down with it.
-        this._leather = null;
+        return; // a broken slice must not take the board down with it
       }
+      if (this._skinWanted === id) this._applySkin(id);
     };
-    img.onerror = () => { this._leatherPending = false; };
-    img.src = 'images/Leather_Board.png';
+    img.onerror = () => { if (this._skinPending === id) this._skinPending = null; };
+    img.src = skin.file;
   }
 
-  // Cut the photo into textures and build the two field panels that carry them.
-  _sliceLeather(img) {
-    const CROPS = Backgammon3D.LEATHER_CROPS;
-    const s = (img.naturalWidth || img.width) / 1241;
+  // Cut a photo into textures and build the field panels that carry them.
+  _sliceSkin(img, skin) {
+    const s = (img.naturalWidth || img.width) / skin.ref;
     const cut = (box, repeat) => {
       const [x, y, w, h] = box;
       const c = document.createElement('canvas');
@@ -285,16 +330,18 @@ class Backgammon3D {
       // Lambert with a white base colour lets the texture through untinted while
       // still taking the scene's lighting, so the board tips into the light the
       // same way the checkers do.
-      fieldL: this._mat(0xffffff, { map: cut(CROPS.fieldL) }),
-      fieldR: this._mat(0xffffff, { map: cut(CROPS.fieldR) }),
-      bar:    this._mat(0xffffff, { map: cut(CROPS.bar) }),
-      frame:  this._mat(0xffffff, { map: cut(CROPS.leather, [4, 1]) }),
-      // The trays are the same hide, tinted down so they read as recesses. The
-      // photo's own tray is no good as a source: its dividers and shading are
-      // baked in, and tiled across a tray they came out as a row of slats.
-      tray:   this._mat(0x8a6552, { map: cut(CROPS.leather) }),
+      fieldL: this._mat(0xffffff, { map: cut(skin.fieldL) }),
+      fieldR: this._mat(0xffffff, { map: cut(skin.fieldR) }),
+      bar:    this._mat(0xffffff, { map: cut(skin.bar) }),
+      frame:  this._mat(0xffffff, { map: cut(skin.material, [4, 1]) }),
+      // The trays are the same stock, darkened so they read as recesses. The
+      // tint is neutral grey rather than a brown: it has to sit right on steel
+      // and stone as well as on leather. The photo's own tray is no good as a
+      // source — its dividers and shading are baked in, and tiled across a tray
+      // they came out as a row of slats.
+      tray:   this._mat(0x8f8f8f, { map: cut(skin.material) }),
       // The felt slab is only ever seen edge-on once the field panels cover it.
-      feltEdge: this._mat(0x14301f),
+      feltEdge: this._mat(0x2a2a2a),
       panels: []
     };
 
@@ -316,20 +363,22 @@ class Backgammon3D {
     return L;
   }
 
-  _applySkin(name) {
-    if (name === this._boardSkin) return;
-    const leather = name === 'leather' ? this._leather : null;
-    if (name === 'leather' && !leather) return;
+  _applySkin(id) {
+    if (id === this._boardSkin) return;
+    const skin = (this._skins || {})[id] || null;
+    if (id !== 'classic' && !skin) return;
     // Classic materials are the ones the meshes were built with, so restoring
     // is just handing them back.
-    this.pointMeshes.forEach(m => { m.visible = !leather; });
-    if (this._leather) this._leather.panels.forEach(p => { p.visible = !!leather; });
+    this.pointMeshes.forEach(m => { m.visible = !skin; });
+    for (const k in this._skins || {}) {
+      this._skins[k].panels.forEach(p => { p.visible = this._skins[k] === skin; });
+    }
     const set = (mesh, mat) => { mesh.material = mat || mesh.userData.classicMat; };
-    for (const m of this.frameMeshes) set(m, leather && leather.frame);
-    for (const m of this.trayMeshes) set(m, leather && leather.tray);
-    set(this.feltMesh, leather && leather.feltEdge);
-    set(this.barMesh, leather && leather.frame);
-    this._boardSkin = name;
+    for (const m of this.frameMeshes) set(m, skin && skin.frame);
+    for (const m of this.trayMeshes) set(m, skin && skin.tray);
+    set(this.feltMesh, skin && skin.feltEdge);
+    set(this.barMesh, skin && skin.frame);
+    this._boardSkin = id;
     this.needsRender = true;
   }
 
@@ -1409,3 +1458,7 @@ class Backgammon3D {
     if (el.parentNode) el.parentNode.removeChild(el);
   }
 }
+
+// A top-level `class` is a lexical global, not a property of window, and the
+// settings screen reads the board list off window — so hand it over explicitly.
+window.Backgammon3D = Backgammon3D;
