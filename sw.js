@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v151';
+const CACHE_NAME = '5dice-cache-v152';
 
 // Precache the SAME versioned URLs index.html actually requests. Unversioned
 // entries used to coexist with runtime-cached ?v= entries, and the offline
@@ -7,7 +7,7 @@ const CACHE_NAME = '5dice-cache-v151';
 const urlsToCache = [
   './',
   './index.html',
-  './styles.css?v=48',
+  './styles.css?v=49',
   './skins.css?v=8',
   './skins.js?v=1',
   './app.js?v=56',

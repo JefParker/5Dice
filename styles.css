@@ -1665,6 +1665,28 @@ body.dice3d-active .fd-die {
 }
 
 /* ------------------------------------------------------------------ */
+/* Portrait phones: the backgammon board runs edge to edge.             */
+/* _resize() fits the board to the container's WIDTH, so every pixel    */
+/* of width is a bigger board — and the 20px the game container puts    */
+/* down each side was costing about a checker's worth of one. The       */
+/* negative margins break the board out of that padding whatever it is, */
+/* rather than hard-coding it, and the rounded corners go with it since */
+/* there is no longer a gap for them to sit in.                         */
+/* ------------------------------------------------------------------ */
+@media (orientation: portrait) and (max-width: 767px) {
+  #backgammon-container {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    border-radius: 0;
+  }
+  /* 100vw counts a classic scrollbar's width as usable; phones use overlay
+     scrollbars so it normally doesn't, but this keeps a stray one from
+     turning the extra pixels into a sideways scroll. */
+  #screen-game .game-container { overflow-x: hidden; }
+}
+
+/* ------------------------------------------------------------------ */
 /* Tap the background to sweep the chrome out of the way.               */
 /* The header and footer are the two solid bars boxing in the board.    */
 /* A tap on empty space slides them off the top and bottom edges; a     */
