@@ -52,6 +52,7 @@ class Backgammon3D {
     this.CHK_H = 0.14;
 
     this._buildBoard();
+    this._buildShadows();   // before the checkers, so they draw over their own shadow
     this._buildCheckers();
     this._buildDice();
     this._buildCube();
@@ -256,6 +257,86 @@ class Backgammon3D {
       mesh.visible = false;
       this.group.add(mesh);
       this.checkers.push(mesh);
+    }
+  }
+
+  // A soft contact shadow under every checker. Without one, a pale checker on a
+  // pale point (or a dark one on the brown points) melts into the triangle it's
+  // sitting on — the disc has no edge to catch. Real shadow maps would cost a
+  // whole depth pass per frame on phones for one small effect, so these are
+  // fake: a flat, radially-faded disc laid just above the felt, sized so its
+  // soft edge peeks out past the checker's rim. It also doubles as the height
+  // cue while you drag — the blob grows and fades as the checker lifts.
+  _buildShadows() {
+    const N = 128;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const ctx = cv.getContext('2d');
+    // Opaque core out to the checker's own radius, then a short fade. Anything
+    // softer just greys the point; anything harder reads as a second checker.
+    const grad = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    grad.addColorStop(0, 'rgba(0,0,0,1)');
+    grad.addColorStop(0.68, 'rgba(0,0,0,0.92)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, N, N);
+    const tex = new THREE.CanvasTexture(cv);
+
+    const S = this.CHK_R * 1.34 * 2; // a little wider than the checker
+    const geo = new THREE.PlaneGeometry(S, S);
+    this.shadowMeshes = [];
+    for (let i = 0; i < 30; i++) {
+      // One material per shadow: opacity is animated per checker with height.
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex, transparent: true, opacity: 0.36,
+        depthWrite: false, color: 0x000000
+      });
+      const m = new THREE.Mesh(geo, mat);
+      m.rotation.x = -Math.PI / 2;
+      m.visible = false;
+      m.renderOrder = -1; // under the checkers, over the points
+      this.group.add(m);
+      this.shadowMeshes.push(m);
+    }
+  }
+
+  // Where the shadow for checker `c` should lie. Points and felt are effectively
+  // flat at y≈0; the bar is a raised block. A checker that's in the air (dragged
+  // or mid-hop) drops its shadow on the felt, not on wherever it started.
+  _shadowGroundY(c) {
+    if (c.userData.zone !== 'bar') return 0.012;
+    if (this.drag && this.drag.mesh === c) return 0.012;
+    if (this.moveAnims && this.moveAnims.some(a => a.mesh === c)) return 0.012;
+    return 0.312; // just clear of the bar's top face
+  }
+
+  // Park each shadow under its checker. Called once per rendered frame, so it
+  // covers state repaints, hops and drags alike without any of them knowing.
+  _syncShadows() {
+    if (!this.shadowMeshes) return;
+    // Stacked checkers (the 6th onwards on a point) sit exactly on top of the
+    // one below, and two blobs in the same spot blend into a black disc — so
+    // only the bottom of a pile gets a shadow. Checkers come in bottom-first.
+    const taken = new Set();
+    for (let i = 0; i < this.checkers.length; i++) {
+      const c = this.checkers[i], s = this.shadowMeshes[i];
+      // Borne-off checkers stand on edge, packed tight in the tray: shadows
+      // there are a smear, and nothing needs picking out of a finished pile.
+      if (!c.visible || c.userData.zone === 'off') { s.visible = false; continue; }
+      const key = Math.round(c.position.x * 50) + ':' + Math.round(c.position.z * 50);
+      if (taken.has(key)) { s.visible = false; continue; }
+      taken.add(key);
+
+      const ground = this._shadowGroundY(c);
+      const h = Math.max(0, c.position.y - ground);
+      // Offset away from the sun (6, 18, 8), so the shadow leans the same way
+      // the board's own lighting does, and further the higher the checker is.
+      const lift = Math.min(0.8, h + this.CHK_H / 2);
+      s.position.set(c.position.x - lift * 0.33, ground, c.position.z - lift * 0.44);
+      const g = 1 + lift * 0.30;
+      s.scale.set(g, g, 1);
+      s.material.opacity = 0.38 * (1 - lift * 0.55);
+      s.visible = true;
     }
   }
 
@@ -1162,6 +1243,7 @@ class Backgammon3D {
     }
 
     if (busy || this.needsRender) {
+      this._syncShadows();
       this.renderer.render(this.scene, this.camera);
       this.needsRender = false;
     }
