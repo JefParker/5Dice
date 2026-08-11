@@ -14,7 +14,8 @@
 // The black seat renders the mirror image of that (see _pointBase), so both
 // players see their own home board and bear-off tray at the bottom right.
 //   Bear-off trays sit past the right rail: white's bottom, black's top.
-// In portrait containers the whole board group rotates 90° to fit.
+// In portrait containers the board keeps its classic orientation and is
+// fitted to the screen width (it renders smaller rather than rotating).
 
 class Backgammon3D {
   constructor(container, callbacks = {}) {
@@ -817,7 +818,10 @@ class Backgammon3D {
   }
 
   _applyBoardRotation() {
-    this.group.rotation.y = this.portrait ? Math.PI / 2 : 0;
+    // The board used to rotate 90° in portrait to fill the screen, but a
+    // sideways board reads wrong — keep the classic orientation everywhere
+    // and let _resize() fit it to the width instead.
+    this.group.rotation.y = 0;
   }
 
   showSelectRing(zone) {
@@ -977,31 +981,29 @@ class Backgammon3D {
     this.camera.aspect = w / h;
     this.portrait = h > w * 1.05;
     this._applyBoardRotation();
-    // Fit: pull the camera back until the board's long axis fits the view.
+    // Fit: pull the camera back until the board's long axis fits the view
+    // width. Same math in portrait — the board stays in its classic
+    // orientation and simply renders smaller on a narrow screen.
     const long = (this.FELT_HALF_X + this.TRAY_W + 1) * 2;
     const fov = this.camera.fov * Math.PI / 180;
-    const fitAxis = this.portrait ? h / w : 1; // rotated board: long axis maps to vertical
-    let dist;
-    if (!this.portrait) {
-      const hFov = 2 * Math.atan(Math.tan(fov / 2) * this.camera.aspect);
-      dist = (long / 2) / Math.tan(hFov / 2) * 1.12;
-    } else {
-      dist = (long / 2) / Math.tan(fov / 2) * 1.18;
-    }
+    const hFov = 2 * Math.atan(Math.tan(fov / 2) * this.camera.aspect);
+    let dist = (long / 2) / Math.tan(hFov / 2) * 1.03;
     dist = Math.max(dist, 13);
     this._camSeated.pos.set(0, dist * 0.86, dist * 0.62);
-    this._camSeated.look.set(0, 0, this.portrait ? 0 : 0.4);
+    this._camSeated.look.set(0, 0, 0.4);
 
     // Overhead pose. Straight down means nothing is foreshortened any more, so
     // the short axis of the board suddenly needs its full height on screen —
     // fit BOTH axes here rather than reusing the seated distance, or the top
     // and bottom rails get cropped as the board tips up.
+    // No margin here: the board runs edge to edge, using every pixel of the
+    // container (the wooden frame IS the border — no purple gap around it).
     const halfLong = long / 2;
-    const halfShort = this.DEPTH_HALF + 0.6;
-    const halfV = this.portrait ? halfLong : halfShort;  // screen vertical
-    const halfH = this.portrait ? halfShort : halfLong;  // screen horizontal
+    const halfShort = this.DEPTH_HALF + 0.5;
+    const halfV = halfShort;  // screen vertical
+    const halfH = halfLong;   // screen horizontal
     const hFovFlat = 2 * Math.atan(Math.tan(fov / 2) * this.camera.aspect);
-    const flatDist = Math.max(halfV / Math.tan(fov / 2), halfH / Math.tan(hFovFlat / 2)) * 1.08;
+    const flatDist = Math.max(halfV / Math.tan(fov / 2), halfH / Math.tan(hFovFlat / 2));
     this._camFlat.pos.set(0, Math.max(flatDist, 13), 0);
     this._camFlat.look.set(0, 0, 0);
 
