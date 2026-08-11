@@ -1183,6 +1183,16 @@ body.dice3d-active .fd-die {
   font-weight: bold;
 }
 
+/* Commit is irreversible — it locks the category and ends the turn — so it
+   carries the weight of a filled button, and Cancel reads as a quiet outline.
+   Sitting on the right is the convention but a weak signal on its own: at a
+   glance in the middle of a turn it's the colour that tells them apart. */
+.fd-commit-overlay .fd-cancel {
+  background: transparent;
+  color: #dddddd;
+  border: 2px solid #8a8a8a;
+}
+
 
 @keyframes wobble {
   0% { transform: translate(0, 0) rotate(0deg); }

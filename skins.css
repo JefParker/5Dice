@@ -438,6 +438,13 @@ html[data-skin],
   backdrop-filter: var(--sk-blur);
 }
 
+/* Commit already picks up [data-skin] .btn-success; the quiet one has to
+   follow the skin's own muted text and border rather than staying grey. */
+[data-skin] .fd-commit-overlay .fd-cancel {
+  color: var(--sk-text-muted);
+  border-color: var(--sk-border-strong);
+}
+
 [data-skin] #fd-scorecard {
   color: var(--sk-text);
   background: var(--sk-bg-2);

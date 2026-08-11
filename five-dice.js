@@ -436,15 +436,15 @@ document.querySelectorAll('.fd-cat').forEach(catEl => {
     commitDiv.innerHTML = `
       <div>Score ${score} in ${cat}?</div>
       <div class="fd-commit-buttons">
-        <button id="btn-fd-undo">Undo</button>
-        <button id="btn-fd-commit">Commit</button>
+        <button id="btn-fd-cancel" class="fd-cancel">Cancel</button>
+        <button id="btn-fd-commit" class="btn-success">Commit</button>
       </div>
     `;
     document.getElementById('five-dice-container').appendChild(commitDiv);
 
     // Bind against THIS overlay's buttons (not getElementById, which returns the
     // first match in the document).
-    commitDiv.querySelector('#btn-fd-undo').onclick = () => {
+    commitDiv.querySelector('#btn-fd-cancel').onclick = () => {
       commitDiv.remove();
     };
 
