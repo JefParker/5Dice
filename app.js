@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 56;
+window.__appJsVersion = 57;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -229,6 +229,226 @@ try {
   };
   tabChannel.postMessage({ type: 'hello', peerId: myPeerId });
 } catch (e) { /* BroadcastChannel unsupported — skip the warning */ }
+
+
+// --- TURN ALERTS (Web Push) ---
+// A phone that has flipped to another app can't hear Firebase any more, so
+// the player who just finished a turn asks push-worker/ (a Cloudflare Worker
+// on 5dice.app/push) to send the next player a real push notification. Each
+// opted-in device stores its subscription at pushSubs/{uuid}/{peerId}; the
+// sender reads those, skips any device that is on screen right now, and posts
+// the rest to the Worker. On iPhone this only works from the Home Screen app
+// (Safari tabs can't receive push) — the toggle explains that when it can't
+// subscribe. Default: OFF, and only ever turned on by the player.
+const PUSH_WORKER_URL = 'https://5dice.app/push/notify';
+const VAPID_PUBLIC_KEY = 'BNCtqOPttiLbgOsHugLiVSNhBNedc84L_1xnjzBSROPe56ZvePgR2mbg8Hf0RbzWZX2AdG2WU3WJlgfgmrba948';
+// A device counts as "looking at the game" if it said so this recently. The
+// heartbeat below refreshes every 45s while visible, so a stuck flag (app
+// killed without a pagehide) can only mute reminders for about a minute.
+const PUSH_ACTIVE_FRESH_MS = 75000;
+const PUSH_HEARTBEAT_MS = 45000;
+
+let turnAlertsEnabled = (localStorage.getItem('turnAlerts') === 'true');
+let pushHeartbeat = null;
+
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+// iOS Safari only exposes PushManager inside a Home Screen web app, so
+// "unsupported on an iPhone" nearly always means "not installed yet".
+function pushUnsupportedReason() {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (ios && !standalone) return 'On iPhone, turn alerts only work from the Home Screen app: tap Share → Add to Home Screen, then turn this on there.';
+  return "This browser can't receive push notifications.";
+}
+
+function urlBase64ToUint8Array(base64) {
+  const padding = '='.repeat((4 - base64.length % 4) % 4);
+  const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+function subToRecord(sub) {
+  const j = sub.toJSON ? sub.toJSON() : sub;
+  return { endpoint: j.endpoint, p256dh: j.keys && j.keys.p256dh, auth: j.keys && j.keys.auth };
+}
+
+async function backendReady() {
+  if (window.firebaseGameBackend) return window.firebaseGameBackend;
+  await new Promise(resolve => window.addEventListener('firebaseGameReady', resolve, { once: true }));
+  return window.firebaseGameBackend;
+}
+
+// Subscribe (or re-use the existing subscription) and record it under my
+// uuid + this device's peerId. Returns true on success.
+async function subscribeTurnAlerts() {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+  const backend = await backendReady();
+  const rec = subToRecord(sub);
+  rec.active = document.visibilityState === 'visible';
+  await backend.pushSubSave(myUuid, myPeerId, rec);
+  // Player ID sync swaps the uuid and reloads; tidy the entry filed under the
+  // old one so nobody keeps pinging a stale key.
+  const prevUuid = localStorage.getItem('turnAlertsUuid');
+  if (prevUuid && prevUuid !== myUuid) backend.pushSubRemove(prevUuid, myPeerId).catch(() => {});
+  localStorage.setItem('turnAlertsUuid', myUuid);
+  startPushHeartbeat();
+  return true;
+}
+
+async function unsubscribeTurnAlerts() {
+  stopPushHeartbeat();
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe();
+  } catch (e) { /* nothing to undo */ }
+  try {
+    const backend = await backendReady();
+    await backend.pushSubRemove(myUuid, myPeerId);
+  } catch (e) { /* offline — the sender prunes dead entries on its own */ }
+}
+
+// The Settings switch. Permission has to be asked from a tap, which is why
+// this is the only place that calls Notification.requestPermission().
+async function setTurnAlertsEnabled(on) {
+  const toggle = document.getElementById('turn-alerts-toggle');
+  const reflect = () => { if (toggle) toggle.checked = turnAlertsEnabled; };
+
+  if (!on) {
+    turnAlertsEnabled = false;
+    localStorage.setItem('turnAlerts', 'false');
+    reflect();
+    await unsubscribeTurnAlerts();
+    return;
+  }
+
+  if (!pushSupported()) {
+    showToast(pushUnsupportedReason(), '#c0392b');
+    reflect();
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      showToast('Notifications are blocked for 5 Dice. Allow them in your phone\'s settings to use turn alerts.', '#c0392b');
+      reflect();
+      return;
+    }
+    await subscribeTurnAlerts();
+    turnAlertsEnabled = true;
+    localStorage.setItem('turnAlerts', 'true');
+    reflect();
+    showToast("Turn alerts on — you'll get a nudge when it's your turn.", '#27ae60');
+  } catch (err) {
+    console.error('Turn alerts subscribe failed:', err);
+    showToast("Couldn't turn on alerts: " + (err && err.message ? err.message : err), '#c0392b');
+    turnAlertsEnabled = false;
+    localStorage.setItem('turnAlerts', 'false');
+    reflect();
+  }
+}
+
+// Keep the stored subscription fresh on every launch (push services rotate
+// endpoints, and the uuid may have changed). Quietly switch off if the person
+// has since revoked permission in their phone's settings.
+async function syncTurnAlertsOnLoad() {
+  if (!turnAlertsEnabled) return;
+  if (!pushSupported() || Notification.permission !== 'granted') {
+    turnAlertsEnabled = false;
+    localStorage.setItem('turnAlerts', 'false');
+    return;
+  }
+  try { await subscribeTurnAlerts(); }
+  catch (err) { console.warn('Turn alerts re-sync failed:', err); }
+}
+
+// --- on-screen presence for the sender's "is she already looking?" check ---
+function pushSetActive(active) {
+  if (!turnAlertsEnabled || !window.firebaseGameBackend) return;
+  window.firebaseGameBackend.pushSubSetActive(myUuid, myPeerId, active);
+}
+function startPushHeartbeat() {
+  stopPushHeartbeat();
+  pushSetActive(document.visibilityState === 'visible');
+  pushHeartbeat = setInterval(() => {
+    if (document.visibilityState === 'visible') pushSetActive(true);
+  }, PUSH_HEARTBEAT_MS);
+}
+function stopPushHeartbeat() {
+  if (pushHeartbeat) clearInterval(pushHeartbeat);
+  pushHeartbeat = null;
+}
+document.addEventListener('visibilitychange', () => pushSetActive(document.visibilityState === 'visible'));
+// iOS fires pagehide (not always visibilitychange) when the app is swiped away.
+window.addEventListener('pagehide', () => pushSetActive(false));
+window.addEventListener('pageshow', () => pushSetActive(true));
+
+// --- sender side ---
+// Called from updateGameBackground(), which every game runs right after it
+// sets window.currentTurnPlayerId. Only the device that HELD the turn sees the
+// me → someone-else transition, so exactly one device sends per turn change.
+let lastTurnHolder = null;
+let lastTurnNotified = { key: null, at: 0 };
+
+function maybeNotifyTurnChange() {
+  const next = window.currentTurnPlayerId || null;
+  const prev = lastTurnHolder;
+  lastTurnHolder = next;
+  if (!currentRoomId || !window.gameStarted) return;
+  if (prev !== myPeerId || !next || next === myPeerId || next === AI_PLAYER_ID) return;
+  // 5 Dice recomputes the turn from scores, and a state echo can bounce it
+  // through me and back within the same second — don't buzz twice.
+  const key = currentRoomId + ':' + next;
+  const now = Date.now();
+  if (lastTurnNotified.key === key && now - lastTurnNotified.at < 15000) return;
+  lastTurnNotified = { key, at: now };
+  sendTurnReminder(next).catch(err => console.warn('Turn reminder failed:', err));
+}
+
+async function sendTurnReminder(peerId) {
+  const backend = window.firebaseGameBackend;
+  if (!backend || !backend.pushSubsFor) return;
+  const player = roomPlayerDetails.find(p => p.peerId === peerId);
+  if (!player || !player.uuid) return;
+  const subs = await backend.pushSubsFor(player.uuid);
+  const gameName = getCurrentGameType();
+  const roomId = currentRoomId;
+  const message = {
+    title: `Your turn in ${gameName}`,
+    body: `${myName || 'Your opponent'} just played. Tap to jump back in.`,
+    url: `./?join=${encodeURIComponent(roomId)}`,
+    tag: `turn-${roomId}`
+  };
+  const now = Date.now();
+  await Promise.all(Object.entries(subs).map(async ([devicePeerId, sub]) => {
+    if (!sub || !sub.endpoint) return;
+    // Already looking at the game on that device — a banner would just be noise.
+    if (sub.active && (now - (sub.activeAt || 0)) < PUSH_ACTIVE_FRESH_MS) return;
+    try {
+      const res = await fetch(PUSH_WORKER_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sub: { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, ...message })
+      });
+      // The push service says that device unsubscribed — stop trying it.
+      if (res.status === 410) backend.pushSubRemove(player.uuid, devicePeerId).catch(() => {});
+      else if (!res.ok) console.warn('Turn reminder rejected:', res.status, await res.text().catch(() => ''));
+    } catch (err) {
+      console.warn('Turn reminder request failed:', err);
+    }
+  }));
+}
 
 // --- WAKE LOCK LOGIC ---
 let wakeLock = null;
@@ -860,6 +1080,9 @@ const openSettings = () => {
   const autoRollToggle = document.getElementById('auto-roll-toggle');
   if (autoRollToggle) autoRollToggle.checked = autoRollEnabled;
 
+  const turnAlertsToggle = document.getElementById('turn-alerts-toggle');
+  if (turnAlertsToggle) turnAlertsToggle.checked = turnAlertsEnabled;
+
   syncSkinPicker();
 
   if (document.getElementById('settings-uuid')) {
@@ -967,6 +1190,13 @@ if (autoRollToggleEl) {
   autoRollToggleEl.checked = autoRollEnabled;
   autoRollToggleEl.addEventListener('change', (e) => setAutoRollEnabled(e.target.checked));
 }
+
+const turnAlertsToggleEl = document.getElementById('turn-alerts-toggle');
+if (turnAlertsToggleEl) {
+  turnAlertsToggleEl.checked = turnAlertsEnabled;
+  turnAlertsToggleEl.addEventListener('change', (e) => setTurnAlertsEnabled(e.target.checked));
+}
+window.addEventListener('firebaseGameReady', syncTurnAlertsOnLoad, { once: true });
 
 // --- ROOM CREATION & LOBBY RENDER ---
 
@@ -1682,6 +1912,7 @@ window.recordRoomTie = function(playerId) {
 };
 
 function updateGameBackground() {
+  maybeNotifyTurnChange();
   const gameScreen = document.getElementById('screen-game');
   if (!gameScreen) return;
 

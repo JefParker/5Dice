@@ -1,0 +1,16 @@
+{
+  "name": "5dice-push",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Worker that sends 'your turn' Web Push notifications for 5Dice.app",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.132.0"
+  },
+  "dependencies": {
+    "@block65/webcrypto-web-push": "^2.0.0"
+  }
+}

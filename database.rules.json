@@ -357,6 +357,46 @@
       }
     },
 
+    // Turn-reminder push subscriptions, one per device, keyed by the player's
+    // uuid (stable across their devices) then the device's peerId. Written by
+    // the device that opted in; read by an opponent's device when it ends its
+    // turn, which posts the subscription to the push Worker (push-worker/).
+    // `active` + `activeAt` say whether the app is open on screen right now,
+    // so nobody gets buzzed for a turn they're already looking at.
+    "pushSubs": {
+      "$uuid": {
+        ".read": "auth != null",
+        "$peerId": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['endpoint', 'p256dh', 'auth'])",
+          "endpoint": {
+            ".validate": "newData.isString() && newData.val().beginsWith('https://') && newData.val().length <= 2048"
+          },
+          "p256dh": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "auth": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "active": {
+            ".validate": "newData.isBoolean()"
+          },
+          "activeAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "updated": {
+            ".validate": "newData.isNumber()"
+          },
+          "ua": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+
     // Voice chat (WebRTC mesh): membership + per-peer signaling inboxes.
     "voice": {
       "$roomId": {

@@ -125,6 +125,19 @@
           </div>
         </div>
 
+        <div class="settings-section" style="margin-top: 20px;">
+          <div class="hints-toggle-row">
+            <div>
+              <label for="turn-alerts-toggle">Turn Alerts</label>
+              <p class="small-hint" style="text-align: left; margin: 4px 0 0;">Get a notification on this device when it's your turn and you've switched to something else. On iPhone this works from the Home Screen app only (Share → Add to Home Screen).</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="turn-alerts-toggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
         <div id="settings-player-id-section" class="settings-section" style="margin-top: 24px;">
           <label>Player ID</label>
           <p class="small-hint" style="text-align: left; margin-bottom: 8px;">1. Copy ID from your other device.<br>2. Paste it here and tap Update Player ID.</p>
@@ -746,7 +759,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script type="module" src="firebase-game-backend.js?v=31"></script>
+  <script type="module" src="firebase-game-backend.js?v=32"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script src="dice3d.js?v=24"></script>
@@ -757,7 +770,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <!-- Before app.js: the dashboard login wiring reads window.dashPasskey. -->
   <script src="passkey.js?v=1"></script>
-  <script src="app.js?v=56"></script>
+  <script src="app.js?v=57"></script>
   <script src="voice-chat.js?v=1"></script>
 
   <!-- Stale-cache tripwire.

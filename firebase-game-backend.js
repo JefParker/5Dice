@@ -645,6 +645,54 @@ window.firebaseGameBackend = {
     return gameEventsUnsubscribe;
   },
 
+  // --- TURN-REMINDER PUSH SUBSCRIPTIONS ---
+  // pushSubs/{uuid}/{peerId}: one Web Push subscription per opted-in device,
+  // grouped by the player's uuid so an opponent can find every device of the
+  // person whose turn it now is. `active`/`activeAt` track whether the app is
+  // on screen there, refreshed by app.js as visibility changes.
+
+  pushSubSave: async (uuid, peerId, sub) => {
+    if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
+    if (!uuid || !peerId || !sub || !sub.endpoint) return;
+    const sRef = ref(db, `pushSubs/${uuid}/${peerId}`);
+    // If the socket drops (phone suspended, app killed) the device is by
+    // definition not looking at the game, so let the reminders through.
+    await onDisconnect(sRef).update({ active: false });
+    await set(sRef, {
+      endpoint: sub.endpoint,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+      active: !!sub.active,
+      activeAt: Date.now(),
+      updated: Date.now(),
+      ua: (navigator.userAgent || '').slice(0, 200)
+    });
+  },
+
+  pushSubSetActive: async (uuid, peerId, active) => {
+    if (!(await requireAuth())) return;
+    if (!uuid || !peerId) return;
+    await update(ref(db, `pushSubs/${uuid}/${peerId}`), {
+      active: !!active,
+      activeAt: Date.now()
+    }).catch(() => {});
+  },
+
+  pushSubRemove: async (uuid, peerId) => {
+    if (!(await requireAuth())) return;
+    if (!uuid || !peerId) return;
+    await onDisconnect(ref(db, `pushSubs/${uuid}/${peerId}`)).cancel().catch(() => {});
+    await remove(ref(db, `pushSubs/${uuid}/${peerId}`)).catch(() => {});
+  },
+
+  // All subscriptions for a player, as { peerId: {...} } — or {} if none.
+  pushSubsFor: async (uuid) => {
+    if (!(await requireAuth())) return {};
+    if (!uuid) return {};
+    const snap = await get(ref(db, `pushSubs/${uuid}`));
+    return snap.val() || {};
+  },
+
   // --- VOICE CHAT SIGNALING (WebRTC mesh) ---
   // Everything lives under voice/{roomId}: `members/{peerId}` advertises who is
   // in the voice mesh and their mic/speaker state (with onDisconnect cleanup),

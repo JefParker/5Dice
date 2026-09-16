@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "5dice-push",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "observability": { "enabled": true },
+  // Served from the app's own origin so app.js needs no CORS and no
+  // workers.dev hostname: https://5dice.app/push/notify
+  "routes": [{ "pattern": "5dice.app/push/*", "zone_name": "5dice.app" }],
+  // VAPID_PUBLIC_KEY is public by nature (it also ships in app.js); the
+  // matching VAPID_PRIVATE_KEY is a secret: `wrangler secret put VAPID_PRIVATE_KEY`.
+  "vars": {
+    "VAPID_SUBJECT": "mailto:jeffreyrobertparker@gmail.com",
+    "VAPID_PUBLIC_KEY": "BNCtqOPttiLbgOsHugLiVSNhBNedc84L_1xnjzBSROPe56ZvePgR2mbg8Hf0RbzWZX2AdG2WU3WJlgfgmrba948"
+  }
+}

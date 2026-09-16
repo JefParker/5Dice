@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v152';
+const CACHE_NAME = '5dice-cache-v153';
 
 // Precache the SAME versioned URLs index.html actually requests. Unversioned
 // entries used to coexist with runtime-cached ?v= entries, and the offline
@@ -10,7 +10,7 @@ const urlsToCache = [
   './styles.css?v=49',
   './skins.css?v=8',
   './skins.js?v=1',
-  './app.js?v=56',
+  './app.js?v=57',
   './passkey.js?v=1',
   './voice-chat.js?v=1',
   './five-dice.js?v=43',
@@ -18,7 +18,7 @@ const urlsToCache = [
   './backgammon3d.js?v=20',
   './bg-game.js?v=21',
   './dice3d.js?v=24',
-  './firebase-game-backend.js?v=31',
+  './firebase-game-backend.js?v=32',
   './firebase-config.js',
   './manifest.json',
   './images/icon-192x192.png',
@@ -98,5 +98,40 @@ self.addEventListener('activate', event => {
         })
       );
     }).then(() => self.clients.claim())
+  );
+});
+
+// --- TURN REMINDERS (Web Push) ---
+// push-worker/ sends { title, body, url, tag } encrypted for this device once
+// an opponent finishes their turn. Always show something: iOS revokes push
+// permission after a few pushes that produce no notification, so "skip it if
+// the app is on screen" is decided by the SENDER (pushSubs active flag), not
+// here. `tag` collapses repeats for the same room into one banner.
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { /* plain text or empty */ }
+  const title = data.title || 'Your turn';
+  const options = {
+    body: data.body || "It's your turn to play.",
+    tag: data.tag || 'turn',
+    renotify: true,
+    icon: './images/icon-192x192.png',
+    badge: './images/icon-192x192.png',
+    data: { url: data.url || './' }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Tapping the banner: bring the open app forward if there is one (it is
+// already in the room and live), otherwise open it on the room's join link.
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || './', self.location.href).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const existing = clientList.find(c => 'focus' in c);
+      if (existing) return existing.focus();
+      return self.clients.openWindow(target);
+    })
   );
 });
