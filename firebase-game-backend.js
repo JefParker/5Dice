@@ -655,9 +655,6 @@ window.firebaseGameBackend = {
     if (!(await requireAuth())) throw (authError || new Error('Not authenticated'));
     if (!uuid || !peerId || !sub || !sub.endpoint) return;
     const sRef = ref(db, `pushSubs/${uuid}/${peerId}`);
-    // If the socket drops (phone suspended, app killed) the device is by
-    // definition not looking at the game, so let the reminders through.
-    await onDisconnect(sRef).update({ active: false });
     await set(sRef, {
       endpoint: sub.endpoint,
       p256dh: sub.p256dh,
@@ -667,6 +664,13 @@ window.firebaseGameBackend = {
       updated: Date.now(),
       ua: (navigator.userAgent || '').slice(0, 200)
     });
+    // If the socket drops (phone suspended, app killed) the device is by
+    // definition not looking at the game, so let the reminders through.
+    // Armed AFTER the set: Firebase validates an onDisconnect write when it is
+    // armed, and `{active:false}` on a node that doesn't exist yet fails the
+    // hasChildren rule (PERMISSION_DENIED). Best-effort — the sender's 75s
+    // freshness window covers a device whose onDisconnect never armed.
+    await onDisconnect(sRef).update({ active: false }).catch(() => {});
   },
 
   pushSubSetActive: async (uuid, peerId, active) => {
