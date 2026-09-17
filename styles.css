@@ -388,6 +388,12 @@ label {
   gap: 12px;
 }
 
+/* On the setup screen the buttons follow the last option directly — dialogs
+   space their own, so this only lifts them off the form. */
+#screen-setup .action-group {
+  margin-top: 26px;
+}
+
 /* Screen C (Game) */
 .game-container {
   flex: 1;
