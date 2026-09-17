@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 57;
+window.__appJsVersion = 58;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -547,7 +547,7 @@ function updateDiagnostics() {
   if (dot && txt) {
     if (isConnected) {
       dot.className = 'status-dot connected';
-      txt.innerText = `LOBBY: ONLINE (FIREBASE)`;
+      txt.innerText = `LOBBY: ONLINE`;
     } else {
       dot.className = 'status-dot connecting';
       txt.innerText = `LOBBY: CONNECTING...`;
@@ -563,7 +563,7 @@ function updateDiagnostics() {
     gamePlayerCount.innerText = `Players: ${pCount}`;
     if (isConnected) {
       gameDot.className = 'status-dot connected';
-      gameTxt.innerText = `GAME: ONLINE (FIREBASE)`;
+      gameTxt.innerText = `GAME: ONLINE`;
     } else {
       gameDot.className = 'status-dot connecting';
       gameTxt.innerText = `GAME: CONNECTING...`;
