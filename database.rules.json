@@ -165,6 +165,12 @@
           "bgCube": {
             ".validate": "newData.isBoolean()"
           },
+          // Set on rooms that are kept out of the lobby list. Enforcement is
+          // client-side (every signed-in client can read lobby/rooms), so this
+          // hides a room, it does not secure it.
+          "private": {
+            ".validate": "newData.isBoolean()"
+          },
           "lastActive": {
             ".validate": "newData.isNumber()"
           },

@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 58;
+window.__appJsVersion = 59;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -1200,7 +1200,29 @@ window.addEventListener('firebaseGameReady', syncTurnAlertsOnLoad, { once: true 
 
 // --- ROOM CREATION & LOBBY RENDER ---
 
+// --- PRIVATE ROOM SETTING ---
+// A private room is left out of everybody else's lobby list; the invite link is
+// the only way in. The switch on the setup screen remembers how it was last
+// left, because whoever plays privately tends to keep playing privately.
+// Default: OFF.
+function privateRoomPref() {
+  return localStorage.getItem('privateRoom') === 'true';
+}
+
+function setPrivateRoomPref(on) {
+  localStorage.setItem('privateRoom', on ? 'true' : 'false');
+}
+
+// Set below, once the setup screen's selects are wired up. Shows/hides the
+// option rows that only apply to some games or player counts.
+let refreshSetupOptions = () => {};
+
 document.getElementById('btn-create-new').addEventListener('click', () => {
+  const privToggle = document.getElementById('private-room-toggle');
+  if (privToggle) privToggle.checked = privateRoomPref();
+  // The setup screen keeps whatever was chosen last time, so re-run the
+  // show/hide pass on the way in rather than only when a select changes.
+  refreshSetupOptions();
   showScreen('screen-setup');
   setTimeout(() => {
     const input = document.getElementById('room-name-input');
@@ -1208,20 +1230,29 @@ document.getElementById('btn-create-new').addEventListener('click', () => {
   }, 50);
 });
 
+const privateRoomToggleEl = document.getElementById('private-room-toggle');
+if (privateRoomToggleEl) {
+  privateRoomToggleEl.addEventListener('change', (e) => setPrivateRoomPref(e.target.checked));
+}
+
 document.getElementById('btn-cancel-setup').addEventListener('click', () => {
   showScreen('screen-lobby');
 });
 
 const gameTypeSelect = document.getElementById('game-type-select');
 if (gameTypeSelect) {
-  const refreshSetupOptions = () => {
+  refreshSetupOptions = () => {
     const gameType = gameTypeSelect.value;
     const playerCount = document.getElementById('player-count').value;
     const bgOpts = document.getElementById('bg-options');
     const diffWrap = document.getElementById('bg-difficulty-wrap');
+    const privWrap = document.getElementById('private-room-wrap');
     if (bgOpts) bgOpts.classList.toggle('hidden', gameType !== 'Backgammon');
     // Difficulty only matters against the computer.
     if (diffWrap) diffWrap.classList.toggle('hidden', gameType !== 'Backgammon' || playerCount !== '1');
+    // A solo room is already invisible to everyone else, so there is nothing for
+    // the private switch to do.
+    if (privWrap) privWrap.classList.toggle('hidden', playerCount === '1');
   };
 
   gameTypeSelect.addEventListener('change', (e) => {
@@ -1279,6 +1310,11 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
   // dice, so backgammon turns can auto-roll instead of waiting for a tap.
   const bgCube = gameType === 'Backgammon' && bgCubeSel ? !!bgCubeSel.checked : false;
 
+  // Solo rooms are nobody else's business already — don't mark them private, so
+  // the flag never outlives a room it did nothing for.
+  const privToggle = document.getElementById('private-room-toggle');
+  const isPrivate = maxPlayers > 1 && !!(privToggle ? privToggle.checked : privateRoomPref());
+
   showLoading('Creating Room...');
 
   const roomId = Math.random().toString(36).substr(2, 9);
@@ -1300,6 +1336,7 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
     maxPlayers: maxPlayers,
     lastActive: Date.now()
   };
+  if (isPrivate) room.private = true;
   if (gameType === 'Backgammon') {
     room.bgTarget = bgTarget;
     room.bgCube = bgCube;
@@ -1409,6 +1446,11 @@ function renderRooms() {
     if (r.status === 'in-progress' && !isPlayer) {
       return; // Hide in-progress games if not a player
     }
+    // A private room only reaches people who were sent its link. Its own players
+    // keep seeing the card so they can get back in from the lobby.
+    if (r.private && !isPlayer) {
+      return;
+    }
     
     validRoomCount++;
     const isReturning = r.status === 'in-progress' && isPlayer;
@@ -1449,7 +1491,7 @@ function renderRooms() {
     div.dataset.roomId = r.id;
     div.innerHTML = `
       ${deleteBtnHtml}
-      <h3>${escapeHtml(r.name)} - ${escapeHtml(displayGameType)}</h3>
+      <h3>${r.private ? '🔒 ' : ''}${escapeHtml(r.name)} - ${escapeHtml(displayGameType)}</h3>
       <p>Host: ${escapeHtml(r.hostName || 'Host')}</p>
       ${seatText}
       <button class="capsule-button small${isReturning ? ' btn-rejoin' : ''}" data-action="join" ${isFull && !isReturning ? 'disabled' : ''}>${isReturning ? 'Rejoin Game' : 'Join Game'}</button>
