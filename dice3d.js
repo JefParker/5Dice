@@ -231,7 +231,41 @@ class Dice3D {
     return new THREE.Quaternion().setFromEuler(rot);
   }
   
+  // Finish the roll that is in flight: park the dice on their final faces and
+  // fire its onComplete exactly once. Used by the normal settle path, by the
+  // watchdog, and when a newer roll arrives before this one has landed.
+  _finishRoll() {
+    const rd = this.rollData;
+    if (!rd) return;
+    this.rollData = null;
+    this.rolling = false;
+    this.settling = false;
+    this.snapData = {
+      finalValues: rd.finalValues,
+      heldState: rd.heldState,
+      targetElements: rd.targetElements
+    };
+    this.snapDirty = true;
+    if (rd.onComplete) rd.onComplete();
+  }
+
   roll(finalValues, unheldIndices, targetElements, onComplete) {
+    // A roll that has not landed yet must still complete — its onComplete is
+    // what commits the opponent's dice values. Replacing rollData outright
+    // used to drop that callback whenever a burst of queued messages arrived
+    // (coming back from another app), leaving `rolling` stuck and a stale
+    // tumble writing old values over the current turn.
+    if (this.rollData) this._finishRoll();
+
+    const heldState = [0, 1, 2, 3, 4].map(i => !unheldIndices.includes(i));
+    // No rAF in a hidden tab, so the tumble could never play: land the dice
+    // straight away rather than leaving `rolling` set until the tab returns.
+    if (this.destroyed || (typeof document !== 'undefined' && document.hidden)) {
+      this.snapToState(finalValues, heldState, targetElements);
+      if (onComplete) onComplete();
+      return;
+    }
+
     this.rolling = true;
     this.settling = false;
     this.rollStartTime = performance.now();
@@ -247,8 +281,17 @@ class Dice3D {
       // Previously they were omitted, so snapData.targetElements was undefined and
       // _applySnap() threw a TypeError every frame after a roll, freezing the canvas.
       targetElements,
-      heldState: [0, 1, 2, 3, 4].map(i => !unheldIndices.includes(i))
+      heldState
     };
+
+    // Watchdog: the tumble is ~1.5s plus a 0.5s settle. rAF can stall (an
+    // occluded window, a throttled tab) without document.hidden ever flipping,
+    // and nothing else finishes the roll — so the game flow must not depend on
+    // the frame loop getting there.
+    const rd = this.rollData;
+    setTimeout(() => {
+      if (!this.destroyed && this.rollData === rd) this._finishRoll();
+    }, 3000);
     
     for (let i = 0; i < 5; i++) {
       const el = targetElements[i];
@@ -410,6 +453,16 @@ class Dice3D {
 
   destroy() {
     this.destroyed = true;
+    // A roll still in the air owes its caller an onComplete — five-dice.js
+    // unlocks the Roll button in it. Dropping it here left the button dead
+    // in every later game until a reload. Fire it before the scene goes.
+    if (this.rollData) {
+      const rd = this.rollData;
+      this.rollData = null;
+      this.rolling = false;
+      this.settling = false;
+      try { if (rd.onComplete) rd.onComplete(); } catch (e) { console.warn('Dice3D onComplete after destroy:', e); }
+    }
 
     // Remove the window listeners (using the stored bound references).
     if (this._onResize) {
@@ -522,17 +575,7 @@ class Dice3D {
       }
       
       if (t >= 1) {
-        this.rolling = false;
-        this.settling = false;
-        this.snapData = {
-          finalValues: this.rollData.finalValues,
-          heldState: this.rollData.heldState,
-          targetElements: this.rollData.targetElements
-        };
-        this.snapDirty = true;
-        if (this.rollData.onComplete) {
-          this.rollData.onComplete();
-        }
+        this._finishRoll();
       }
     }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v158';
+const CACHE_NAME = '5dice-cache-v159';
 
 // Precache the SAME versioned URLs index.html actually requests. Unversioned
 // entries used to coexist with runtime-cached ?v= entries, and the offline
@@ -10,14 +10,14 @@ const urlsToCache = [
   './styles.css?v=50',
   './skins.css?v=8',
   './skins.js?v=1',
-  './app.js?v=59',
+  './app.js?v=60',
   './passkey.js?v=1',
-  './voice-chat.js?v=1',
-  './five-dice.js?v=43',
+  './voice-chat.js?v=2',
+  './five-dice.js?v=44',
   './backgammon.js?v=2',
-  './backgammon3d.js?v=20',
-  './bg-game.js?v=21',
-  './dice3d.js?v=24',
+  './backgammon3d.js?v=21',
+  './bg-game.js?v=22',
+  './dice3d.js?v=25',
   './firebase-game-backend.js?v=33',
   './firebase-config.js',
   './manifest.json',
@@ -86,12 +86,18 @@ self.addEventListener('fetch', event => {
   );
 });
 
+// CacheStorage is shared by every service worker on the origin, and the Score
+// Sheet (/Score/) runs its own. Deleting "everything that isn't mine" here
+// used to wipe Score's precache, and Score's activate wiped this one — so
+// visiting the Score Sheet silently broke the main app offline, and vice
+// versa. Each worker now only retires its OWN older versions; Score's caches
+// are all prefixed 'score-'.
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== CACHE_NAME && !cacheName.startsWith('score-')) {
             console.log('SW deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }

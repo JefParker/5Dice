@@ -346,6 +346,12 @@
           "firstTurn": {
             ".validate": "newData.isString() && newData.val().length <= 64"
           },
+          // Identifies one game within a room. A rematch mints a new one, so a
+          // client can tell "a different game started" from "an older snapshot
+          // of this game" without comparing score counts.
+          "gameId": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
           "scores": {
             "$pid": {
               "$cat": {
@@ -480,6 +486,9 @@
           "firstTurn": {
             ".validate": "newData.isString() && newData.val().length <= 64"
           },
+          "gameId": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
           "category": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },
@@ -501,6 +510,10 @@
           },
           "bgState": {
             ".validate": "newData.isString() && newData.val().length < 20000"
+          },
+          // BG_TURN: the opponent already watched these moves land via PREVIEW.
+          "streamed": {
+            ".validate": "newData.isBoolean()"
           },
           "d1": {
             ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"

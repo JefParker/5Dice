@@ -33,7 +33,11 @@ and on again.
 ```bash
 npx wrangler dev                       # reads VAPID_PRIVATE_KEY from .dev.vars
 curl -X POST http://127.0.0.1:8787/push/notify -H 'content-type: application/json' \
-  -d '{"sub":{"endpoint":"https://…","keys":{"p256dh":"…","auth":"…"}},"title":"Your turn","body":"Test"}'
+  -d '{"sub":{"endpoint":"https://…","keys":{"p256dh":"…","auth":"…"}},"game":"5 Dice","from":"Test","roomId":"abc123"}'
 ```
+
+The Worker writes the notification text itself (`Your turn in <game>` /
+`<from> just played…`); callers only supply the game, the sender's name and
+the room id. See the note at the top of `src/index.js` for why.
 
 Logs: `npx wrangler tail 5dice-push`.

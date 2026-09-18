@@ -8,7 +8,7 @@
 //
 //   POST https://5dice.app/push/notify
 //   { "sub": { endpoint, keys: { p256dh, auth } },
-//     "title": "Your turn in 5 Dice", "body": "...", "url": "./?join=abc", "tag": "turn-abc" }
+//     "game": "5 Dice", "from": "Jake", "roomId": "abc123xyz" }
 //
 //   201  delivered to the push service
 //   410  the subscription is dead — the caller should delete it from Firebase
@@ -18,6 +18,13 @@
 // limits abuse is that a push endpoint only accepts messages signed by the
 // VAPID key it was subscribed with, so this relay can only ever reach devices
 // that opted in to 5Dice — and only if the caller knows their endpoint.
+//
+// The caller does NOT get to write the notification text. Subscriptions are
+// readable by any signed-in client (player uuids are visible in the lobby),
+// so a free-text relay would let a stranger put any message they liked on a
+// player's lock screen. The Worker composes the banner itself from a game
+// name it recognises, a short sender name, and a room id; the worst an abuser
+// can do is send a genuine-looking turn reminder.
 
 import { buildPushPayload } from '@block65/webcrypto-web-push';
 
@@ -53,15 +60,21 @@ export default {
         !sub.keys || !str(sub.keys.p256dh, 200) || !str(sub.keys.auth, 100)) {
       return json(400, { error: 'invalid subscription' });
     }
-    if (!str(body.title, 100) || !str(body.body, 300)) {
-      return json(400, { error: 'title and body required' });
-    }
+    const GAMES = ['5 Dice', 'Backgammon', 'Tic-Tac-Toe'];
+    const game = GAMES.includes(body.game) ? body.game : '5Dice';
+    // Sender name: printable characters only, short enough for one line.
+    const from = (str(body.from, 100) ? body.from : '')
+      .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+      .trim()
+      .slice(0, 24) || 'Your opponent';
+    // Room ids are what app.js mints (base36); anything else gets no deep link.
+    const roomId = str(body.roomId, 40) && /^[a-z0-9_-]+$/i.test(body.roomId) ? body.roomId : null;
 
     const data = {
-      title: body.title,
-      body: body.body,
-      url: str(body.url, 300) ? body.url : './',
-      tag: str(body.tag, 100) ? body.tag : 'turn',
+      title: `Your turn in ${game}`,
+      body: `${from} just played. Tap to jump back in.`,
+      url: roomId ? `./?join=${encodeURIComponent(roomId)}` : './',
+      tag: roomId ? `turn-${roomId}` : 'turn',
     };
 
     const vapid = {

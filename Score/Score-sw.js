@@ -1,16 +1,19 @@
 
- const staticCache = 'static-v260808c';
- const dynamicCache = 'dynamic-v260808c';
+ // 'score-' prefix: CacheStorage is shared with the root app's service worker,
+ // and each worker only ever deletes its OWN older caches (see activate).
+ const staticCache = 'score-static-v260917';
+ const dynamicCache = 'score-dynamic-v260917';
  // Precache the SAME versioned URLs the page actually requests. When you bump a
  // ?v= number in index.html, bump it here too and bump the cache version
- // strings above.
+ // strings above. The ../ entries are ROOT-owned files: their ?v= must match
+ // the root index.html / sw.js (push.sh checks), and they are served
+ // network-first below so a root bump can never be shadowed by this cache.
  const assets = ['./', 'index.html',
     'Score.js?v=24', 'firebase-backend.js?v=14', 'Score.css?v=10',
-    'forms.css', 'Score.json', '../dice3d.js?v=24',
-    '../skins.css?v=6', '../skins.js?v=1',
+    'forms.css', 'Score.json', '../dice3d.js?v=25',
+    '../skins.css?v=8', '../skins.js?v=1',
     '../firebase-config.js',
     'https://fonts.googleapis.com/css2?family=Poppins:wght@400&display=swap',
-    'https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400&display=swap',
     'fallback.html'];
 
 // Cross-origin libraries needed to boot offline (opaque responses via no-cors).
@@ -53,12 +56,25 @@ self.addEventListener('activate', evt => {
     evt.waitUntil(
         caches.keys().then(keys => {
             return Promise.all(keys
-                .filter(key => key !== staticCache && key !== dynamicCache)
+                // Only retire our own older versions. The root app's cache
+                // ('5dice-cache-…') lives in the same CacheStorage and must
+                // survive a visit here.
+                .filter(key => key.startsWith('score-') && key !== staticCache && key !== dynamicCache)
                 .map(key => caches.delete(key))
             )
         }).then(() => self.clients.claim())
     );
 });
+
+// Root-owned files (../skins.css, ../dice3d.js, …) are versioned by the ROOT
+// index.html, which this worker never sees. Cache-first would keep serving
+// whatever copy was installed here until this file's bytes changed, so those
+// go network-first: fresh when online, cached copy offline.
+const scopePath = new URL(self.registration.scope).pathname;
+function isRootOwned(url) {
+    const u = new URL(url);
+    return u.origin === self.location.origin && !u.pathname.startsWith(scopePath);
+}
 
 self.addEventListener('fetch', evt => {
     // Only handle GET requests. cache.put() throws on POST/PUT and would break
@@ -89,6 +105,24 @@ self.addEventListener('fetch', evt => {
                     || (await caches.match('./'))
                     || (await caches.match('fallback.html'))
                     || Response.error();
+            })
+        );
+        return;
+    }
+
+    if (isRootOwned(evt.request.url)) {
+        evt.respondWith(
+            fetch(evt.request).then(fetchRes => {
+                if (fetchRes && fetchRes.ok) {
+                    const resClone = fetchRes.clone();
+                    caches.open(dynamicCache).then(cache => {
+                        cache.put(evt.request.url, resClone).catch(() => {});
+                        trimCache(dynamicCache, DYNAMIC_CACHE_MAX_ENTRIES);
+                    });
+                }
+                return fetchRes;
+            }).catch(async () => {
+                return (await caches.match(evt.request)) || Response.error();
             })
         );
         return;

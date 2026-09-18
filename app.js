@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 59;
+window.__appJsVersion = 60;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -424,12 +424,9 @@ async function sendTurnReminder(peerId) {
   const subs = await backend.pushSubsFor(player.uuid);
   const gameName = getCurrentGameType();
   const roomId = currentRoomId;
-  const message = {
-    title: `Your turn in ${gameName}`,
-    body: `${myName || 'Your opponent'} just played. Tap to jump back in.`,
-    url: `./?join=${encodeURIComponent(roomId)}`,
-    tag: `turn-${roomId}`
-  };
+  // The Worker composes the banner text itself (see push-worker/src/index.js
+  // for why); this is just the material it needs.
+  const message = { game: gameName, from: myName || '', roomId };
   const now = Date.now();
   await Promise.all(Object.entries(subs).map(async ([devicePeerId, sub]) => {
     if (!sub || !sub.endpoint) return;
@@ -1367,9 +1364,11 @@ document.getElementById('btn-create-room').addEventListener('click', async () =>
       isGameOver: false,
       // Persisted so every client (including one that reloads mid-game) derives
       // the same turn order instead of falling back to a local-only anchor.
-      firstTurn: myPeerId
+      firstTurn: myPeerId,
+      gameId: window.fdMintGameId ? window.fdMintGameId() : undefined
     }
   };
+  if (initialGameData.fiveDiceState.gameId === undefined) delete initialGameData.fiveDiceState.gameId;
   if (gameType === 'Backgammon') {
     initialGameData.bgTarget = bgTarget;
     initialGameData.bgCube = bgCube;
@@ -1665,8 +1664,13 @@ function setupGameUI(gameType, isRejoin = false) {
     tttBoard.classList.add('hidden');
     fdContainer.classList.remove('hidden');
     document.body.classList.add('bg-five-dice');
-    if (!window.dice3d && typeof Dice3D !== 'undefined') {
-      window.dice3d = new Dice3D();
+    // Dice3D is declared regardless of whether the three.js / cannon.js CDN
+    // scripts arrived; guard on those, and never let the 3D layer failing take
+    // the join down with it — five-dice.js has an HTML dice fallback.
+    if (!window.dice3d && typeof Dice3D !== 'undefined' &&
+        typeof THREE !== 'undefined' && typeof CANNON !== 'undefined') {
+      try { window.dice3d = new Dice3D(); }
+      catch (err) { console.error('3D dice failed to start:', err); window.dice3d = null; }
     }
     if (!isRejoin || !window.fiveDiceState || window.fiveDiceState.isGameOver) {
       init5DiceGame();
@@ -1841,7 +1845,7 @@ function handleGameEvent(evt) {
     // Route by the tracked game type, not the lobby cache — a missing cache
     // entry used to send a 5 Dice PLAY_AGAIN into the tic-tac-toe reset.
     if (getCurrentGameType() === '5 Dice') {
-      if (window.reset5DiceGame) window.reset5DiceGame(evt.firstTurn);
+      if (window.reset5DiceGame) window.reset5DiceGame(evt.firstTurn, evt.gameId || null);
     } else {
       resetGame(evt.firstTurn);
     }
@@ -2271,23 +2275,27 @@ document.getElementById('btn-play-again').addEventListener('click', async () => 
 
   const is5Dice = getCurrentGameType() === '5 Dice';
   if (is5Dice) {
-    if (window.reset5DiceGame) window.reset5DiceGame(nextFirstTurn);
-  } else {
-    resetGame(nextFirstTurn);
+    // Through sendGameAction, so the PLAY_AGAIN event and the fresh state go
+    // out on the ordered write chain with retries — ahead of the auto-roll
+    // the reset schedules, which used to race past them. The new gameId in
+    // the state lets a client that never sees the event adopt the rematch.
+    const gameId = window.fdMintGameId ? window.fdMintGameId() : null;
+    if (window.reset5DiceGame) window.reset5DiceGame(nextFirstTurn, gameId);
+    const evt = { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn };
+    if (gameId) evt.gameId = gameId;
+    await window.sendGameAction(evt);
+    return;
   }
+
+  resetGame(nextFirstTurn);
 
   if (window.firebaseGameBackend && currentRoomId) {
     try {
-      const updates = {
+      await window.firebaseGameBackend.updateGameState(currentRoomId, {
+        gameState: ['', '', '', '', '', '', '', '', ''],
         currentTurnPlayerId: nextFirstTurn,
         lastUpdated: Date.now()
-      };
-      if (is5Dice) {
-        updates.fiveDiceState = window.fiveDiceState;
-      } else {
-        updates.gameState = ['', '', '', '', '', '', '', '', ''];
-      }
-      await window.firebaseGameBackend.updateGameState(currentRoomId, updates);
+      });
       await window.firebaseGameBackend.sendGameEvent(currentRoomId, { type: 'PLAY_AGAIN', firstTurn: nextFirstTurn, sender: myPeerId });
     } catch (err) {
       console.error('Failed to sync play-again:', err);
@@ -2458,6 +2466,10 @@ const handleLeaveGame = async () => {
   currentGameType = null;
   gamePlayers = [];
   roomPlayerDetails = [];
+  gameHost = null;
+  // Forget who held the turn here: joining another room on the opponent's
+  // turn otherwise read as "my turn → theirs" and pushed them a reminder.
+  lastTurnHolder = null;
   gameState = ['', '', '', '', '', '', '', '', ''];
   // Drop the finished/abandoned board entirely: a stale fiveDiceState surviving
   // into the next room blocked state adoption and could corrupt the new game.

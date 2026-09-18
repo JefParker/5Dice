@@ -100,6 +100,36 @@ check_app_version() {
 
 check_app_version
 
+# --- Score Sheet vs root asset versions --------------------------------------
+# Score/index.html loads root-owned files (../skins.css, ../dice3d.js, …) with
+# its own ?v= numbers, and Score-sw.js precaches them. They drifted once
+# (skins.css v6 vs v8) and the Score page served a two-version-old stylesheet
+# for weeks. Every ../X?v=N in Score/index.html and Score/Score-sw.js must be
+# the N root index.html uses.
+
+check_score_versions() {
+  local bad=0 f ref name ver root_ver
+  for f in Score/index.html Score/Score-sw.js; do
+    [ -f "$f" ] || continue
+    for ref in $(grep -o '\.\./[A-Za-z0-9_./-]*?v=[0-9]\+' "$f" | sort -u); do
+      name=${ref#../}; name=${name%%\?v=*}
+      ver=${ref##*?v=}
+      root_ver=$(grep -o "[\"'(]$name?v=[0-9]\+" index.html | head -1 | grep -o '[0-9]\+$' || true)
+      if [ -n "$root_ver" ] && [ "$root_ver" != "$ver" ]; then
+        echo "✗ $f references $name?v=$ver but index.html uses v$root_ver"
+        bad=1
+      fi
+    done
+  done
+  if [ "$bad" -ne 0 ]; then
+    echo "  Bump the Score copies (and the cache names in Score/Score-sw.js). Nothing was pushed."
+    exit 1
+  fi
+  echo "✓ Score Sheet root-asset versions match index.html."
+}
+
+check_score_versions
+
 # --- anything to do? ---------------------------------------------------------
 
 if [ -z "$(git status --porcelain)" ]; then

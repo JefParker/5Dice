@@ -28,6 +28,7 @@
   let speakerOn = false;
   let joined = false;       // are we advertised in voice/members?
   let localStream = null;   // mic MediaStream (exists only while mic is on)
+  let micPending = false;   // getUserMedia prompt is up
   let members = {};         // last members snapshot from Firebase
   const peers = new Map();  // remotePeerId -> { pc, audioEl, polite, makingOffer, ignoreOffer }
 
@@ -149,13 +150,16 @@
       if (!peer.audioEl) {
         const el = document.createElement('audio');
         el.autoplay = true;
+        el.setAttribute('playsinline', '');
         el.dataset.voicePeer = remoteId;
         document.body.appendChild(el);
         peer.audioEl = el;
       }
       peer.audioEl.srcObject = streams[0] || new MediaStream([track]);
       peer.audioEl.muted = !speakerOn;
-      peer.audioEl.play().catch(() => { /* will start on the next user gesture */ });
+      // Outside a user gesture iOS Safari rejects this (NotAllowedError);
+      // unlockAudio() below retries on the next tap anywhere on the page.
+      peer.audioEl.play().catch(() => {});
     };
 
     pc.onconnectionstatechange = () => {
@@ -168,6 +172,20 @@
 
     return peer;
   }
+
+  // iOS Safari only lets an <audio> start from inside a user gesture. A peer
+  // whose track arrives AFTER the Speaker tap (anyone who joins voice later)
+  // therefore stays silent until the listener toggles Speaker off and on
+  // again. So: on every tap, nudge any remote audio that is still paused.
+  function unlockAudio() {
+    if (!speakerOn) return;
+    for (const peer of peers.values()) {
+      const el = peer.audioEl;
+      if (el && el.paused && el.srcObject) el.play().catch(() => {});
+    }
+  }
+  document.addEventListener('touchend', unlockAudio, { capture: true, passive: true });
+  document.addEventListener('click', unlockAudio, { capture: true, passive: true });
 
   function closePeer(remoteId) {
     const peer = peers.get(remoteId);
@@ -239,19 +257,34 @@
   // ---------- Toggles ----------
 
   async function toggleMic() {
-    if (!voiceRoomId) return;
+    if (!voiceRoomId || micPending) return;
     if (!micOn) {
       // Need the microphone before we advertise it as on.
       if (!localStream) {
+        // The permission prompt can sit open for a while. If the room was
+        // left in the meantime (or Mic was tapped again), the stream that
+        // finally arrives belongs to nobody: stop it, or the browser's
+        // recording light stays on with no one listening — and the next room
+        // would silently offer that track to everyone.
+        const room = voiceRoomId;
+        micPending = true;
+        let stream;
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({
+          stream = await navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
           });
         } catch (e) {
+          micPending = false;
           console.error('Microphone access failed:', e);
           if (window.showToast) window.showToast('Microphone access was blocked. Allow it in your browser to talk.', '#dc3545');
           return;
         }
+        micPending = false;
+        if (voiceRoomId !== room || localStream) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        localStream = stream;
       }
       micOn = true;
       await joinMesh().catch(() => { micOn = false; stopMicStream(); });

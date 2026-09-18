@@ -986,6 +986,7 @@ class Backgammon3D {
     this.rollAnim = { values, start: performance.now(), settling: false, done };
     const anim = this.rollAnim;
     setTimeout(() => {
+      if (this.destroyed) return;                    // torn down mid-roll: the controller is gone
       if (this.rollAnim === anim) finishInstantly(); // rAF never progressed
     }, 3200);
     this.dice.forEach((die, i) => {
@@ -1034,6 +1035,7 @@ class Backgammon3D {
     // Watchdog: rAF can be paused (occluded window) even when document.hidden
     // is false — never let a cosmetic hop stall the game flow behind it.
     setTimeout(() => {
+      if (this.destroyed) return;
       const idx = this.moveAnims ? this.moveAnims.indexOf(anim) : -1;
       if (idx >= 0) {
         this.moveAnims.splice(idx, 1);
@@ -1210,6 +1212,14 @@ class Backgammon3D {
 
   _pointerDown(e) {
     if (this.destroyed) return;
+    // One pointer owns the board at a time. A second finger (a thumb resting
+    // on the board, say) used to replace `this.drag` outright: the first
+    // finger's release then dropped the SECOND finger's checker wherever the
+    // first one happened to be, and left the original checker levitating.
+    // Secondary buttons and secondary pointers are ignored entirely.
+    if (this.drag) return;
+    if (e.isPrimary === false) return;
+    if (typeof e.button === 'number' && e.button > 0) return;
     const hit = this._zoneAt(e, true);
     if (!hit) { if (this.cb.onTap) this.cb.onTap(null); return; }
     if (hit.zone === 'cube') { if (this.cb.onCubeTap) this.cb.onCubeTap(); return; }
@@ -1224,7 +1234,8 @@ class Backgammon3D {
         targets,
         startX: e.clientX,
         startY: e.clientY,
-        moved: false
+        moved: false,
+        pointerId: e.pointerId
       };
       // Capture AFTER drag is armed, and never let it throw: if this failed
       // (stale pointerId on some touch stacks) the press used to be swallowed
@@ -1243,6 +1254,7 @@ class Backgammon3D {
 
   _pointerMove(e) {
     if (!this.drag) return;
+    if (e.pointerId !== undefined && e.pointerId !== this.drag.pointerId) return;
     if (!this.drag.moved) {
       // Fingers and shaky mice emit pointermove during an intended tap. Below
       // this slop radius the press is still a tap, so don't promote it to a
@@ -1271,6 +1283,7 @@ class Backgammon3D {
 
   _pointerUp(e) {
     if (!this.drag) return;
+    if (e.pointerId !== undefined && e.pointerId !== this.drag.pointerId) return;
     const d = this.drag;
     this.drag = null;
     const hit = this._zoneAt(e, false);
@@ -1495,6 +1508,13 @@ class Backgammon3D {
 
   destroy() {
     this.destroyed = true;
+    // Drop every in-flight animation. The rAF loop stops on `destroyed`, which
+    // left the setTimeout watchdogs as the only thing that could finish a
+    // roll or a hop — and they did, calling done() into a controller that had
+    // already nulled its state (or, worse, into the NEXT room's state).
+    this.rollAnim = null;
+    this.moveAnims = [];
+    this.drag = null;
     window.removeEventListener('resize', this._onResize);
     if (this._ro) { this._ro.disconnect(); this._ro = null; }
     const el = this.renderer.domElement;

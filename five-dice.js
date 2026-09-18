@@ -54,8 +54,49 @@ window.fiveDiceState = {
   turnsLeft: 13
 };
 
+// One id per game within a room. A rematch mints a new one, so sync5DiceState
+// can tell "a different game has started" (adopt it) from "an older snapshot
+// of this game" (ignore it) without guessing from score counts — which is
+// what used to strand a reloaded player on a fresh board over a finished
+// game, and strand a player who missed the PLAY_AGAIN event on the old one.
+function fdMintGameId() {
+  return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+window.fdMintGameId = fdMintGameId;
+
+// Bumped whenever the dice are set by anything other than a remote roll that
+// is still tumbling: a score (which resets them), a state sync, a new game.
+// A remote roll's landing callback checks it and, if the world has moved on,
+// leaves the dice alone instead of writing a stale throw over the current turn.
+let fdDiceEpoch = 0;
+
+// The Roll button locks itself with this class until the dice animation's
+// completion callback lifts it. Tearing the dice down mid-roll (leaving the
+// room) used to swallow that callback, and the class lives on a static
+// element, so the button stayed dead in every later game until a reload.
+function fdClearRolling() {
+  const btn = document.getElementById('fd-roll-btn');
+  if (btn) btn.classList.remove('is-rolling');
+}
+
+// Everything the game-over screen left behind that a new game must clear.
+function fdNewGameUi() {
+  window._fd_celebrated = false; // new game → a fresh celebration is allowed
+  fdClearRolling();
+  const btnPlayAgain = document.getElementById('btn-play-again');
+  if (btnPlayAgain) btnPlayAgain.classList.add('hidden');
+  const winsEl = document.getElementById('fd-wins');
+  if (winsEl) winsEl.classList.add('hidden');
+  // Clear the previous game's winner/tie background so the new game returns to
+  // the normal turn-colored board.
+  const gs = document.getElementById('screen-game');
+  if (gs) { gs.classList.remove('tie-background'); gs.style.backgroundColor = ''; }
+}
+
 function init5DiceGame() {
   window._fd_celebrated = false;
+  fdClearRolling();
+  fdDiceEpoch++;
   window.fiveDiceState = {
     dice: [1, 1, 1, 1, 1],
     held: [false, false, false, false, false],
@@ -65,7 +106,8 @@ function init5DiceGame() {
     isGameOver: false,
     // Persisted turn-order anchor: every client derives the same rotation from
     // this instead of a local-only variable that a reload would lose.
-    firstTurn: window.currentFirstTurn || window.gameHost || window.myPeerId
+    firstTurn: window.currentFirstTurn || window.gameHost || window.myPeerId,
+    gameId: fdMintGameId()
   };
 
   const players = window.gamePlayers || [window.myPeerId];
@@ -617,9 +659,14 @@ window.handle5DiceMessage = function(msg) {
     }
     
     if (window.dice3d) {
+      const epoch = fdDiceEpoch;
       window.dice3d.roll(finalValues, unheldIndices, targetElements, () => {
-        window.fiveDiceState.dice = finalValues;
-        update5DiceUI();
+        // Only commit the throw if nothing has reset the dice since it began
+        // (a score, a sync, a new game) — and only into a game that still exists.
+        if (window.fiveDiceState && epoch === fdDiceEpoch) {
+          window.fiveDiceState.dice = finalValues;
+        }
+        if (window.fiveDiceState) update5DiceUI();
       });
     } else {
       window.fiveDiceState.dice = finalValues;
@@ -664,6 +711,7 @@ window.handle5DiceMessage = function(msg) {
       window.fiveDiceState.rollsLeft = 3;
       window.fiveDiceState.held = [false, false, false, false, false];
       window.fiveDiceState.dice = [1,1,1,1,1];
+      fdDiceEpoch++;
       if (window.sync5DiceState) {
         window.sync5DiceState(window.fiveDiceState);
       }
@@ -678,6 +726,7 @@ window.cleanup5DiceGame = function() {
     window.dice3d.destroy();
     window.dice3d = null;
   }
+  fdClearRolling();
   // Never leave the chrome swept away for the next screen — you'd come back to
   // a game with no header and no way to reach the ☰ menu.
   showGameChrome();
@@ -808,8 +857,22 @@ function toggleGameChrome() {
 window.addEventListener('resize', () => window.scheduleFiveDiceFit());
 window.addEventListener('orientationchange', () => window.scheduleFiveDiceFit());
 
-window.reset5DiceGame = function(firstTurnId = null) {
-  window._fd_celebrated = false; // new game → a fresh celebration is allowed
+// `gameId` is the id of the game being started. The player who pressed Play
+// Again mints it and sends it in the PLAY_AGAIN event; everyone else passes
+// the event's id through so all clients agree on it. If the new game's state
+// already arrived through sync5DiceState (the event came second, or never),
+// there is nothing left to reset.
+window.reset5DiceGame = function(firstTurnId = null, gameId = null) {
+  if (gameId && window.fiveDiceState && window.fiveDiceState.gameId === gameId) {
+    fdNewGameUi();
+    update5DiceUI();
+    return;
+  }
+  // Remember what we are replacing: a late echo of the old game's final state
+  // must not be adopted back over the fresh board.
+  window._fd_prevGameId = (window.fiveDiceState && window.fiveDiceState.gameId) || null;
+  fdNewGameUi();
+  fdDiceEpoch++;
   const selectedFirstTurn = firstTurnId || window.gameHost;
   window.currentFirstTurn = selectedFirstTurn;
   window.currentTurnPlayerId = selectedFirstTurn;
@@ -822,7 +885,8 @@ window.reset5DiceGame = function(firstTurnId = null) {
     turnsLeft: 13,
     isGameOver: false,
     scores: {},
-    firstTurn: selectedFirstTurn
+    firstTurn: selectedFirstTurn,
+    gameId: gameId || fdMintGameId()
   };
 
   const players = (window.gamePlayers && window.gamePlayers.length > 0) ? window.gamePlayers : [window.myPeerId];
@@ -833,16 +897,6 @@ window.reset5DiceGame = function(firstTurnId = null) {
       'five-dice': null, 'full-house': null, 'bonus-5s': null
     };
   });
-
-  const btnPlayAgain = document.getElementById('btn-play-again');
-  if (btnPlayAgain) btnPlayAgain.classList.add('hidden');
-  const winsEl = document.getElementById('fd-wins');
-  if (winsEl) winsEl.classList.add('hidden');
-
-  // Clear the previous game's winner/tie background so the new game returns to
-  // the normal turn-colored board.
-  const gs = document.getElementById('screen-game');
-  if (gs) { gs.classList.remove('tie-background'); gs.style.backgroundColor = ''; }
 
   const elStatus = document.getElementById('game-status');
   if (elStatus) {
@@ -882,13 +936,31 @@ window.sync5DiceState = function(incomingState) {
   const isIncomingComplete = incomingState.isGameOver || (window.gamePlayers.length > 0 && window.gamePlayers.every(p => getScoreCount(incomingState, p) >= 13));
   const isLocalFresh = window.fiveDiceState && !window.fiveDiceState.isGameOver && totalCurrentScores === 0;
 
+  // Game identity (see fdMintGameId). States written before ids existed have
+  // none, and fall through to the score-count heuristics below.
+  const localId = (window.fiveDiceState && window.fiveDiceState.gameId) || null;
+  const incId = incomingState.gameId || null;
+  const idsDiffer = !!(localId && incId && localId !== incId);
+  const isReplacedGame = !!(incId && incId === window._fd_prevGameId);
+
   // Determine if incoming state should update our local state
   let shouldUpdateState = false;
+  let isNewGame = false;   // adopting a game other than the one on screen
 
   if (!window.fiveDiceState) {
     shouldUpdateState = true;
+  } else if (isReplacedGame) {
+    // A late echo of the game Play Again just replaced. Never adopt it back.
+    shouldUpdateState = false;
+  } else if (idsDiffer) {
+    // A different game altogether: the rematch whose PLAY_AGAIN event we
+    // missed, or the real state of a room we reloaded into. Score counts say
+    // nothing useful across games, so adopt it outright.
+    shouldUpdateState = true;
+    isNewGame = true;
   } else if (isLocalFresh && isIncomingComplete) {
     // Ignore stale completed game snapshots arriving right after a game reset!
+    // (Legacy path — only reachable for a state without a gameId.)
     shouldUpdateState = false;
   } else if (totalIncomingScores > totalCurrentScores) {
     // New score recorded! Always accept
@@ -905,18 +977,29 @@ window.sync5DiceState = function(incomingState) {
   }
 
   if (shouldUpdateState) {
+    if (isNewGame) {
+      if (isIncomingComplete) {
+        // Reloaded into a finished game: show the result, but don't throw the
+        // winner's confetti a second time.
+        window._fd_celebrated = true;
+      } else {
+        fdNewGameUi();
+      }
+    }
     // Preserve accumulated Yahtzee bonuses (bonus-5s). They only ever increase and
     // are NOT reflected in the score-count used above, so an equal-count incoming
     // state that happens to lack a just-awarded bonus would otherwise silently wipe
     // it. Take the max per player so a bonus can never be reduced by a sync.
+    // (Within ONE game only — a different game starts its bonuses from zero.)
     const prevBonus = {};
-    if (window.fiveDiceState && window.fiveDiceState.scores) {
+    if (!isNewGame && window.fiveDiceState && window.fiveDiceState.scores) {
       for (const p in window.fiveDiceState.scores) {
         const b = window.fiveDiceState.scores[p] && window.fiveDiceState.scores[p]['bonus-5s'];
         if (typeof b === 'number') prevBonus[p] = b;
       }
     }
     window.fiveDiceState = incomingState;
+    fdDiceEpoch++;
     if (window.fiveDiceState.scores) {
       for (const p in prevBonus) {
         if (!window.fiveDiceState.scores[p]) continue;

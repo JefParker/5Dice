@@ -18,6 +18,11 @@
   let selected = null;      // tap-to-move source zone
   let uiRoot = null;        // DOM overlay
   let busy = false;         // an animation/AI turn is in flight
+  // Bumped by cleanup(). A dice-roll callback captured before a room was torn
+  // down (or re-entered) compares against it and bails, so a stale roll can
+  // never land on the NEXT room's state. (backgammon3d's destroy() also drops
+  // its animations; this is the belt to that braces.)
+  let viewGen = 0;
   let aiTimer = null;
 
   const AI = 'computer';
@@ -577,7 +582,9 @@
     const d1 = rollDie(), d2 = rollDie();
     show('bg-btn-roll', false);
     show('bg-btn-double', false);
+    const gen = viewGen;
     view.animateRoll(d1, d2, () => {
+      if (gen !== viewGen || !state) return;
       state = window.BG.rollDice(state, d1, d2);
       busy = false;
       broadcast('ROLL', { d1, d2 });
@@ -886,7 +893,9 @@
     busy = true;
     const dW = rollDie(), dB = rollDie();
     status('Rolling for first turn...');
+    const gen = viewGen;
     view.animateRoll(dW, dB, () => {
+      if (gen !== viewGen || !state) return;
       state = window.BG.applyOpeningRoll(state, dW, dB);
       busy = false;
       broadcast('OPENING', { dW, dB });
@@ -1031,7 +1040,9 @@
       }
       busy = true;
       const d1 = rollDie(), d2 = rollDie();
+      const gen = viewGen;
       view.animateRoll(d1, d2, () => {
+        if (gen !== viewGen || !state) return;
         state = BGE.rollDice(state, d1, d2);
         busy = false;
         render();
@@ -1121,7 +1132,13 @@
     const again = el('btn-play-again');
     if (again) again.classList.remove('hidden');
     if (typeof window.renderWinsTally === 'function') window.renderWinsTally();
-    broadcast('SAVE');
+    // Persist the final state (with _recorded set, so a reload can't tally the
+    // win twice) — but ONLY from the client whose action ended the game. Every
+    // adoption path calls this function, and a SAVE stamps seq+1, so when both
+    // clients re-broadcast on adoption they handed the seq back and forth
+    // forever: one reload after a finished game started an endless loop of
+    // event pushes and state writes between the two phones.
+    if (state._endedBy === window.myPeerId || isAi()) broadcast('SAVE');
   }
 
   // ---------------------------------------------------------------------------
@@ -1153,11 +1170,28 @@
 
       const container = opts.container;
       container.classList.remove('hidden');
-      view = new Backgammon3D(container, {
-        onPickup, onDrop, onTap, onDragStart,
-        onIdle: showIdleHints,
-        onCubeTap: () => { if (window.BG.canOfferCube(state, myColor)) onDoubleClick(); }
-      });
+      // The board needs three.js and cannon.js from the CDN. If either never
+      // arrived (blocked, offline first visit) the constructor throws — and
+      // the Firebase join has already succeeded by now, so throwing out of
+      // here used to leave the player seated in the room but stuck behind
+      // the loading overlay. Fail soft instead.
+      try {
+        if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
+          throw new Error('3D libraries not loaded');
+        }
+        view = new Backgammon3D(container, {
+          onPickup, onDrop, onTap, onDragStart,
+          onIdle: showIdleHints,
+          onCubeTap: () => { if (window.BG.canOfferCube(state, myColor)) onDoubleClick(); }
+        });
+      } catch (err) {
+        console.error('Backgammon board failed to start:', err);
+        this.active = false;
+        view = null;
+        container.classList.add('hidden');
+        if (window.showToast) window.showToast("The 3D board couldn't load — check your connection and rejoin.", '#dc3545');
+        return;
+      }
       view.setPlayerColor(myColor);
       buildUi(container);
 
@@ -1171,8 +1205,13 @@
       if (!adopted) state = window.BG.initialState(opts.matchTarget || 1, opts.cubeEnabled);
 
       render();
-      if (state.phase === 'opening') setTimeout(runOpening, 700);
-      else { checkNoMoves(); maybeRunAi(); }
+      // The opening roll is NOT scheduled from here. app.js calls poke() right
+      // after the first games/{id} snapshot has been applied (syncState, then
+      // poke, in the same callback), and that is the earliest moment we know
+      // whether a game is already under way. A blind timer here used to fire
+      // before a slow first snapshot arrived, roll a fresh opening on top of a
+      // game 40 moves in, and write that seq-1 board over the real one.
+      if (state.phase !== 'opening') { checkNoMoves(); maybeRunAi(); }
       if (state.phase === 'over') gameOverUi();
     },
 
@@ -1210,7 +1249,11 @@
           // `state` is already the post-roll position, and rolling does not
           // change whose turn it is, so state.turn IS the roller.
           const sides = kind === 'OPENING' ? ['w', 'b'] : state.turn;
-          view.animateRoll(a, b, () => { render(); if (state.phase === 'over') gameOverUi(); else maybeRunAi(); }, sides);
+          const gen = viewGen;
+          view.animateRoll(a, b, () => {
+            if (gen !== viewGen || !state) return;
+            render(); if (state.phase === 'over') gameOverUi(); else maybeRunAi();
+          }, sides);
           refreshUi();
           return;
         }
@@ -1315,6 +1358,7 @@
 
     cleanup() {
       this.active = false;
+      viewGen++;
       clearTimeout(aiTimer);
       clearTimeout(openingTimer);
       cancelAutoRoll();
