@@ -30,7 +30,7 @@ import { buildPushPayload } from '@block65/webcrypto-web-push';
 
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-methods': 'POST, GET, OPTIONS',
   'access-control-allow-headers': 'content-type',
   'access-control-max-age': '86400',
 };
@@ -44,12 +44,52 @@ function json(status, obj) {
 
 const str = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
 
+// --- TURN credentials ------------------------------------------------------
+// POST /push/turn → { iceServers, ttl }. Voice chat is a WebRTC mesh, and two
+// phones on carrier-grade NAT can't reach each other with STUN alone, so this
+// mints short-lived Cloudflare TURN credentials. It needs a TURN key from the
+// dashboard (Realtime → TURN) stored as two secrets: TURN_KEY_ID and
+// TURN_KEY_API_TOKEN. Without them it answers { iceServers: null } and the
+// app stays on STUN — nothing breaks, it just can't relay.
+//
+// TURN traffic is metered on this account, so only browsers on the app's own
+// origins are served. The Origin header is easy to forge outside a browser,
+// which is why the credentials are also short-lived.
+const TURN_TTL = 7200;
+const TURN_ORIGINS = ['https://5dice.app', 'https://www.5dice.app'];
+function originAllowed(origin) {
+  if (!origin) return false;
+  if (TURN_ORIGINS.includes(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.5dice-frontend\.pages\.dev$/.test(origin)) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;   // wrangler dev
+  return false;
+}
+
+async function turnCredentials(request, env) {
+  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return json(200, { iceServers: null, ttl: 0 });
+  if (!originAllowed(request.headers.get('origin'))) return json(403, { error: 'origin not allowed' });
+  const res = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ ttl: TURN_TTL }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return json(502, { iceServers: null, error: 'turn api ' + res.status, detail: text.slice(0, 300) });
+  }
+  const data = await res.json().catch(() => null);
+  return json(200, { iceServers: (data && data.iceServers) || null, ttl: TURN_TTL });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     const url = new URL(request.url);
+    if (request.method === 'POST' && url.pathname.endsWith('/turn')) {
+      return turnCredentials(request, env);
+    }
     if (request.method !== 'POST' || !url.pathname.endsWith('/notify')) {
-      return json(404, { error: 'POST /notify' });
+      return json(404, { error: 'POST /notify or POST /turn' });
     }
 
     let body;

@@ -28,6 +28,13 @@
   'use strict';
 
   const LS_KEY = 'dice.dashPasskey.v1';
+  // The WebAuthn user handle, kept SEPARATELY from the record so forget() can
+  // drop the sealed blob without losing it. Platforms treat a new credential
+  // for the same (rpId, user.id) as a replacement, so re-registering with the
+  // same handle overwrites the old passkey in iCloud Keychain / Google
+  // Password Manager instead of piling up duplicates — which the picker then
+  // offered, and a stale pick was rejected as "wrong-credential".
+  const LS_HANDLE_KEY = 'dice.dashPasskey.userHandle';
   const RP_NAME = '5 Dice Dashboard';
   const HKDF_SALT = '5dice-dash-passkey-v1';
   const HKDF_INFO = 'admin-credential-wrap';
@@ -75,6 +82,19 @@
 
   function saveRecord(rec) {
     localStorage.setItem(LS_KEY, JSON.stringify(rec));
+  }
+
+  function loadOrCreateUserHandle() {
+    try {
+      const raw = localStorage.getItem(LS_HANDLE_KEY);
+      if (raw) {
+        const bytes = b64uDecode(raw);
+        if (bytes.length === 16) return bytes;
+      }
+    } catch (e) { /* mint a fresh one below */ }
+    const fresh = randomBytes(16);
+    try { localStorage.setItem(LS_HANDLE_KEY, b64uEncode(fresh)); } catch (e) {}
+    return fresh;
   }
 
   // --- crypto --------------------------------------------------------------
@@ -157,6 +177,8 @@
   function forget() {
     // The credential itself stays in the platform's passkey store — only the
     // browser's own settings can remove it there. All we own is the blob.
+    // The user handle is deliberately KEPT (see LS_HANDLE_KEY): the next
+    // register() replaces that credential rather than adding a second one.
     try { localStorage.removeItem(LS_KEY); } catch (e) {}
   }
 
@@ -166,8 +188,14 @@
     if (!supported()) return { ok: false, reason: 'unsupported' };
     if (!email || !password) return { ok: false, reason: 'missing-credentials' };
 
-    const userHandle = randomBytes(16);
+    const userHandle = loadOrCreateUserHandle();
     const prfSalt = randomBytes(32);
+    // If a sealed record is somehow still here, don't let the authenticator
+    // mint a second credential beside the one it already holds.
+    const existing = loadRecord();
+    const excludeCredentials = existing
+      ? [{ type: 'public-key', id: b64uDecode(existing.credentialId) }]
+      : [];
 
     let cred;
     try {
@@ -176,6 +204,7 @@
           challenge: randomBytes(32),
           rp: { name: RP_NAME, id: location.hostname },
           user: { id: userHandle, name: email, displayName: email },
+          excludeCredentials,
           // ES256 then RS256. We never verify a signature (no server), but the
           // authenticator still requires a credible algorithm list.
           pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],

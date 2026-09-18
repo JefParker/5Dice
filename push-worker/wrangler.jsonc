@@ -9,6 +9,8 @@
   "routes": [{ "pattern": "5dice.app/push/*", "zone_name": "5dice.app" }],
   // VAPID_PUBLIC_KEY is public by nature (it also ships in app.js); the
   // matching VAPID_PRIVATE_KEY is a secret: `wrangler secret put VAPID_PRIVATE_KEY`.
+  // Optional secrets TURN_KEY_ID + TURN_KEY_API_TOKEN switch on the voice-chat
+  // TURN relay at /push/turn (see README).
   "vars": {
     "VAPID_SUBJECT": "mailto:jeffreyrobertparker@gmail.com",
     "VAPID_PUBLIC_KEY": "BNCtqOPttiLbgOsHugLiVSNhBNedc84L_1xnjzBSROPe56ZvePgR2mbg8Hf0RbzWZX2AdG2WU3WJlgfgmrba948"

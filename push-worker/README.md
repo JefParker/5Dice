@@ -28,6 +28,25 @@ is ever lost, generate a new one, update `VAPID_PUBLIC_KEY` in both
 `wrangler.jsonc` and `app.js`, and every device has to switch Turn Alerts off
 and on again.
 
+## Voice chat TURN relay (optional)
+
+`POST /push/turn` hands the app short-lived Cloudflare TURN credentials so two
+phones behind carrier NAT can still hear each other. It is off until a TURN
+key exists:
+
+1. Cloudflare dashboard → **Realtime** → **TURN** → create a key. Note the
+   *Key ID* and *API token*.
+2. ```bash
+   npx wrangler secret put TURN_KEY_ID
+   npx wrangler secret put TURN_KEY_API_TOKEN
+   npx wrangler deploy
+   ```
+
+Until then the endpoint answers `{"iceServers": null}` and voice chat uses
+Google STUN only (works on Wi-Fi, usually not phone-to-phone on LTE). TURN
+traffic is metered on the account, so the endpoint only serves browsers on the
+app's own origins and credentials last two hours.
+
 ## Local test
 
 ```bash

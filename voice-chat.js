@@ -17,7 +17,91 @@
 (function () {
   'use strict';
 
-  const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  // ---------- ICE servers ----------
+  // STUN alone can't connect two phones that are both behind carrier-grade NAT
+  // (most LTE), so the push Worker also hands out short-lived Cloudflare TURN
+  // credentials once a TURN key has been configured there (push-worker/README).
+  // Until then it answers { iceServers: null } and we stay on STUN.
+  const STUN_ONLY = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  const TURN_URL = 'https://5dice.app/push/turn';
+  let iceServers = STUN_ONLY;
+  let iceExpiresAt = 0;      // when the credentials we hold stop being worth using
+  let iceFetch = null;       // in-flight refresh, so callers share one request
+
+  function refreshIceServers() {
+    if (Date.now() < iceExpiresAt) return Promise.resolve(iceServers);
+    if (iceFetch) return iceFetch;
+    iceFetch = (async () => {
+      try {
+        const opts = { method: 'POST' };
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opts.signal = AbortSignal.timeout(4000);
+        const res = await fetch(TURN_URL, opts);
+        if (!res.ok) throw new Error('turn endpoint ' + res.status);
+        const j = await res.json();
+        if (j && Array.isArray(j.iceServers) && j.iceServers.length) {
+          iceServers = j.iceServers;
+          // Ask again well before the credentials lapse.
+          iceExpiresAt = Date.now() + Math.max(60, (j.ttl || 3600) - 300) * 1000;
+        } else {
+          iceServers = STUN_ONLY;                       // TURN not set up yet
+          iceExpiresAt = Date.now() + 10 * 60 * 1000;
+        }
+      } catch (e) {
+        iceServers = STUN_ONLY;
+        iceExpiresAt = Date.now() + 60 * 1000;
+      } finally {
+        iceFetch = null;
+      }
+      return iceServers;
+    })();
+    return iceFetch;
+  }
+
+  // ---------- Reconnect backoff ----------
+  // A failed connection used to be torn down and rebuilt immediately, by both
+  // sides, forever: a new offer, an answer, a fresh round of candidates, ~15s
+  // of ICE, fail, repeat — dozens of Firebase writes a minute for as long as
+  // the two phones stayed in the room. Now: a few spaced attempts, then stop
+  // and say so. A member leaving and coming back starts the count over.
+  const MAX_ICE_ATTEMPTS = 3;
+  const iceFails = new Map();   // remoteId -> { count, timer, gaveUp }
+
+  function backoffActive(remoteId) {
+    const f = iceFails.get(remoteId);
+    return !!(f && (f.timer || f.gaveUp));
+  }
+
+  function clearBackoff(remoteId) {
+    const f = iceFails.get(remoteId);
+    if (f && f.timer) clearTimeout(f.timer);
+    iceFails.delete(remoteId);
+  }
+
+  function memberName(remoteId) {
+    const m = members[remoteId];
+    if (m && m.name) return m.name;
+    return (typeof window.getDisplayName === 'function') ? window.getDisplayName(remoteId) : 'a player';
+  }
+
+  function scheduleRebuild(remoteId) {
+    closePeer(remoteId);
+    const f = iceFails.get(remoteId) || { count: 0, timer: null, gaveUp: false };
+    f.count++;
+    iceFails.set(remoteId, f);
+    if (f.count > MAX_ICE_ATTEMPTS) {
+      f.gaveUp = true;
+      console.warn('voice: giving up on', remoteId, 'after', MAX_ICE_ATTEMPTS, 'attempts');
+      if (window.showToast) window.showToast(`Couldn't connect voice with ${memberName(remoteId)}.`, '#dc3545');
+      return;
+    }
+    const delay = 1000 * Math.pow(2, f.count);   // 2s, 4s, 8s
+    f.timer = setTimeout(async () => {
+      f.timer = null;
+      if (!participating() || !members[remoteId] || peers.has(remoteId)) return;
+      await refreshIceServers();   // credentials may have lapsed meanwhile
+      if (participating() && members[remoteId] && !peers.has(remoteId)) createPeer(remoteId);
+    }, delay);
+  }
 
   const micBtn = document.getElementById('btn-toggle-mic');
   const spkBtn = document.getElementById('btn-toggle-speaker');
@@ -68,6 +152,8 @@
   async function joinMesh() {
     if (joined || !voiceRoomId || !backend()) return;
     joined = true;
+    await refreshIceServers();   // bounded (4s); STUN-only if it fails
+    if (!voiceRoomId) { joined = false; return; }   // room left during the wait
     try {
       await backend().voiceJoin(voiceRoomId, window.myPeerId, {
         name: window.myName || '',
@@ -94,6 +180,7 @@
     }
     joined = false;
     for (const id of [...peers.keys()]) closePeer(id);
+    for (const id of [...iceFails.keys()]) clearBackoff(id);
     stopMicStream();
   }
 
@@ -109,7 +196,7 @@
   function createPeer(remoteId) {
     if (peers.has(remoteId)) return peers.get(remoteId);
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers });
     const peer = {
       pc,
       audioEl: null,
@@ -163,11 +250,8 @@
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') {
-        // Drop and let the members listener rebuild it if we're both still here.
-        closePeer(remoteId);
-        if (participating() && members[remoteId]) createPeer(remoteId);
-      }
+      if (pc.connectionState === 'connected') { clearBackoff(remoteId); return; }
+      if (pc.connectionState === 'failed') scheduleRebuild(remoteId);
     };
 
     return peer;
@@ -209,6 +293,7 @@
     let payload;
     try { payload = JSON.parse(signal.data); } catch (e) { return; }
     const remoteId = signal.from;
+    if (backoffActive(remoteId)) return;   // we're waiting, or we've given up
     const peer = createPeer(remoteId);
     const pc = peer.pc;
 
@@ -247,10 +332,14 @@
     }
     // Connect to every other advertised member; drop connections to the departed.
     for (const id in members) {
-      if (id !== window.myPeerId && members[id]) createPeer(id);
+      if (id !== window.myPeerId && members[id] && !backoffActive(id)) createPeer(id);
     }
     for (const id of [...peers.keys()]) {
       if (!members[id]) closePeer(id);
+    }
+    // Someone who left gets a clean slate if they come back.
+    for (const id of [...iceFails.keys()]) {
+      if (!members[id]) clearBackoff(id);
     }
   }
 
@@ -341,6 +430,7 @@
     if (voiceRoomId === roomId) return;
     window.voiceLeaveRoom();
     voiceRoomId = roomId;
+    refreshIceServers();   // warm the TURN credentials before anyone taps a toggle
     if (!backend()) return;
     backend().listenVoiceMembers(roomId, onMembersUpdate);
     backend().listenVoiceSignals(roomId, window.myPeerId, handleSignal);
