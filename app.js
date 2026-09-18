@@ -15,7 +15,7 @@ window.myPeerId = myPeerId;
 // that didn't match its own HTML and the bump — the whole cache-busting strategy
 // — failed silently. Bump this with the ?v= in index.html and sw.js; push.sh
 // checks all three agree.
-window.__appJsVersion = 60;
+window.__appJsVersion = 61;
 
 // Escape user-controlled text before inserting into innerHTML (chat, room/host names).
 function escapeHtml(str) {
@@ -831,6 +831,20 @@ function armInviteWait() {
     hideLoading();
     showToast("That invite didn't lead anywhere — the game may have ended.", '#dc3545');
   }, INVITE_WAIT_MS);
+}
+
+// A tapped turn notification while the app is already open: sw.js focuses
+// this window and posts the room id. Same path as a texted invite link.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', async (e) => {
+    const d = e.data;
+    if (!d || d.type !== 'open-room' || !d.roomId) return;
+    if (currentRoomId === d.roomId) return;          // already looking at it
+    if (currentRoomId) await handleLeaveGame();      // seated elsewhere: stand up first
+    pendingJoinRoomId = d.roomId;
+    inviteWaitArmed = false;
+    armInviteWait();
+  });
 }
 
 function tryPendingInviteJoin() {

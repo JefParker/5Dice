@@ -594,6 +594,10 @@
   }
 
   function checkNoMoves() {
+    // Only the player on roll passes their own turn. A synced position that
+    // belongs to the opponent (their ROLL event was lost, say) must not make
+    // THIS client commit a turn on their behalf.
+    if (!state || state.turn !== myColor) return;
     if (state.phase === 'moving' && window.BG.legalMoves(state).length === 0 && state.movesLeft.length > 0 && state.turnMoves.length === 0) {
       if (window.showToast) window.showToast('No legal moves — turn passes.', '#8a4a25');
       setTimeout(() => { commitTurn(); }, 1100);

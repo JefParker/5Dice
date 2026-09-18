@@ -1,4 +1,4 @@
-const CACHE_NAME = '5dice-cache-v159';
+const CACHE_NAME = '5dice-cache-v160';
 
 // Precache the SAME versioned URLs index.html actually requests. Unversioned
 // entries used to coexist with runtime-cached ?v= entries, and the offline
@@ -10,13 +10,13 @@ const urlsToCache = [
   './styles.css?v=50',
   './skins.css?v=8',
   './skins.js?v=1',
-  './app.js?v=60',
+  './app.js?v=61',
   './passkey.js?v=1',
   './voice-chat.js?v=2',
-  './five-dice.js?v=44',
+  './five-dice.js?v=45',
   './backgammon.js?v=2',
-  './backgammon3d.js?v=21',
-  './bg-game.js?v=22',
+  './backgammon3d.js?v=22',
+  './bg-game.js?v=23',
   './dice3d.js?v=25',
   './firebase-game-backend.js?v=33',
   './firebase-config.js',
@@ -128,16 +128,22 @@ self.addEventListener('push', event => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Tapping the banner: bring the open app forward if there is one (it is
-// already in the room and live), otherwise open it on the room's join link.
+// Tapping the banner: bring the open app forward if there is one and tell it
+// which room the tap was about (app.js joins it if it isn't there already —
+// the player may have gone back to the lobby, or be in another room), else
+// open a fresh window on the room's join link. The Score Sheet is a window on
+// this origin too, but it can't join a game, so it is never the one focused.
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const target = new URL((event.notification.data && event.notification.data.url) || './', self.location.href).href;
+  const roomId = new URL(target).searchParams.get('join');
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      const existing = clientList.find(c => 'focus' in c);
-      if (existing) return existing.focus();
-      return self.clients.openWindow(target);
+      const app = clientList.filter(c => 'focus' in c && !new URL(c.url).pathname.includes('/Score/'));
+      const existing = app.find(c => c.focused) || app[0];
+      if (!existing) return self.clients.openWindow(target);
+      if (roomId) existing.postMessage({ type: 'open-room', roomId });
+      return existing.focus();
     })
   );
 });

@@ -1230,8 +1230,15 @@ window.handle5DiceGameOver = function() {
   } else {
     const gc = document.querySelector('.game-container');
     if (gc) gc.scrollTo({ top: 0, behavior: 'smooth' });
-    const winnerName = getPeerName(winners[0]);
-    if (elStatus) elStatus.innerText = `${winnerName} Wins!`;
+    if (elStatus) {
+      // Two OTHER players can tie in a 3+ player room; the background already
+      // shows the tie stripes, so the text must not name a single winner.
+      if (winners.length > 1) {
+        elStatus.innerText = `It's a Tie! (${winners.map(getPeerName).join(' & ')})`;
+      } else {
+        elStatus.innerText = `${getPeerName(winners[0])} Wins!`;
+      }
+    }
   }
   const btnPlayAgain = document.getElementById('btn-play-again');
   if (btnPlayAgain) btnPlayAgain.classList.remove('hidden');

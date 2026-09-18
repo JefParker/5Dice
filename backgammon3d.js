@@ -307,13 +307,14 @@ class Backgammon3D {
   // skin instantly instead of re-cutting it, and the browser cache means only
   // the first look at each board costs anything.
   setBoardSkin(id) {
+    // Remember the latest request FIRST — before any early return — so a slow
+    // load that lands after the user has moved on (to Classic, or to a skin
+    // that was already sliced) doesn't yank the board back to it.
+    this._skinWanted = id;
     const skin = Backgammon3D.skinById(id);
     if (!skin) { this._applySkin('classic'); return; }
     this._skins = this._skins || {};
     if (this._skins[id]) { this._applySkin(id); return; }
-    // Remember the latest request so a slow load that lands after the user has
-    // moved on doesn't yank the board back to a skin they already left.
-    this._skinWanted = id;
     if (this._skinPending === id) return;
     this._skinPending = id;
     const img = new Image();
@@ -976,6 +977,16 @@ class Backgammon3D {
   // `sides` skins the dice: 'w'/'b' for a normal roll, or ['w','b'] for the
   // opening roll so each player's single die shows in their own colour.
   animateRoll(d1, d2, done, sides) {
+    // A roll still in flight owes its caller a done() — the controller sets
+    // `busy` and only clears it there. Replacing it silently used to leave
+    // that client unable to roll again for the rest of the game (two hosts
+    // racing the opening roll was the way in). Land the old one first.
+    if (this.rollAnim) {
+      const prev = this.rollAnim;
+      this.rollAnim = null;
+      this._placeDiceStatic(prev.values[0], prev.values[1], null, null);
+      if (prev.done) prev.done();
+    }
     const finishInstantly = () => {
       this.rollAnim = null;
       this._placeDiceStatic(d1, d2, null, sides);
