@@ -1,0 +1,28 @@
+{
+  "id": "/SyncWatch/",
+  "name": "SyncWatch",
+  "short_name": "SyncWatch",
+  "description": "A stopwatch that shows the same time on every device that joins it.",
+  "lang": "en-US",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#191970",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "img/SyncWatch64.png", "type": "image/png", "sizes": "64x64" },
+    { "src": "img/SyncWatch128.png", "type": "image/png", "sizes": "128x128" },
+    { "src": "img/SyncWatch192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "img/SyncWatch512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "screenshots": [
+    {
+      "src": "img/SyncWatch-SS01.png",
+      "type": "image/png",
+      "sizes": "1080x1970",
+      "form_factor": "narrow",
+      "label": "SyncWatch"
+    }
+  ]
+}

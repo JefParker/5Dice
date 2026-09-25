@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+ <title>SyncWatch</title>
+ <meta name="description" content="A stopwatch that shows the same time on every device that joins it.">
+ <meta name="robots" content="noindex">
+ <meta name="theme-color" content="#000000">
+ <link rel="manifest" href="SyncWatch.json">
+ <link rel="icon" href="img/SyncWatch.ico" sizes="any">
+ <link rel="icon" type="image/png" sizes="192x192" href="img/SyncWatch192.png">
+ <link rel="apple-touch-icon" href="img/SyncWatch192.png">
+ <meta name="mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black">
+ <meta name="apple-mobile-web-app-title" content="SyncWatch">
+ <meta property="og:title" content="SyncWatch">
+ <meta property="og:description" content="A stopwatch that shows the same time on every device that joins it.">
+ <meta property="og:image" content="https://5dice.app/SyncWatch/img/SummeryCard.png">
+ <meta property="og:url" content="https://5dice.app/SyncWatch/">
+ <meta property="og:type" content="website">
+ <meta name="twitter:card" content="summary_large_image">
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo+Mono&family=Poppins&display=swap">
+ <link rel="stylesheet" href="SyncWatch.css">
+ <script type="module" src="SyncWatch.js"></script>
+</head>
+
+<body>
+<main id="Main">
+
+ <section id="EnterScreen" class="Lobby" hidden>
+  <form id="EnterForm" autocomplete="off">
+   <label class="Instructions" for="WatchId">Enter an ID for your SyncWatch</label>
+   <input id="WatchId" class="Field" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" placeholder="SyncWatch ID" required>
+   <div class="Buttons">
+    <button type="button" id="EnterCancel" class="Btn WordReveal" hidden>Cancel</button>
+    <button type="submit" id="Go" class="Btn WordReveal">Go</button>
+   </div>
+  </form>
+ </section>
+
+ <section id="WatchScreen" hidden>
+  <div id="WatchLabel" class="WatchLabel"></div>
+  <div class="DisplayCase">
+   <div id="Display" class="Display" role="timer">00:00:00.0</div>
+  </div>
+  <div class="Lobby Buttons">
+   <button type="button" id="Lap" class="Btn WordReveal" disabled>Lap</button>
+   <button type="button" id="Start" class="Btn WordReveal">Start</button>
+  </div>
+  <button type="button" id="IDReadout" class="IDReadout" title="Change ID">ID</button>
+  <button type="button" id="WhosHere" class="WhosHere" title="Who's here"></button>
+ </section>
+
+</main>
+
+<button type="button" id="MenuBtn" class="MenuBtn" aria-label="Menu" aria-haspopup="menu" aria-expanded="false" hidden>&#8942;</button>
+
+<ul id="Menu" class="context" role="menu">
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="countdown">Count down…</li>
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="label">Label…</li>
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="share">Share link</li>
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="id">ID</li>
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="ping">Ping</li>
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="install" id="InstallItem" hidden>Install app</li>
+ <li class="context-link" role="menuitem" tabindex="-1" data-action="about">About</li>
+</ul>
+
+<dialog id="CountDownDialog" class="Dialog">
+ <form method="dialog">
+  <div class="DialogSection">Count Down</div>
+  <div class="DialogSection TimeFields">
+   <label><input type="number" id="Hours" min="0" max="99" placeholder="00" inputmode="numeric"><span>hr</span></label>
+   <label><input type="number" id="Minutes" min="0" max="999" placeholder="00" inputmode="numeric"><span>min</span></label>
+   <label><input type="number" id="Seconds" min="0" max="9999" placeholder="00" inputmode="numeric"><span>sec</span></label>
+  </div>
+  <div class="DialogSection Buttons">
+   <button value="cancel" class="Btn" formnovalidate>Cancel</button>
+   <button value="ok" class="Btn">OK</button>
+  </div>
+ </form>
+</dialog>
+
+<dialog id="LabelDialog" class="Dialog">
+ <form method="dialog">
+  <div class="DialogSection">Label the watch…</div>
+  <div class="DialogSection">
+   <input type="text" id="LabelInput" class="Field" maxlength="100" placeholder="Watch title">
+  </div>
+  <div class="DialogSection Buttons">
+   <button value="cancel" class="Btn" formnovalidate>Cancel</button>
+   <button value="ok" class="Btn">OK</button>
+  </div>
+ </form>
+</dialog>
+
+<dialog id="AboutDialog" class="Dialog">
+ <form method="dialog">
+  <div class="DialogSection"><img src="img/SyncWatch128.png" alt="" width="96" height="96"></div>
+  <div class="DialogSection">SyncWatch</div>
+  <div class="DialogSection Small">
+   Everyone using the same ID sees the same watch.<br>
+   <span id="AboutVersion"></span>
+  </div>
+  <div class="DialogSection Small" id="AboutInstall" hidden>
+   To install: tap Share, then “Add to Home Screen”.
+  </div>
+  <div class="DialogSection Buttons"><button value="ok" class="Btn">Close</button></div>
+ </form>
+</dialog>
+
+<div id="Toasts" class="Toast" aria-live="polite"></div>
+
+</body>
+</html>

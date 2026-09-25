@@ -461,6 +461,99 @@
       }
     },
 
+    // SyncWatch (/SyncWatch/): a shared stopwatch per numeric ID. Anyone signed
+    // in who knows an ID can run that watch — by design, as it always was. There
+    // is no read on syncwatch/ itself, so IDs can't be listed.
+    "syncwatch": {
+      "$watchId": {
+        ".read": "auth != null && $watchId.matches(/^[0-9]{1,9}$/)",
+
+        "state": {
+          ".write": "auth != null && $watchId.matches(/^[0-9]{1,9}$/)",
+          ".validate": "newData.hasChildren(['mode', 'type', 'startAt', 'elapsed', 'seq'])",
+          "mode": {
+            ".validate": "newData.val() === 'running' || newData.val() === 'stopped'"
+          },
+          "type": {
+            ".validate": "newData.val() === 'up' || newData.val() === 'down'"
+          },
+          "startAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "elapsed": {
+            ".validate": "newData.isNumber()"
+          },
+          "seq": {
+            ".validate": "newData.isNumber()"
+          },
+          "by": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+
+        "title": {
+          ".write": "auth != null && $watchId.matches(/^[0-9]{1,9}$/)",
+          ".validate": "newData.isString() && newData.val().length <= 100"
+        },
+
+        "lastActive": {
+          ".write": "auth != null && $watchId.matches(/^[0-9]{1,9}$/)",
+          ".validate": "newData.isNumber()"
+        },
+
+        "presence": {
+          "$clientId": {
+            ".write": "auth != null && $watchId.matches(/^[0-9]{1,9}$/)",
+            ".validate": "$clientId.length <= 64 && newData.hasChildren(['label', 'at'])",
+            "label": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+
+        // Ping/pong messages. Senders delete their own after 20s; any joiner
+        // sweeps leftovers older than two minutes (hence the index).
+        "pings": {
+          ".indexOn": ["at"],
+          "$pingId": {
+            ".write": "auth != null && $watchId.matches(/^[0-9]{1,9}$/)",
+            ".validate": "newData.hasChildren(['type', 'from', 'at'])",
+            "type": {
+              ".validate": "newData.val() === 'ping' || newData.val() === 'pong'"
+            },
+            "from": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "label": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "to": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+
     "gameEvents": {
       "$roomId": {
         ".read": "auth != null",

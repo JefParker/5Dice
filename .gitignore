@@ -11,3 +11,6 @@ images/Leather_Board.png
 
 # Screenshots dropped in the folder to show someone a bug.
 Screenshot*.png
+
+# Firebase emulator logs
+*-debug.log

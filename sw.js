@@ -56,6 +56,11 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
     return;
   }
+  // SyncWatch is a separate app with its own worker (/SyncWatch/SyncWatch-sw.js).
+  // Until that worker takes over, don't copy its pages into the 5 Dice cache.
+  if (new URL(event.request.url).pathname.startsWith('/SyncWatch/')) {
+    return;
+  }
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {
