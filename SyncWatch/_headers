@@ -1,0 +1,5 @@
+# Cloudflare Pages header rules for syncwatch.5dice.app (same reasoning as the
+# 5 Dice _headers file): revalidate everything, so a deploy is never shadowed
+# by a stale browser copy. An unchanged file still costs only a 304.
+/*
+  Cache-Control: no-cache

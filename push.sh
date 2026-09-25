@@ -130,6 +130,16 @@ check_score_versions() {
 
 check_score_versions
 
+# --- SyncWatch's copy of the Firebase config ----------------------------------
+# SyncWatch deploys on its own (syncwatch.5dice.app, Pages root dir SyncWatch/)
+# and so can't reach ../firebase-config.js — it carries a copy. Keep them equal.
+
+if [ -f SyncWatch/firebase-config.js ] && ! cmp -s firebase-config.js SyncWatch/firebase-config.js; then
+  echo "✗ SyncWatch/firebase-config.js differs from firebase-config.js."
+  echo "  Copy the root one over it. Nothing was pushed."
+  exit 1
+fi
+
 # --- anything to do? ---------------------------------------------------------
 
 if [ -z "$(git status --porcelain)" ]; then

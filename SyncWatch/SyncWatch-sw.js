@@ -1,12 +1,11 @@
-// SyncWatch service worker. Scope: /SyncWatch/ — separate from the 5 Dice
-// worker at the site root, so SyncWatch installs and updates as its own app.
-//
-// CacheStorage is shared by every worker on the origin, so this one only ever
-// touches caches named 'syncwatch-…'. Bump CACHE when SHELL changes.
+// SyncWatch service worker. SyncWatch is served from its own origin
+// (syncwatch.5dice.app) so it installs as its own app and never falls inside
+// 5 Dice's scope. Only caches named 'syncwatch-…' are ever touched.
+// Bump CACHE when SHELL changes.
 
-const CACHE = 'syncwatch-v260925';
+const CACHE = 'syncwatch-v260925b';
 const SHELL = ['./', 'SyncWatch.js', 'SyncWatch-firebase.js', 'SyncWatch.css', 'SyncWatch.json',
-    '../firebase-config.js', 'img/SyncWatch.ico', 'img/SyncWatch64.png', 'img/SyncWatch128.png',
+    'firebase-config.js', 'img/SyncWatch.ico', 'img/SyncWatch64.png', 'img/SyncWatch128.png',
     'img/SyncWatch192.png'];
 
 // The Firebase SDK and fonts come from these; their urls are versioned or
