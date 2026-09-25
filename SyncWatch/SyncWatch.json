@@ -9,20 +9,46 @@
   "display": "standalone",
   "theme_color": "#000000",
   "background_color": "#191970",
-  "categories": ["utilities", "productivity"],
+  "categories": [
+    "utilities",
+    "productivity"
+  ],
   "icons": [
-    { "src": "img/SyncWatch64.png", "type": "image/png", "sizes": "64x64" },
-    { "src": "img/SyncWatch128.png", "type": "image/png", "sizes": "128x128" },
-    { "src": "img/SyncWatch192.png", "type": "image/png", "sizes": "192x192" },
-    { "src": "img/SyncWatch512.png", "type": "image/png", "sizes": "512x512" }
+    {
+      "src": "img/SyncWatch64.png",
+      "type": "image/png",
+      "sizes": "64x64"
+    },
+    {
+      "src": "img/SyncWatch128.png",
+      "type": "image/png",
+      "sizes": "128x128"
+    },
+    {
+      "src": "img/SyncWatch192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "img/SyncWatch512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
   ],
   "screenshots": [
     {
-      "src": "img/SyncWatch-SS01.png",
+      "src": "img/SyncWatch-narrow.png",
       "type": "image/png",
-      "sizes": "1080x1970",
+      "sizes": "1080x1920",
       "form_factor": "narrow",
-      "label": "SyncWatch"
+      "label": "A running stopwatch shared by two devices"
+    },
+    {
+      "src": "img/SyncWatch-wide.png",
+      "type": "image/png",
+      "sizes": "1920x1080",
+      "form_factor": "wide",
+      "label": "A five-minute countdown on a large screen"
     }
   ]
 }
