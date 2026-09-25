@@ -1,0 +1,10 @@
+# SyncWatch moved to its own origin (syncwatch.5dice.app) on 2026-09-25, so it
+# installs as its own app instead of opening inside 5 Dice on Android.
+#
+# The first rule serves a self-removing worker in place of the old SyncWatch
+# worker: browsers refuse to update a service worker through a redirect, so
+# without it the old one would linger on this origin forever. It must stay
+# above the redirect, since the first matching rule wins.
+/SyncWatch/SyncWatch-sw.js  /syncwatch-retire-sw.js  200
+/SyncWatch                  https://syncwatch.5dice.app/  301
+/SyncWatch/*                https://syncwatch.5dice.app/:splat  301
