@@ -13,9 +13,9 @@
 // This file is loaded with a dynamic import() so the stopwatch still works as a
 // plain local stopwatch if it fails to load (offline, before first cache).
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, onValue, set, push, remove, runTransaction, onDisconnect, serverTimestamp, query, orderByChild, startAt, endAt, get, onChildAdded } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, push, remove, runTransaction, onDisconnect, serverTimestamp, query, orderByChild, startAt, endAt, get, onChildAdded } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -30,9 +30,8 @@ export const serverNow = () => Date.now() + serverOffset;
 
 export const onConnection = (cb) => onValue(ref(db, '.info/connected'), snap => cb(snap.val() === true));
 
-// Auth is shared with 5 Dice (same origin, same Firebase project). Wait for the
-// restored session before signing in anonymously — signing in unconditionally
-// would replace an admin's 5 Dice session with a fresh anonymous one.
+// Anonymous auth, persisted by the SDK. Wait for a restored session before
+// signing in, so a reload keeps its uid instead of minting a new user each time.
 const authReady = new Promise(resolve => {
     const unsubscribe = onAuthStateChanged(auth, user => {
         unsubscribe();
@@ -74,8 +73,10 @@ export async function joinWatch(id, me, on) {
     // onDisconnect when the connection dropped.
     unsubs.push(onValue(ref(db, '.info/connected'), snap => {
         if (snap.val() !== true || left) return;
+        // If we left while the onDisconnect was registering, writing presence
+        // now would leave a ghost "user" behind on the old watch for good.
         onDisconnect(presenceRef).remove()
-            .then(() => set(presenceRef, { label: me.label, at: serverTimestamp() }))
+            .then(() => left ? undefined : set(presenceRef, { label: me.label, at: serverTimestamp() }))
             .catch(err => console.warn('SyncWatch: presence failed', err));
     }));
 

@@ -3,7 +3,7 @@
 // 5 Dice's scope. Only caches named 'syncwatch-…' are ever touched.
 // Bump CACHE when SHELL changes.
 
-const CACHE = 'syncwatch-v260925b';
+const CACHE = 'syncwatch-v260925c';
 const SHELL = ['./', 'SyncWatch.js', 'SyncWatch-firebase.js', 'SyncWatch.css', 'SyncWatch.json',
     'firebase-config.js', 'img/SyncWatch.ico', 'img/SyncWatch64.png', 'img/SyncWatch128.png',
     'img/SyncWatch192.png'];
@@ -48,13 +48,31 @@ self.addEventListener('fetch', evt => {
     // Our files: network first so an update shows up on the next load; the
     // cache is for offline. Pages load as './' whatever their ?id= says.
     const key = req.mode === 'navigate' ? new URL('./', self.registration.scope).href : req;
-    evt.respondWith(fetch(req).then(res => {
+    evt.respondWith(networkFirst(req, key));
+});
+
+// On a weak signal (a track, a gym) a fetch can hang for most of a minute
+// before failing. After NETWORK_WAIT_MS use the cached copy if there is one;
+// the network response still lands in the cache for next time.
+const NETWORK_WAIT_MS = 3500;
+
+const networkFirst = (req, key) => new Promise(resolve => {
+    let settled = false;
+    const finish = (res) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(res);
+    };
+    const cached = () => caches.match(key, { ignoreSearch: true });
+    const timer = setTimeout(() => cached().then(hit => { if (hit) finish(hit); }), NETWORK_WAIT_MS);
+    fetch(req).then(res => {
         if (res.ok && res.type === 'basic') {
             const copy = res.clone();
             caches.open(CACHE).then(cache => cache.put(key, copy)).catch(() => {});
         }
-        return res;
-    }).catch(() => caches.match(key, { ignoreSearch: true }).then(hit => hit || Response.error())));
+        finish(res);
+    }).catch(() => cached().then(hit => finish(hit || Response.error())));
 });
 
 self.addEventListener('notificationclick', evt => {

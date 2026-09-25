@@ -8,7 +8,7 @@
 //            runs up to zero
 // Lap is deliberately local: it freezes this screen only, as it always has.
 
-const VERSION = '2026.09.25';
+const VERSION = '2026.09.25b';
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,11 +26,14 @@ const me = { id: randomId(), label: deviceLabel() };
 let backend = null;        // the Firebase module, once loaded
 let session = null;        // the joined watch
 let joinToken = 0;         // guards against a slow join finishing after an ID change
-let connected = false;
+let connected = null;       // null until Firebase reports either way
+let backendFailed = false;
 let presence = {};
 let watchId = null;
 let state = { ...RESET, seq: 0, by: '' };
 let firstState = true;
+let joinSeq = -1;          // seq of the first state seen after joining
+let joining = null;        // id whose join is in flight
 let lap = null;            // frozen reading while Lap is on
 let finishedSeq = -1;      // countdown that already fired its alert
 let zeroTimer = null;
@@ -71,11 +74,15 @@ const change = (fn) => {
     if (session) session.change(current => fn(normalize(current)));
 };
 
+// The press means what the button said when it was pressed. It is not a
+// toggle: if two people hit Stop at the same moment, the second transaction
+// sees an already-stopped watch and must leave it alone, not restart it.
 const startStop = () => {
     const t = now();
-    change(s => s.mode === 'running'
-        ? { ...s, mode: 'stopped', elapsed: t - s.startAt }
-        : { ...s, mode: 'running', startAt: t - s.elapsed });
+    const stopping = state.mode === 'running';
+    change(s => stopping
+        ? (s.mode === 'running' ? { ...s, mode: 'stopped', elapsed: t - s.startAt } : undefined)
+        : (s.mode === 'stopped' ? { ...s, mode: 'running', startAt: t - s.elapsed } : undefined));
 };
 
 const lapReset = () => {
@@ -96,12 +103,17 @@ const setState = (next, local) => {
     state = next;
     if (next.mode !== 'running' || prev.mode !== 'running' || next.startAt !== prev.startAt) lap = null;
 
-    if (!local && !firstState && next.by !== me.id && next.seq !== prev.seq) {
-        const what = next.mode === 'running' ? 'started'
-            : (next.elapsed === 0 && next.type === 'up') ? 'reset' : 'stopped';
-        notify(`SyncWatch ${what}`, true);
+    if (!local && firstState) {
+        firstState = false;
+        joinSeq = next.seq;
+    } else if (!local && next.by !== me.id && next.seq !== prev.seq) {
+        const isReset = next.mode === 'stopped' && next.type === 'up' && next.elapsed === 0;
+        // Another device got to zero first (ours may be asleep in the
+        // background). That's the end of the countdown, not a plain reset.
+        const countdownEnded = isReset && prev.mode === 'running' && prev.type === 'down' && now() - prev.startAt > -1500;
+        if (countdownEnded) alertZero(prev.seq);
+        else notify(`SyncWatch ${next.mode === 'running' ? 'started' : isReset ? 'reset' : 'stopped'}`, true);
     }
-    firstState = false;
 
     wakeLock(next.mode === 'running');
     scheduleZero();
@@ -120,15 +132,11 @@ const scheduleZero = () => {
 const checkZero = () => {
     if (state.mode !== 'running' || state.type !== 'down' || reading() < 0) return false;
     const seq = state.seq;
-    const late = reading() > 5000;   // it ended while nobody here was watching
-    if (finishedSeq !== seq) {
-        finishedSeq = seq;
-        if (!late) {
-            flash();
-            notify('SyncWatch countdown reached zero', false);
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
-        }
-    }
+    // A countdown that was already over when we joined ended while nobody was
+    // watching — reset it quietly. One we saw running gets its alert however
+    // late our timer fires (a phone may have slept through zero).
+    if (seq === joinSeq && reading() > 5000) finishedSeq = seq;
+    else alertZero(seq);
     // Every device notices; the first to write wins, the rest see seq moved on.
     setState({ ...RESET, seq: seq + 1, by: me.id }, true);
     if (session) session.change(current => {
@@ -138,7 +146,16 @@ const checkZero = () => {
     return true;
 };
 
+const alertZero = (seq) => {
+    if (finishedSeq === seq) return;
+    finishedSeq = seq;
+    flash();
+    notify('SyncWatch countdown reached zero', false);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+};
+
 const flash = () => {
+    if (flashing) return;
     flashing = true;
     let i = 0;
     const step = () => {
@@ -192,8 +209,8 @@ const tick = () => {
 const renderUsers = () => {
     const el = $('WhosHere');
     const count = Object.keys(presence).length;
-    if (!backend) el.textContent = 'Local only';
-    else if (!connected) el.textContent = 'Offline';
+    if (!backend) el.textContent = backendFailed ? 'Local only' : 'Connecting…';
+    else if (connected === false) el.textContent = 'Offline';
     else if (!session) el.textContent = 'Connecting…';
     else el.textContent = `${count} ${count === 1 ? 'user' : 'users'}`;
 };
@@ -212,7 +229,7 @@ const normalizeId = (raw) => {
 };
 
 const openWatch = async (id) => {
-    if (id === watchId && session) {
+    if (id === watchId && (session || joining === id)) {
         showScreen('WatchScreen');
         return;
     }
@@ -224,6 +241,7 @@ const openWatch = async (id) => {
 
     presence = {};
     firstState = true;
+    joinSeq = -1;
     lap = null;
     renderTitle('');
     $('IDReadout').textContent = `ID: ${id}`;
@@ -235,15 +253,21 @@ const openWatch = async (id) => {
 
 // Join the shared watch — now, or as soon as the Firebase module has loaded.
 const connectWatch = async () => {
-    if (!backend || !watchId || session) return;
+    if (!backend || !watchId || session || joining === watchId) return;
     const id = watchId;
     const token = ++joinToken;
-    const joined = await backend.joinWatch(id, me, {
-        onState: (s) => { if (token === joinToken) setState({ ...normalize(s), seq: (s && s.seq) || 0, by: (s && s.by) || '' }, false); },
-        onTitle: (t) => { if (token === joinToken) renderTitle(t); },
-        onPresence: (p) => { if (token === joinToken) { presence = p; renderUsers(); } },
-        onPing: (key, msg) => { if (token === joinToken) handlePing(key, msg); }
-    });
+    joining = id;
+    let joined;
+    try {
+        joined = await backend.joinWatch(id, me, {
+            onState: (s) => { if (token === joinToken) setState({ ...normalize(s), seq: (s && s.seq) || 0, by: (s && s.by) || '' }, false); },
+            onTitle: (t) => { if (token === joinToken) renderTitle(t); },
+            onPresence: (p) => { if (token === joinToken) { presence = p; renderUsers(); } },
+            onPing: (key, msg) => { if (token === joinToken) handlePing(key, msg); }
+        });
+    } finally {
+        if (joining === id) joining = null;
+    }
     if (token !== joinToken) {
         joined.leave();
         return;
@@ -405,6 +429,7 @@ const notify = async (text, onlyIfHidden) => {
 // ---------------------------------------------------------------- wake lock
 
 let wakeLockSentinel = null;
+let wakeLockPending = false;   // a request is in flight; don't start a second
 let wantWakeLock = false;
 
 const wakeLock = async (want) => {
@@ -416,12 +441,18 @@ const wakeLock = async (want) => {
         sentinel?.release().catch(() => {});
         return;
     }
-    if (wakeLockSentinel || document.visibilityState !== 'visible') return;
+    if (wakeLockSentinel || wakeLockPending || document.visibilityState !== 'visible') return;
+    wakeLockPending = true;
     try {
-        wakeLockSentinel = await navigator.wakeLock.request('screen');
-        wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
-        if (!wantWakeLock) wakeLock(false);
-    } catch (e) { /* battery saver or not allowed */ }
+        const sentinel = await navigator.wakeLock.request('screen');
+        sentinel.addEventListener('release', () => { if (wakeLockSentinel === sentinel) wakeLockSentinel = null; });
+        wakeLockSentinel = sentinel;
+        if (!wantWakeLock) wakeLock(false);   // stopped while we were asking
+    } catch (e) {
+        /* battery saver or not allowed */
+    } finally {
+        wakeLockPending = false;
+    }
 };
 
 // ---------------------------------------------------------------- helpers
@@ -486,7 +517,13 @@ const wireUp = () => {
 
     for (const dialog of document.querySelectorAll('dialog')) {
         // Tap outside the box to cancel.
-        dialog.addEventListener('click', (ev) => { if (ev.target === dialog) dialog.close('cancel'); });
+        // (The dialog's own padding also targets the dialog, so check the box.)
+        dialog.addEventListener('click', (ev) => {
+            if (ev.target !== dialog) return;
+            const r = dialog.getBoundingClientRect();
+            const inside = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+            if (!inside) dialog.close('cancel');
+        });
     }
 
     $('MenuBtn').addEventListener('click', (ev) => {
@@ -556,6 +593,8 @@ const loadBackend = async () => {
         connectWatch();
     } catch (e) {
         console.warn('SyncWatch: sync unavailable, running as a local stopwatch', e);
+        backendFailed = true;
+        renderUsers();
     }
 };
 
