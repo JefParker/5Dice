@@ -360,15 +360,49 @@ main {
     }
 }
 
-/* Phones on their side: keep the buttons on screen. */
-@media (max-height: 500px) and (orientation: landscape) {
+/* Wide windows (desktop, phones on their side): the watch fills the window
+   height, and the time grows to fill whatever room the label, buttons and
+   corner readouts leave. Digits are 0.6em wide, so 10 of them need 6em. */
+@media (orientation: landscape) {
+    body, main, #WatchScreen {
+        display: flex;
+        flex-direction: column;
+    }
+
+    body {
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    main, #WatchScreen, .DisplayCase {
+        flex: 1;
+    }
+
     main {
-        padding-top: 0.3em;
+        padding-bottom: calc(3vmax + 30px);
+    }
+
+    .DisplayCase {
+        container-type: size;
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .Display {
-        font-size: min(15vw, 26vh);
-        padding: 8px 2vw;
+        width: 98%;
+        padding: 4px 1cqw;
+        line-height: 1.05;
+        font-size: max(24px, min(15.5cqw, (100cqh - 12px) / 1.05));
+    }
+}
+
+/* Short wide windows: tighter spacing to keep the buttons on screen. */
+@media (max-height: 500px) and (orientation: landscape) {
+    main {
+        padding-top: 0.3em;
+        padding-bottom: 36px;
     }
 
     .Buttons {
