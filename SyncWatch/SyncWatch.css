@@ -49,11 +49,11 @@ main {
 }
 
 .Display {
-    padding: 20px 2vw;
-    width: 85%;
+    padding: 20px 1vw;
+    width: 94%;
     margin-left: auto;
     margin-right: auto;
-    font-size: 13vw;
+    font-size: 15vw;
     font-family: 'Chivo Mono', ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
     line-height: 1.3;
@@ -346,9 +346,9 @@ main {
 
 @media (max-width: 500px) {
     .Display {
-        width: 94%;
-        font-size: 14vw;
-        padding: 16px 1vw;
+        width: 98%;
+        font-size: 15.5vw;
+        padding: 16px 0;
     }
 
     .Lobby {
@@ -367,7 +367,7 @@ main {
     }
 
     .Display {
-        font-size: min(13vw, 22vh);
+        font-size: min(15vw, 26vh);
         padding: 8px 2vw;
     }
 
