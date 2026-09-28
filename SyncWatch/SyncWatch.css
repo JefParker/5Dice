@@ -53,6 +53,11 @@ main {
     display: none;
 }
 
+/* Past 99 hours the time is a character longer; shrink it to keep it in the box. */
+.Display.Wide > span {
+    font-size: 0.9em;
+}
+
 .DisplayCase {
     width: 100%;
     text-align: center;

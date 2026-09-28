@@ -8,7 +8,7 @@
 //            runs up to zero
 // Lap is deliberately local: it freezes this screen only, as it always has.
 
-const VERSION = '2026.09.27e';
+const VERSION = '2026.09.27f';
 
 const $ = (id) => document.getElementById(id);
 
@@ -41,6 +41,7 @@ let frame = null;
 let shownText = '';
 let flashing = false;
 let installPrompt = null;
+let pendingChanges = [];   // presses made before the watch was joined, sent once it is
 const myPings = new Map();  // ping key → number of answers
 
 // ---------------------------------------------------------------- time
@@ -72,6 +73,7 @@ const change = (fn) => {
     if (!next) return;
     setState({ ...next, seq: state.seq + 1, by: me.id }, true);
     if (session) session.change(current => fn(normalize(current)));
+    else if (!backendFailed) pendingChanges.push(fn);
 };
 
 // The press means what the button said when it was pressed. It is not a
@@ -150,7 +152,7 @@ const alertZero = (seq) => {
     if (finishedSeq === seq) return;
     finishedSeq = seq;
     flash();
-    notify('SyncWatch countdown reached zero', false);
+    notify('SyncWatch countdown reached zero', true);
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
 };
 
@@ -195,7 +197,8 @@ const render = () => {
 const setDisplayText = (value) => {
     const text = formatTime(value);
     if (text !== shownText) {
-        $('Display').textContent = text;
+        $('DisplayText').textContent = text;
+        $('Display').classList.toggle('Wide', text.length > 10);
         shownText = text;
     }
 };
@@ -240,6 +243,7 @@ const openWatch = async (id) => {
     try { localStorage.setItem('SyncWatchID', id); } catch (e) { /* private mode */ }
 
     presence = {};
+    pendingChanges = [];
     firstState = true;
     joinSeq = -1;
     lap = null;
@@ -249,6 +253,18 @@ const openWatch = async (id) => {
     render();
     renderUsers();
     connectWatch();
+    showMenuHintOnce();
+};
+
+// Nothing on screen says there is a menu, so say so on the first visit.
+const showMenuHintOnce = () => {
+    try {
+        if (localStorage.getItem('SyncWatchHint')) return;
+        localStorage.setItem('SyncWatchHint', '1');
+    } catch (e) {
+        return;   // private mode: it would show every time
+    }
+    toast(matchMedia('(hover: hover)').matches ? 'Right-click for the menu' : 'Press and hold for the menu', 8000);
 };
 
 // Join the shared watch — now, or as soon as the Firebase module has loaded.
@@ -274,6 +290,9 @@ const connectWatch = async () => {
     }
     session = joined;
     renderUsers();
+    const queued = pendingChanges;
+    pendingChanges = [];
+    for (const fn of queued) session.change(current => fn(normalize(current)));
 };
 
 // ---------------------------------------------------------------- ping
@@ -296,7 +315,7 @@ const handlePing = (key, msg) => {
     if (!msg || msg.from === me.id) return;
     if (msg.type === 'ping') {
         toast(`Ping from ${msg.label || 'another device'}`);
-        session.pong(key);
+        session?.pong(key);   // a ping can arrive while the join is still finishing
     } else if (msg.type === 'pong' && myPings.has(msg.to)) {
         myPings.set(msg.to, myPings.get(msg.to) + 1);
         toast(`Pong from ${msg.label || 'another device'}`);
@@ -340,15 +359,26 @@ const openLabel = () => {
 };
 
 // Copy the watch's link, ready to paste into a text. If the clipboard
-// refuses, show the link so it can be copied by hand.
+// refuses, offer the phone's share sheet, or failing that show the link in a
+// field it can be copied from.
 const share = async () => {
     const url = new URL(`./?id=${watchId}`, location.href).href;
     try {
         await navigator.clipboard.writeText(url);
         toast('Link copied to clipboard');
-    } catch {
-        toast(url);
+        return;
+    } catch (e) { /* not allowed here */ }
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: 'SyncWatch', text: `Join SyncWatch ${watchId}`, url });
+            return;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+        }
     }
+    $('LinkField').value = url;
+    $('LinkDialog').showModal();
+    $('LinkField').select();
 };
 
 const showAbout = () => {
@@ -395,12 +425,13 @@ const menuOpen = () => $('Menu').classList.contains('open');
 
 // ---------------------------------------------------------------- toasts and notifications
 
-const toast = (text) => {
+const toast = (text, ms = 4700) => {
     const el = document.createElement('div');
     el.className = 'ToastMsg';
     el.textContent = text;
+    if (ms !== 4700) el.style.animationDuration = `${(ms - 200) / 1000}s`;
     $('Toasts').append(el);
-    setTimeout(() => el.remove(), 4700);
+    setTimeout(() => el.remove(), ms);
 };
 
 const notify = async (text, onlyIfHidden) => {
@@ -509,6 +540,9 @@ const wireUp = () => {
         session?.setTitle(title);
     });
 
+    for (const btn of document.querySelectorAll('.CancelBtn')) {
+        btn.addEventListener('click', () => btn.closest('dialog').close('cancel'));
+    }
     for (const dialog of document.querySelectorAll('dialog')) {
         // Tap outside the box to cancel.
         // (The dialog's own padding also targets the dialog, so check the box.)
@@ -554,15 +588,18 @@ const wireUp = () => {
         longPressed = false;
     });
     document.addEventListener('pointercancel', cancelPress);
-    // Lifting the finger after a long press mustn't also press the button
-    // under it, or close the menu it just opened.
+    // A click outside the open menu closes it and does nothing else, like a
+    // native menu. Lifting the finger after a long press mustn't press the
+    // button under it, or close the menu it just opened.
     document.addEventListener('click', (ev) => {
-        if (Date.now() < swallowUntil && !ev.target.closest('#Menu')) {
-            ev.stopPropagation();
-            ev.preventDefault();
+        if (ev.target.closest('#Menu')) return;
+        if (Date.now() >= swallowUntil) {
+            if (!menuOpen()) return;
+            hideMenu();
         }
+        ev.stopPropagation();
+        ev.preventDefault();
     }, true);
-    document.addEventListener('click', (ev) => { if (!ev.target.closest('#Menu')) hideMenu(); });
     $('Menu').addEventListener('click', (ev) => {
         const item = ev.target.closest('[data-action]');
         if (!item) return;
@@ -616,6 +653,7 @@ const loadBackend = async () => {
     } catch (e) {
         console.warn('SyncWatch: sync unavailable, running as a local stopwatch', e);
         backendFailed = true;
+        pendingChanges = [];
         renderUsers();
     }
 };

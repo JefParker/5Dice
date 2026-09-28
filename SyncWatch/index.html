@@ -45,7 +45,7 @@
  <section id="WatchScreen" hidden>
   <div id="WatchLabel" class="WatchLabel"></div>
   <div class="DisplayCase">
-   <div id="Display" class="Display" role="timer">00:00:00.0</div>
+   <div id="Display" class="Display" role="timer"><span id="DisplayText">00:00:00.0</span></div>
   </div>
   <div class="Lobby Buttons">
    <button type="button" id="Lap" class="Btn WordReveal" disabled>Lap</button>
@@ -76,7 +76,7 @@
    <label><input type="number" id="Seconds" min="0" max="9999" placeholder="00" inputmode="numeric"><span>sec</span></label>
   </div>
   <div class="DialogSection Buttons">
-   <button value="cancel" class="Btn" formnovalidate>Cancel</button>
+   <button type="button" class="Btn CancelBtn">Cancel</button>
    <button value="ok" class="Btn">OK</button>
   </div>
  </form>
@@ -89,9 +89,20 @@
    <input type="text" id="LabelInput" class="Field" maxlength="100" placeholder="Watch title">
   </div>
   <div class="DialogSection Buttons">
-   <button value="cancel" class="Btn" formnovalidate>Cancel</button>
+   <button type="button" class="Btn CancelBtn">Cancel</button>
    <button value="ok" class="Btn">OK</button>
   </div>
+ </form>
+</dialog>
+
+<dialog id="LinkDialog" class="Dialog">
+ <form method="dialog">
+  <div class="DialogSection">Link to this watch</div>
+  <div class="DialogSection">
+   <input type="text" id="LinkField" class="Field" readonly>
+  </div>
+  <div class="DialogSection Small">Copy it and send it to whoever should join.</div>
+  <div class="DialogSection Buttons"><button value="ok" class="Btn">Close</button></div>
  </form>
 </dialog>
 
@@ -101,6 +112,7 @@
   <div class="DialogSection">SyncWatch</div>
   <div class="DialogSection Small">
    Everyone using the same ID sees the same watch.<br>
+   Right-click, or press and hold, for the menu.<br>
    <span id="AboutVersion"></span>
   </div>
   <div class="DialogSection Small" id="AboutInstall" hidden>
