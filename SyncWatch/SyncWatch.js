@@ -8,7 +8,7 @@
 //            runs up to zero
 // Lap is deliberately local: it freezes this screen only, as it always has.
 
-const VERSION = '2026.09.27c';
+const VERSION = '2026.09.27d';
 
 const $ = (id) => document.getElementById(id);
 
@@ -307,7 +307,6 @@ const handlePing = (key, msg) => {
 
 const showScreen = (id) => {
     for (const screen of ['EnterScreen', 'WatchScreen']) $(screen).hidden = screen !== id;
-    $('MenuBtn').hidden = id !== 'WatchScreen';
     hideMenu();
     // Keyboard users land on Start; on touch screens the focus ring is just noise.
     if (id === 'WatchScreen' && matchMedia('(hover: hover)').matches) $('Start').focus();
@@ -388,13 +387,11 @@ const showMenu = (x, y) => {
     const top = Math.max(8, Math.min(window.innerHeight - menu.offsetHeight - 8, y));
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
-    $('MenuBtn').setAttribute('aria-expanded', 'true');
     menu.querySelector('li:not([hidden])').focus();
 };
 
 const hideMenu = () => {
     $('Menu').classList.remove('open');
-    $('MenuBtn').setAttribute('aria-expanded', 'false');
 };
 
 const menuOpen = () => $('Menu').classList.contains('open');
@@ -526,20 +523,48 @@ const wireUp = () => {
         });
     }
 
-    $('MenuBtn').addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        if (menuOpen()) {
-            hideMenu();
-            return;
-        }
-        const r = ev.currentTarget.getBoundingClientRect();
-        showMenu(r.right - $('Menu').offsetWidth, r.bottom + 4);
-    });
+    // The menu opens on a right-click, or a long press on a touch screen.
+    // Android turns a long press into a contextmenu event; iOS Safari
+    // doesn't, so a touch held still for half a second opens it too.
+    let pressTimer = null, pressAt = null, pressedAt = 0, longPressed = false, swallowUntil = 0;
+    const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+    const menuAllowed = (target) => !$('WatchScreen').hidden && !target.closest('input, dialog, #Menu');
     document.addEventListener('contextmenu', (ev) => {
-        if ($('WatchScreen').hidden || ev.target.closest('input, dialog')) return;
+        if (!menuAllowed(ev.target)) return;
         ev.preventDefault();
+        if (menuOpen() && Date.now() - pressedAt < 1000) return;   // the long press got there first
         showMenu(ev.clientX, ev.clientY);
     });
+    document.addEventListener('pointerdown', (ev) => {
+        cancelPress();
+        longPressed = false;
+        if (ev.pointerType !== 'touch' || !menuAllowed(ev.target)) return;
+        pressAt = { x: ev.clientX, y: ev.clientY };
+        pressTimer = setTimeout(() => {
+            pressTimer = null;
+            if (menuOpen()) return;
+            pressedAt = Date.now();
+            longPressed = true;
+            showMenu(pressAt.x, pressAt.y);
+        }, 550);
+    });
+    document.addEventListener('pointermove', (ev) => {
+        if (pressTimer && Math.hypot(ev.clientX - pressAt.x, ev.clientY - pressAt.y) > 10) cancelPress();
+    });
+    document.addEventListener('pointerup', () => {
+        cancelPress();
+        if (longPressed) swallowUntil = Date.now() + 500;
+        longPressed = false;
+    });
+    document.addEventListener('pointercancel', cancelPress);
+    // Lifting the finger after a long press mustn't also press the button
+    // under it, or close the menu it just opened.
+    document.addEventListener('click', (ev) => {
+        if (Date.now() < swallowUntil && !ev.target.closest('#Menu')) {
+            ev.stopPropagation();
+            ev.preventDefault();
+        }
+    }, true);
     document.addEventListener('click', (ev) => { if (!ev.target.closest('#Menu')) hideMenu(); });
     $('Menu').addEventListener('click', (ev) => {
         const item = ev.target.closest('[data-action]');
@@ -553,7 +578,7 @@ const wireUp = () => {
         if (ev.key === 'ArrowDown') items[(i + 1) % items.length].focus();
         else if (ev.key === 'ArrowUp') items[(i - 1 + items.length) % items.length].focus();
         else if (ev.key === 'Enter' || ev.key === ' ') document.activeElement.click();
-        else if (ev.key === 'Escape') { hideMenu(); $('MenuBtn').focus(); }
+        else if (ev.key === 'Escape') hideMenu();
         else return;
         ev.preventDefault();
     });
