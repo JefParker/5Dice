@@ -8,7 +8,7 @@
 //            runs up to zero
 // Lap is deliberately local: it freezes this screen only, as it always has.
 
-const VERSION = '2026.09.27d';
+const VERSION = '2026.09.27e';
 
 const $ = (id) => document.getElementById(id);
 
@@ -339,18 +339,15 @@ const openLabel = () => {
     $('LabelDialog').showModal();
 };
 
+// Copy the watch's link, ready to paste into a text. If the clipboard
+// refuses, show the link so it can be copied by hand.
 const share = async () => {
     const url = new URL(`./?id=${watchId}`, location.href).href;
-    const title = $('WatchLabel').textContent || 'SyncWatch';
     try {
-        if (navigator.share) {
-            await navigator.share({ title, text: `Join SyncWatch ${watchId}`, url });
-            return;
-        }
         await navigator.clipboard.writeText(url);
-        toast('Link copied');
-    } catch (e) {
-        if (e.name !== 'AbortError') toast(url);
+        toast('Link copied to clipboard');
+    } catch {
+        toast(url);
     }
 };
 

@@ -3,7 +3,7 @@
 // 5 Dice's scope. Only caches named 'syncwatch-…' are ever touched.
 // Bump CACHE when SHELL changes.
 
-const CACHE = 'syncwatch-v260927d';
+const CACHE = 'syncwatch-v260927e';
 const SHELL = ['./', 'SyncWatch.js', 'SyncWatch-firebase.js', 'SyncWatch.css', 'SyncWatch.json',
     'firebase-config.js', 'img/SyncWatch.ico', 'img/SyncWatch64.png', 'img/SyncWatch128.png',
     'img/SyncWatch192.png'];
