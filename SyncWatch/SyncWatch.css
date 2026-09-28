@@ -369,9 +369,11 @@ main {
         flex-direction: column;
     }
 
+    /* A fixed height, not min-height: the time's size is read from its
+       container's height, which comes out as 0 without it. */
     body {
-        min-height: 100vh;
-        min-height: 100dvh;
+        height: 100vh;
+        height: 100dvh;
     }
 
     main, #WatchScreen, .DisplayCase {
@@ -382,9 +384,16 @@ main {
         padding-bottom: calc(3vmax + 30px);
     }
 
+    #WatchScreen {
+        justify-content: center;
+    }
+
+    /* No taller than the width-limited time needs, so in a big window the
+       time and buttons stay together and the spare room goes around them. */
     .DisplayCase {
         container-type: size;
         min-height: 60px;
+        max-height: calc(15.5vw * 1.05 + 12px);
         display: flex;
         align-items: center;
         justify-content: center;

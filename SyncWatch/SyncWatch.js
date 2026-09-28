@@ -8,7 +8,7 @@
 //            runs up to zero
 // Lap is deliberately local: it freezes this screen only, as it always has.
 
-const VERSION = '2026.09.27b';
+const VERSION = '2026.09.27c';
 
 const $ = (id) => document.getElementById(id);
 
